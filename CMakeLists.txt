@@ -10,6 +10,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Find dependencies via vcpkg
+find_package(spdlog CONFIG REQUIRED)
+find_package(tl-expected CONFIG REQUIRED)
+find_package(Catch2 3 CONFIG REQUIRED)
+find_package(benchmark CONFIG REQUIRED)
+
 # Export compile commands for IDE support
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

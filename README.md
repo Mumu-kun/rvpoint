@@ -13,8 +13,12 @@ A high-performance point cloud processing library for RISC-V architecture with s
 
 - **Multiple Point Types**: Point3D, PointXYZI, PointXYZRGB, PointNormal
 - **Backend Abstraction**: Clean separation between scalar and vector implementations
+- **Modern Error Handling**: `tl::expected` for clean error propagation (C++17)
+- **Structured Logging**: `spdlog` for fast, configurable logging
+- **Dependency Management**: `vcpkg` for easy library integration
+- **Code Quality**: Pre-commit hooks with `clang-format`
 - **Header-Only Core**: Easy integration, minimal dependencies
-- **Comprehensive Testing**: Google Test suite with QEMU/Spike emulation
+- **Comprehensive Testing**: Catch2 test suite with QEMU/Spike emulation
 - **CI/CD Ready**: GitHub Actions with cross-compilation
 - **Docker Support**: Reproducible development environment
 
@@ -41,14 +45,29 @@ See [Dev Container Setup](.devcontainer/README.md) for detailed guide.
 
 ### Manual Setup (Alternative)
 
-**For native (x86/ARM) development:**
+**Dependencies:**
 ```bash
-sudo apt install cmake ninja-build g++
+# System packages
+sudo apt install cmake ninja-build g++ git zip unzip tar pkg-config
+
+# For RISC-V cross-compilation
+sudo apt install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user
+
+# Python tools
+pip install pre-commit
 ```
 
-**For RISC-V cross-compilation:**
+**Install vcpkg (dependency manager):**
 ```bash
-sudo apt install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user
+git clone https://github.com/microsoft/vcpkg.git
+./vcpkg/bootstrap-vcpkg.sh
+export VCPKG_ROOT=$(pwd)/vcpkg
+export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+```
+
+**Setup pre-commit hooks:**
+```bash
+pre-commit install
 ```
 
 ### Building
@@ -68,6 +87,11 @@ sudo apt install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user
 ./scripts/build.sh --riscv --rvv
 ```
 
+**Run example:**
+```bash
+./build/examples/error_handling_example
+```
+
 
 
 ### Project Structure
@@ -79,19 +103,27 @@ pcl-riscv/
 │   └── CompilerWarnings.cmake     # Warning flags
 ├── .github/workflows/       # CI/CD configuration
 │   └── ci.yml              # GitHub Actions workflow
-├── docker/                  # Docker build environment
-│   └── Dockerfile          # Container with RISC-V toolchain
+├── .devcontainer/           # Dev container setup
+│   ├── Dockerfile          # Container with full toolchain
+│   └── devcontainer.json   # VS Code configuration
+├── include/rvpoint/         # Public library headers
+│   ├── error.hpp           # Error handling with tl::expected
+│   └── logger.hpp          # Logging with spdlog
 ├── scripts/                 # Build and utility scripts
 │   └── build.sh            # Convenient build script
 ├── docs/                    # Documentation
 │   └── BUILD.md            # Build instructions
-├── include/                 # Public library headers (add your code here)
 ├── tests/                   # Unit tests
 │   └── CMakeLists.txt      # Test configuration template
 ├── examples/                # Usage examples
-│   └── CMakeLists.txt      # Example configuration template
+│   ├── error_handling_example.cpp  # Error & logging demo
+│   └── CMakeLists.txt      # Example configuration
 ├── benchmarks/              # Performance benchmarks
 │   └── CMakeLists.txt      # Benchmark configuration template
+├── vcpkg.json              # Dependency manifest
+├── vcpkg-configuration.json # vcpkg settings
+├── .clang-format           # Code formatting rules
+├── .pre-commit-config.yaml # Pre-commit hooks config
 ├── CMakeLists.txt          # Main build configuration
 ├── README.md               # This file
 ├── LICENSE                 # MIT License

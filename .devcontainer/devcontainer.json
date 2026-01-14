@@ -52,12 +52,14 @@
     "remoteEnv": {
         "CC": "gcc",
         "CXX": "g++",
-        "CMAKE_GENERATOR": "Ninja"
+        "CMAKE_GENERATOR": "Ninja",
+        "VCPKG_ROOT": "/opt/vcpkg",
+        "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake"
     },
     // Forward ports (if needed for future web demos)
     "forwardPorts": [],
     // Run commands after container is created
-    "postCreateCommand": "echo 'Dev container ready! Use ./scripts/build.sh to build the project.'",
+    "postCreateCommand": "pre-commit install && echo 'Dev container ready! Pre-commit hooks installed. Use ./scripts/build.sh to build the project.'",
     // Keep container running
     "runArgs": [
         "--cap-add=SYS_PTRACE",

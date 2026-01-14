@@ -14,8 +14,13 @@ RUN apt-get update && apt-get install -y \
     git \
     wget \
     curl \
+    zip \
+    unzip \
+    tar \
+    pkg-config \
     python3 \
     python3-pip \
+    python3-venv \
     gcc-riscv64-linux-gnu \
     g++-riscv64-linux-gnu \
     gcc-riscv64-unknown-elf \
@@ -47,21 +52,31 @@ RUN riscv64-linux-gnu-gcc --version && \
     qemu-riscv64 --version && \
     echo "Tools verified successfully"
 
-# Layer 3: Global configuration (changes occasionally)
+# Layer 3: Python tools (changes occasionally)
+RUN pip3 install --no-cache-dir pre-commit
+
+# Layer 3.5: Install vcpkg
+RUN git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg && \
+    /opt/vcpkg/bootstrap-vcpkg.sh && \
+    ln -s /opt/vcpkg/vcpkg /usr/local/bin/vcpkg
+
+ENV VCPKG_ROOT=/opt/vcpkg
+
+# Layer 4: Global configuration (changes occasionally)
 RUN ccache --max-size=2G && \
     git config --global core.editor "vim" && \
     git config --global init.defaultBranch main
 
 WORKDIR /workspace
 
-# Layer 4: Aliases (changes with project commands - separate for easy updates)
+# Layer 5: Aliases (changes with project commands - separate for easy updates)
 RUN echo 'alias ll="ls -lah"' >> /root/.bashrc && \
     echo 'alias build="./scripts/build.sh"' >> /root/.bashrc && \
     echo 'alias build-riscv="./scripts/build.sh --riscv"' >> /root/.bashrc && \
     echo 'alias build-rvv="./scripts/build.sh --riscv --rvv"' >> /root/.bashrc && \
     echo 'alias test-qemu="cd build && ctest --output-on-failure"' >> /root/.bashrc
 
-# Layer 5: Welcome message (cosmetic - easily updated without rebuilding everything)
+# Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "╔════════════════════════════════════════════════════════════╗"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  PCL-RISC-V Development Container                         ║"' >> /usr/local/bin/welcome.sh && \
@@ -70,7 +85,8 @@ RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "║    - GCC/G++ (native)                                      ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    - riscv64-linux-gnu-gcc/g++ (cross-compiler)            ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    - QEMU (user-mode & system emulation)                   ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - CMake, Ninja, ccache                                  ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - CMake, Ninja, ccache, vcpkg                           ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - spdlog, tl-expected (via vcpkg)                       ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  Quick commands:                                           ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    build         - Native build                            ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    build-riscv   - RISC-V cross-compile (scalar)           ║"' >> /usr/local/bin/welcome.sh && \
