@@ -1,0 +1,73 @@
+{
+    "name": "RV Point Development",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    // Container configuration
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    // VS Code settings
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "cmake.configureOnOpen": true,
+                "cmake.buildDirectory": "${workspaceFolder}/build",
+                "files.associations": {
+                    "*.hpp": "cpp",
+                    "*.h": "c"
+                },
+                "editor.formatOnSave": true,
+                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+                "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+                "C_Cpp.codeAnalysis.clangTidy.runAutomatically": true,
+                "coverage-gutters.coverageFileNames": [
+                    "coverage.info",
+                    "lcov.info",
+                    "coverage.xml"
+                ],
+                "coverage-gutters.showLineCoverage": true,
+                "coverage-gutters.showRulerCoverage": true
+            },
+            // Recommended extensions
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vscode.cmake-tools",
+                "twxs.cmake",
+                "cheshirekow.cmake-format",
+                "xaver.clang-format",
+                "ms-vscode.hexeditor",
+                "vadimcn.vscode-lldb",
+                "notskm.clang-tidy",
+                "ryanluker.vscode-coverage-gutters",
+                "matepek.vscode-catch2-test-adapter",
+                "eamodio.gitlens",
+                "vivaxy.vscode-conventional-commits"
+            ]
+        }
+    },
+    // Set environment variables
+    "remoteEnv": {
+        "CC": "gcc",
+        "CXX": "g++",
+        "CMAKE_GENERATOR": "Ninja"
+    },
+    // Forward ports (if needed for future web demos)
+    "forwardPorts": [],
+    // Run commands after container is created
+    "postCreateCommand": "echo 'Dev container ready! Use ./scripts/build.sh to build the project.'",
+    // Keep container running
+    "runArgs": [
+        "--cap-add=SYS_PTRACE",
+        "--security-opt",
+        "seccomp=unconfined"
+    ],
+    // Use 'postStartCommand' for commands that should run every time
+    "postStartCommand": "git config --global --add safe.directory /workspace",
+    // User settings
+    "remoteUser": "root",
+    // Features (alternative to installing in Dockerfile)
+    "features": {}
+}
