@@ -57,18 +57,20 @@
     },
     // Forward ports (if needed for future web demos)
     "forwardPorts": [],
-    // Run commands after container is created
-    "postCreateCommand": "ln -sf /workspace/cmake/riscv64-linux-gnu.cmake /opt/vcpkg/cmake/riscv64-linux-gnu.cmake && pre-commit install && echo 'Dev container ready! Pre-commit hooks installed. Use ./scripts/build.sh to build the project.'",
     // Keep container running
     "runArgs": [
         "--cap-add=SYS_PTRACE",
         "--security-opt",
         "seccomp=unconfined"
     ],
+    // Mount git config as read-only, copy to allow modifications
+    "mounts": [
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/tmp/.gitconfig-host,type=bind,readonly"
+    ],
     // Use 'postStartCommand' for commands that should run every time
-    "postStartCommand": "git config --global --add safe.directory /workspace",
     // User settings
     "remoteUser": "root",
+    "postCreateCommand": "cp /tmp/.gitconfig-host /root/.gitconfig 2>/dev/null || true && ln -sf /workspace/cmake/riscv64-linux-gnu.cmake /opt/vcpkg/cmake/riscv64-linux-gnu.cmake && pre-commit install && git config --global --add safe.directory /workspace && echo 'Dev container ready! Pre-commit hooks installed. Use ./scripts/build.sh to build the project.'",
     // Features (alternative to installing in Dockerfile)
     "features": {}
 }

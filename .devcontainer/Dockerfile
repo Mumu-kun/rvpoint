@@ -6,6 +6,9 @@ FROM ubuntu:22.04
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Copy Bangladesh mirrors configuration with fallbacks
+COPY sources.list /etc/apt/sources.list
+
 # Layer 1: System packages (changes rarely - excellent caching)
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -25,22 +28,12 @@ RUN apt-get update && apt-get install -y \
     g++-riscv64-linux-gnu \
     binutils-riscv64-linux-gnu \
     qemu-user \
-    qemu-system-misc \
-    qemu-utils \
-    device-tree-compiler \
     gdb \
     gdb-multiarch \
     valgrind \
     ccache \
     clang-format \
     cppcheck \
-    doxygen \
-    graphviz \
-    git-lfs \
-    vim \
-    nano \
-    htop \
-    tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # Note: Spike is NOT included for faster setup. QEMU suffices for scalar/RVV.
@@ -68,6 +61,8 @@ RUN ccache --max-size=2G && \
     git config --global init.defaultBranch main
 
 WORKDIR /workspace
+RUN chmod 777 /workspace
+
 
 # Layer 5: Aliases (changes with project commands - separate for easy updates)
 RUN echo 'alias ll="ls -lah"' >> /root/.bashrc && \
