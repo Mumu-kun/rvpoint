@@ -55,12 +55,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     add_compile_options(-O3 -ffast-math)
 endif()
 
-# Library target will be added here by students
-# add_library(pcl_riscv INTERFACE)
-# target_include_directories(pcl_riscv INTERFACE
-#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#     $<INSTALL_INTERFACE:include>
-# )
+# Library source code
+add_subdirectory(src)
 
 # Tests
 if(BUILD_TESTS)

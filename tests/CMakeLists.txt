@@ -1,19 +1,6 @@
-cmake_minimum_required(VERSION 3.15)
+# RVPoint Tests
 
-# Download Catch2
-include(FetchContent)
-FetchContent_Declare(
-    Catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.5.2
-)
-FetchContent_MakeAvailable(Catch2)
-
-# Enable testing
-enable_testing()
-
-# Add Catch2 CMake integration
-list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+# Catch2 CMake integration
 include(CTest)
 include(Catch)
 
@@ -28,7 +15,7 @@ add_executable(rvpoint_tests
 
 target_link_libraries(rvpoint_tests
     PRIVATE
-        # pcl_riscv  # Uncomment when library is implemented
+        rvpoint
         Catch2::Catch2WithMain
 )
 

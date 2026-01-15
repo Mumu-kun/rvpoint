@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y \
     cmake \
     ninja-build \
     git \
-    wget \
     curl \
     zip \
     unzip \
@@ -21,27 +20,18 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
-    gcc-riscv64-linux-gnu \
-    g++-riscv64-linux-gnu \
-    gcc-riscv64-unknown-elf \
-    g++-riscv64-unknown-elf \
-    qemu-user \
-    qemu-system-misc \
-    qemu-utils \
-    device-tree-compiler \
     gdb \
     gdb-multiarch \
-    valgrind \
     ccache \
     clang-format \
-    cppcheck \
-    doxygen \
-    graphviz \
-    git-lfs \
-    vim \
-    nano \
-    htop \
-    tmux \
+    cppcheck
+
+# Layer 1.5: RISC-V toolchain and QEMU
+RUN apt-get install -y \
+    qemu-user \
+    gcc-riscv64-linux-gnu \
+    g++-riscv64-linux-gnu \
+    binutils-riscv64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*
 
 # Note: Spike is NOT included for faster setup. QEMU suffices for scalar/RVV.
@@ -75,6 +65,9 @@ RUN echo 'alias ll="ls -lah"' >> /root/.bashrc && \
     echo 'alias build-riscv="./scripts/build.sh --riscv"' >> /root/.bashrc && \
     echo 'alias build-rvv="./scripts/build.sh --riscv --rvv"' >> /root/.bashrc && \
     echo 'alias test-qemu="cd build && ctest --output-on-failure"' >> /root/.bashrc
+
+# Make scripts executable
+RUN chmod +x /workspace/scripts/*.sh || true
 
 # Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
