@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     ninja-build \
     git \
+    wget \
     curl \
     zip \
     unzip \
@@ -20,18 +21,26 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
-    gdb \
-    gdb-multiarch \
-    ccache \
-    clang-format \
-    cppcheck
-
-# Layer 1.5: RISC-V toolchain and QEMU
-RUN apt-get install -y \
-    qemu-user \
     gcc-riscv64-linux-gnu \
     g++-riscv64-linux-gnu \
     binutils-riscv64-linux-gnu \
+    qemu-user \
+    qemu-system-misc \
+    qemu-utils \
+    device-tree-compiler \
+    gdb \
+    gdb-multiarch \
+    valgrind \
+    ccache \
+    clang-format \
+    cppcheck \
+    doxygen \
+    graphviz \
+    git-lfs \
+    vim \
+    nano \
+    htop \
+    tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # Note: Spike is NOT included for faster setup. QEMU suffices for scalar/RVV.
@@ -48,7 +57,8 @@ RUN pip3 install --no-cache-dir pre-commit
 # Layer 3.5: Install vcpkg
 RUN git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg && \
     /opt/vcpkg/bootstrap-vcpkg.sh && \
-    ln -s /opt/vcpkg/vcpkg /usr/local/bin/vcpkg
+    ln -s /opt/vcpkg/vcpkg /usr/local/bin/vcpkg && \
+    mkdir -p /opt/vcpkg/cmake
 
 ENV VCPKG_ROOT=/opt/vcpkg
 
@@ -65,9 +75,6 @@ RUN echo 'alias ll="ls -lah"' >> /root/.bashrc && \
     echo 'alias build-riscv="./scripts/build.sh --riscv"' >> /root/.bashrc && \
     echo 'alias build-rvv="./scripts/build.sh --riscv --rvv"' >> /root/.bashrc && \
     echo 'alias test-qemu="cd build && ctest --output-on-failure"' >> /root/.bashrc
-
-# Make scripts executable
-RUN chmod +x /workspace/scripts/*.sh || true
 
 # Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \

@@ -2,7 +2,7 @@
     "name": "RV Point Development",
     "build": {
         "dockerfile": "Dockerfile",
-        "context": ".."
+        "context": "."
     },
     // Container configuration
     "workspaceFolder": "/workspace",
@@ -50,16 +50,15 @@
     },
     // Set environment variables
     "remoteEnv": {
-        "CC": "gcc",
-        "CXX": "g++",
         "CMAKE_GENERATOR": "Ninja",
         "VCPKG_ROOT": "/opt/vcpkg",
-        "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        "VCPKG_DEFAULT_TRIPLET": "x64-linux",
+        "VCPKG_OVERLAY_TRIPLETS": "${containerWorkspaceFolder}/triplets"
     },
     // Forward ports (if needed for future web demos)
     "forwardPorts": [],
     // Run commands after container is created
-    "postCreateCommand": "pre-commit install && echo 'Dev container ready! Pre-commit hooks installed. Use ./scripts/build.sh to build the project.'",
+    "postCreateCommand": "ln -sf /workspace/cmake/riscv64-linux-gnu.cmake /opt/vcpkg/cmake/riscv64-linux-gnu.cmake && pre-commit install && echo 'Dev container ready! Pre-commit hooks installed. Use ./scripts/build.sh to build the project.'",
     // Keep container running
     "runArgs": [
         "--cap-add=SYS_PTRACE",

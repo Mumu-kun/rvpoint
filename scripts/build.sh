@@ -1,6 +1,6 @@
+#!/bin/bash
 # Build script for easy compilation
 
-#!/bin/bash
 set -e
 
 # Colors for output
@@ -13,7 +13,8 @@ NC='\033[0m' # No Color
 BUILD_TYPE="Release"
 ENABLE_RVV="OFF"
 BUILD_DIR="build"
-TOOLCHAIN=""
+TOOLCHAIN_FILE=""
+VCPKG_TRIPLET=""
 EMULATOR="qemu"
 CLEAN=false
 
@@ -29,7 +30,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --riscv)
-            TOOLCHAIN="-DCMAKE_TOOLCHAIN_FILE=cmake/riscv64-linux-gnu.cmake"
+            TOOLCHAIN_FILE="-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+            VCPKG_TRIPLET="-DVCPKG_TARGET_TRIPLET=riscv64-linux -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/vcpkg/cmake/riscv64-linux-gnu.cmake"
             shift
             ;;
         --spike)
@@ -69,12 +71,22 @@ echo -e "${GREEN}Configuring PCL-RISC-V...${NC}"
 echo "  Build Type: $BUILD_TYPE"
 echo "  RVV Enabled: $ENABLE_RVV"
 echo "  Emulator: $EMULATOR"
+if [ -n "$VCPKG_TRIPLET" ]; then
+    echo "  Target: RISC-V 64-bit"
+    echo "  Triplet: riscv64-linux"
+fi
+
+# If not using RISC-V cross-compilation, use regular vcpkg toolchain
+if [ -z "$VCPKG_TRIPLET" ]; then
+    TOOLCHAIN_FILE="-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+fi
 
 cmake -B "$BUILD_DIR" -G Ninja \
-    $TOOLCHAIN \
+    $TOOLCHAIN_FILE \
+    $VCPKG_TRIPLET \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DENABLE_RVV="$ENABLE_RVV" \
-    -DUSE_SPIKE_EMULATOR=$( [ "$EMULATOR" = "spike" ] && echo "ON" || echo "OFF" ) \
+    -DUSE_SPIKE_EMULATOR="$( [ "$EMULATOR" = "spike" ] && echo "ON" || echo "OFF" )" \
     -DBUILD_TESTS=ON \
     -DBUILD_EXAMPLES=ON \
     -DBUILD_BENCHMARKS=ON
