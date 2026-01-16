@@ -47,6 +47,7 @@ add_library(voxel_downsampling_impl OBJECT
 )
 
 target_compile_features(voxel_downsampling_impl PUBLIC cxx_std_17)
+target_include_directories(voxel_downsampling_impl PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 # Standalone executable - Scalar implementation
 add_executable(voxel_downsample_scalar

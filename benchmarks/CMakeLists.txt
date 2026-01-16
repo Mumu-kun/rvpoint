@@ -28,4 +28,6 @@ target_link_libraries(benchmark_voxel_downsampling
         benchmark::benchmark
 )
 
+target_include_directories(benchmark_voxel_downsampling PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
 target_compile_options(benchmark_voxel_downsampling PRIVATE -O3)
