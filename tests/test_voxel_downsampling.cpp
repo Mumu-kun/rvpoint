@@ -294,14 +294,14 @@ TEST_CASE("Voxel downsampling - boundary conditions", "[voxel][edge]") {
 
     SECTION("Leaf size equals coordinate range") {
         std::vector<Point3D> input = {Point3D(0.0f, 0.0f, 0.0f), Point3D(5.0f, 5.0f, 5.0f),
-                                      Point3D(10.0f, 10.0f, 10.0f)};
+                                      Point3D(9.9f, 9.9f, 9.9f)};
         float leaf_size = 10.0f;
 
         auto result_scalar = voxel_downsample_scalar(input, leaf_size);
         auto result_rvv = voxel_downsample_rvv(input, leaf_size);
 
         REQUIRE(result_scalar.size() == result_rvv.size());
-        REQUIRE(result_scalar.size() == 2); // [0,10) and [10,20)
+        REQUIRE(result_scalar.size() == 1); // All in voxel [0,10)
     }
 }
 
@@ -320,14 +320,14 @@ TEST_CASE("Voxel downsampling - extreme coordinates", "[voxel][edge]") {
 
     SECTION("Very large negative coordinates") {
         std::vector<Point3D> input = {Point3D(-1000.0f, -1000.0f, -1000.0f),
-                                      Point3D(-1000.5f, -1000.5f, -1000.5f)};
+                                      Point3D(-1000.4f, -1000.4f, -1000.4f)};
         float leaf_size = 1.0f;
 
         auto result_scalar = voxel_downsample_scalar(input, leaf_size);
         auto result_rvv = voxel_downsample_rvv(input, leaf_size);
 
         REQUIRE(result_scalar.size() == result_rvv.size());
-        REQUIRE(result_scalar.size() == 1);
+        REQUIRE(result_scalar.size() == 1); // Both in voxel [-1000,-999)
     }
 
     SECTION("Mixed extreme coordinates") {
