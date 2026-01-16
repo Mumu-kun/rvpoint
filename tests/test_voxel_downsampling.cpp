@@ -282,14 +282,14 @@ TEST_CASE("Voxel downsampling - boundary conditions", "[voxel][edge]") {
     }
 
     SECTION("Very large leaf size") {
-        auto input = generate_random_cloud(1000, -100.0f, 100.0f);
+        auto input = generate_random_cloud(1000, 0.0f, 100.0f); // All positive coords
         float leaf_size = 1000.0f;
 
         auto result_scalar = voxel_downsample_scalar(input, leaf_size);
         auto result_rvv = voxel_downsample_rvv(input, leaf_size);
 
         REQUIRE(result_scalar.size() == result_rvv.size());
-        REQUIRE(result_scalar.size() == 1); // All in same voxel
+        REQUIRE(result_scalar.size() == 1); // All in voxel [0,1000)
     }
 
     SECTION("Leaf size equals coordinate range") {
@@ -319,7 +319,7 @@ TEST_CASE("Voxel downsampling - extreme coordinates", "[voxel][edge]") {
     }
 
     SECTION("Very large negative coordinates") {
-        std::vector<Point3D> input = {Point3D(-1000.0f, -1000.0f, -1000.0f),
+        std::vector<Point3D> input = {Point3D(-1000.1f, -1000.1f, -1000.1f),
                                       Point3D(-1000.4f, -1000.4f, -1000.4f)};
         float leaf_size = 1.0f;
 
@@ -327,7 +327,7 @@ TEST_CASE("Voxel downsampling - extreme coordinates", "[voxel][edge]") {
         auto result_rvv = voxel_downsample_rvv(input, leaf_size);
 
         REQUIRE(result_scalar.size() == result_rvv.size());
-        REQUIRE(result_scalar.size() == 1); // Both in voxel [-1000,-999)
+        REQUIRE(result_scalar.size() == 1); // Both in voxel [-1001,-1000)
     }
 
     SECTION("Mixed extreme coordinates") {
