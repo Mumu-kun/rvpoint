@@ -38,56 +38,22 @@ struct PointWithKey {
 void compute_voxel_indices_rvv(const std::vector<Point3D>& input, std::vector<PointWithKey>& output,
                                float inv_leaf) {
 #ifdef PCL_HAS_RVV
+    // Note: RVV inline assembly with vector register clobbers is not yet fully
+    // supported by GCC 11 cross-compiler. Using scalar implementation for now.
+    // This is functionally correct and will work on RVV hardware.
+    // Future optimization: Use RVV intrinsics when compiler support improves.
     size_t n = input.size();
     output.resize(n);
 
-    size_t i = 0;
+    for (size_t idx = 0; idx < n; ++idx) {
+        float x_scaled = input[idx].x * inv_leaf;
+        float y_scaled = input[idx].y * inv_leaf;
+        float z_scaled = input[idx].z * inv_leaf;
 
-    // Process in vectors using RVV
-    while (i < n) {
-        size_t vl;
-
-        // Set vector length for this iteration
-        asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(n - i));
-
-        // Load X coordinates
-        asm volatile("vle32.v v0, (%0)" : : "r"(&input[i].x) : "v0");
-
-        // Load Y coordinates (stride = sizeof(Point3D))
-        asm volatile("vle32.v v1, (%0)" : : "r"(&input[i].y) : "v1");
-
-        // Load Z coordinates
-        asm volatile("vle32.v v2, (%0)" : : "r"(&input[i].z) : "v2");
-
-        // Broadcast inv_leaf to vector v3
-        asm volatile("vfmv.v.f v3, %0" : : "f"(inv_leaf) : "v3");
-
-        // Multiply: v0 = x * inv_leaf, v1 = y * inv_leaf, v2 = z * inv_leaf
-        asm volatile("vfmul.vv v0, v0, v3\n"
-                     "vfmul.vv v1, v1, v3\n"
-                     "vfmul.vv v2, v2, v3"
-                     :
-                     :
-                     : "v0", "v1", "v2");
-
-        // Convert float to int with floor semantics (fcvt.w.f with RDN rounding)
-        // For simplicity, use standard conversion and handle floor separately
-        // Store back and process scalar floor (optimization opportunity for future)
-
-        // For now, fall back to scalar for the floor operation
-        // This is a GCC11 limitation workaround
-        for (size_t j = 0; j < vl; ++j) {
-            float x_scaled = input[i + j].x * inv_leaf;
-            float y_scaled = input[i + j].y * inv_leaf;
-            float z_scaled = input[i + j].z * inv_leaf;
-
-            output[i + j].point = input[i + j];
-            output[i + j].i = static_cast<int32_t>(std::floor(x_scaled));
-            output[i + j].j = static_cast<int32_t>(std::floor(y_scaled));
-            output[i + j].k = static_cast<int32_t>(std::floor(z_scaled));
-        }
-
-        i += vl;
+        output[idx].point = input[idx];
+        output[idx].i = static_cast<int32_t>(std::floor(x_scaled));
+        output[idx].j = static_cast<int32_t>(std::floor(y_scaled));
+        output[idx].k = static_cast<int32_t>(std::floor(z_scaled));
     }
 #else
     // Fallback to scalar if RVV not available
@@ -129,40 +95,17 @@ inline uint64_t make_sort_key(int32_t i, int32_t j, int32_t k) {
  */
 Point3D compute_centroid_rvv(const std::vector<PointWithKey>& points, size_t start, size_t end) {
 #ifdef PCL_HAS_RVV
+    // Note: Using scalar implementation due to GCC 11 cross-compiler limitations
+    // with RVV inline assembly. Future optimization opportunity.
     float sum_x = 0.0f, sum_y = 0.0f, sum_z = 0.0f;
-    size_t count = end - start;
 
-    // Vectorized reduction for sum
-    size_t i = start;
-
-    // Initialize vector accumulators to zero
-    asm volatile("vsetvli zero, %0, e32, m1, ta, ma\n"
-                 "vfmv.v.f v4, zero\n" // sum_x accumulator
-                 "vfmv.v.f v5, zero\n" // sum_y accumulator
-                 "vfmv.v.f v6, zero"   // sum_z accumulator
-                 :
-                 : "r"(count)
-                 : "v4", "v5", "v6");
-
-    while (i < end) {
-        size_t vl;
-
-        asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(end - i));
-
-        // Load X, Y, Z coordinates
-        // Note: This is simplified; actual implementation needs proper strided loads
-
-        // Scalar fallback for accumulation (GCC11 limitation)
-        for (size_t j = i; j < i + vl; ++j) {
-            sum_x += points[j].point.x;
-            sum_y += points[j].point.y;
-            sum_z += points[j].point.z;
-        }
-
-        i += vl;
+    for (size_t i = start; i < end; ++i) {
+        sum_x += points[i].point.x;
+        sum_y += points[i].point.y;
+        sum_z += points[i].point.z;
     }
 
-    // Compute centroid
+    size_t count = end - start;
     float inv_count = 1.0f / static_cast<float>(count);
     return Point3D(sum_x * inv_count, sum_y * inv_count, sum_z * inv_count);
 #else
