@@ -55,6 +55,7 @@ add_executable(voxel_downsample_scalar
 
 target_compile_definitions(voxel_downsample_scalar PRIVATE BUILD_STANDALONE)
 target_compile_features(voxel_downsample_scalar PRIVATE cxx_std_17)
+target_include_directories(voxel_downsample_scalar PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
 # Standalone executable - RVV implementation
 add_executable(voxel_downsample_rvv
@@ -63,3 +64,4 @@ add_executable(voxel_downsample_rvv
 
 target_compile_definitions(voxel_downsample_rvv PRIVATE BUILD_STANDALONE)
 target_compile_features(voxel_downsample_rvv PRIVATE cxx_std_17)
+target_include_directories(voxel_downsample_rvv PRIVATE ${CMAKE_SOURCE_DIR}/include)

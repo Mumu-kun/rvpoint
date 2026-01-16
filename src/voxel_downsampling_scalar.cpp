@@ -14,17 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-#ifndef BUILD_STANDALONE
 #include "rvpoint/point3d.hpp"
-#else
-// Standalone build - define Point3D locally
-struct Point3D {
-    float x, y, z;
-
-    Point3D() : x(0.0f), y(0.0f), z(0.0f) {}
-    Point3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-};
-#endif
 
 // Voxel key for hash map - represents (i,j,k) coordinates
 struct VoxelKey {
