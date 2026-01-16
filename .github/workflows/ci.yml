@@ -41,12 +41,19 @@ jobs:
           echo "VCPKG_ROOT=/opt/vcpkg" >> $GITHUB_ENV
 
       - name: Build native
+        env:
+          VCPKG_ROOT: /opt/vcpkg
         run: |
           if [ "${{ matrix.build_type }}" = "Debug" ]; then
             ./scripts/build.sh --debug
           else
             ./scripts/build.sh
           fi
+
+      - name: Run voxel downsampling tests
+        run: |
+          cd build/native
+          ctest -R voxel_downsampling_tests --output-on-failure -V
 
       - name: Upload test results
         if: failure()
@@ -101,6 +108,8 @@ jobs:
           qemu-riscv64 --version
 
       - name: Build RISC-V
+        env:
+          VCPKG_ROOT: /opt/vcpkg
         run: |
           BUILD_FLAGS="--riscv ${{ matrix.rvv }}"
           if [ "${{ matrix.build_type }}" = "Debug" ]; then
@@ -108,12 +117,170 @@ jobs:
           fi
           ./scripts/build.sh $BUILD_FLAGS
 
+      - name: Run voxel downsampling tests (RISC-V)
+        run: |
+          cd build/riscv
+          ctest -R voxel_downsampling_tests --output-on-failure -V
+
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-riscv-${{ matrix.build_type }}-${{ matrix.rvv != '' && 'rvv' || 'scalar' }}
           path: build/Testing/Temporary/
+
+  # Voxel Downsampling Comprehensive Tests
+  voxel-downsampling-tests:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+        leaf_size: [0.5, 1.0, 2.0, 5.0]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            git \
+            curl \
+            zip \
+            unzip \
+            tar \
+            pkg-config
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
+          /opt/vcpkg/bootstrap-vcpkg.sh
+          echo "VCPKG_ROOT=/opt/vcpkg" >> $GITHUB_ENV
+
+      - name: Build with voxel downsampling
+        env:
+          VCPKG_ROOT: /opt/vcpkg
+        run: |
+          if [ "${{ matrix.build_type }}" = "Debug" ]; then
+            ./scripts/build.sh --debug
+          else
+            ./scripts/build.sh
+          fi
+
+      - name: Run comprehensive voxel tests
+        run: |
+          cd build/native
+          # Run all voxel downsampling tests with verbose output
+          ctest -R voxel_downsampling_tests --output-on-failure -V
+
+          # Run stress tests separately to ensure they complete
+          ./tests/voxel_downsampling_tests "[voxel][stress]"
+
+          # Run comparison tests to verify scalar and RVV equivalence
+          ./tests/voxel_downsampling_tests "[voxel][comparison]"
+
+      - name: Test standalone executables
+        run: |
+          cd build/native
+
+          # Test scalar standalone with different leaf sizes
+          echo "Testing scalar implementation with leaf_size=${{ matrix.leaf_size }}"
+          echo "1.0 2.0 3.0" | ./src/voxel_downsample_scalar ${{ matrix.leaf_size }}
+
+          # Test RVV standalone with different leaf sizes
+          echo "Testing RVV implementation with leaf_size=${{ matrix.leaf_size }}"
+          echo "1.0 2.0 3.0" | ./src/voxel_downsample_rvv ${{ matrix.leaf_size }}
+
+      - name: Run performance validation
+        if: matrix.build_type == 'Release'
+        run: |
+          cd build/native
+          # Ensure performance tests complete without crashes
+          timeout 300 ./tests/voxel_downsampling_tests "[voxel][performance]" || exit 1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voxel-test-results-${{ matrix.build_type }}-leaf${{ matrix.leaf_size }}
+          path: |
+            build/native/Testing/Temporary/
+            build/native/tests/
+
+  # Performance regression tests
+  performance-tests:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            git \
+            curl \
+            zip \
+            unzip \
+            tar \
+            pkg-config
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
+          /opt/vcpkg/bootstrap-vcpkg.sh
+          echo "VCPKG_ROOT=/opt/vcpkg" >> $GITHUB_ENV
+
+      - name: Build Release with benchmarks
+        env:
+          VCPKG_ROOT: /opt/vcpkg
+        run: |
+          ./scripts/build.sh
+
+      - name: Run benchmarks
+        run: |
+          cd build/native
+          # Run benchmarks with reduced iterations for CI
+          ./benchmarks/benchmark_voxel_downsampling \
+            --benchmark_min_time=0.1s \
+            --benchmark_repetitions=3 \
+            --benchmark_display_aggregates_only=true \
+            --benchmark_format=json \
+            --benchmark_out=benchmark_results.json
+
+      - name: Validate performance
+        run: |
+          cd build/native
+          # Basic validation that benchmarks completed
+          if [ ! -f benchmark_results.json ]; then
+            echo "Benchmark results file not found!"
+            exit 1
+          fi
+
+          # Check that results contain data
+          if ! grep -q "benchmarks" benchmark_results.json; then
+            echo "Benchmark results appear empty!"
+            exit 1
+          fi
+
+          echo "Performance benchmarks completed successfully"
+          cat benchmark_results.json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: build/native/benchmark_results.json
 
   # Code quality checks
   code-quality:
@@ -143,3 +310,14 @@ jobs:
               -I include \
               src/ tests/ || true
           fi
+
+      - name: Check voxel downsampling code quality
+        run: |
+          # Run cppcheck specifically on voxel downsampling code
+          cppcheck --enable=all \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            --error-exitcode=1 \
+            src/voxel_downsampling_scalar.cpp \
+            src/voxel_downsampling_rvv.cpp \
+            tests/test_voxel_downsampling.cpp
