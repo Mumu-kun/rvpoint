@@ -14,13 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-// Simple 3D point structure
-struct Point3D {
-    float x, y, z;
-
-    Point3D() : x(0.0f), y(0.0f), z(0.0f) {}
-    Point3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-};
+#include "rvpoint/point3d.hpp"
 
 // Voxel key for hash map - represents (i,j,k) coordinates
 struct VoxelKey {
@@ -59,7 +53,8 @@ struct VoxelAccumulator {
     }
 
     Point3D get_centroid() const {
-        if (count == 0) return Point3D();
+        if (count == 0)
+            return Point3D();
         float inv_count = 1.0f / static_cast<float>(count);
         return Point3D(sum_x * inv_count, sum_y * inv_count, sum_z * inv_count);
     }
@@ -72,10 +67,7 @@ struct VoxelAccumulator {
  * @param leaf_size Voxel size (same for all dimensions)
  * @return Downsampled point cloud
  */
-std::vector<Point3D> voxel_downsample_scalar(
-    const std::vector<Point3D>& input,
-    float leaf_size)
-{
+std::vector<Point3D> voxel_downsample_scalar(const std::vector<Point3D>& input, float leaf_size) {
     if (input.empty() || leaf_size <= 0.0f) {
         return std::vector<Point3D>();
     }
@@ -115,13 +107,13 @@ std::vector<Point3D> voxel_downsample_scalar(
 /**
  * @brief Print statistics about the downsampling
  */
-static void print_stats(const std::vector<Point3D>& input,
-                const std::vector<Point3D>& output,
-                double time_ms) {
+static void print_stats(const std::vector<Point3D>& input, const std::vector<Point3D>& output,
+                        double time_ms) {
     std::cout << "Scalar Implementation Statistics:\n";
     std::cout << "  Input points:  " << input.size() << "\n";
     std::cout << "  Output points: " << output.size() << "\n";
-    std::cout << "  Reduction:     " << (100.0 * (1.0 - static_cast<double>(output.size()) / input.size())) << "%\n";
+    std::cout << "  Reduction:     "
+              << (100.0 * (1.0 - static_cast<double>(output.size()) / input.size())) << "%\n";
     std::cout << "  Time:          " << time_ms << " ms\n";
     std::cout << "  Throughput:    " << (input.size() / (time_ms / 1000.0) / 1e6) << " Mpoints/s\n";
 }
@@ -131,7 +123,8 @@ static void print_stats(const std::vector<Point3D>& input,
 #include <chrono>
 #include <random>
 
-std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = -100.0f, float max_coord = 100.0f) {
+std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = -100.0f,
+                                           float max_coord = 100.0f) {
     std::vector<Point3D> cloud;
     cloud.reserve(num_points);
 
@@ -148,13 +141,16 @@ std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = 
 
 int main(int argc, char** argv) {
     // Parse command line arguments
-    size_t num_points = 1000000;  // 1M points default
+    size_t num_points = 1000000; // 1M points default
     float leaf_size = 1.0f;
     int num_iterations = 5;
 
-    if (argc > 1) num_points = std::stoull(argv[1]);
-    if (argc > 2) leaf_size = std::stof(argv[2]);
-    if (argc > 3) num_iterations = std::stoi(argv[3]);
+    if (argc > 1)
+        num_points = std::stoull(argv[1]);
+    if (argc > 2)
+        leaf_size = std::stof(argv[2]);
+    if (argc > 3)
+        num_iterations = std::stoi(argv[3]);
 
     std::cout << "Voxel Grid Downsampling - Scalar Implementation\n";
     std::cout << "================================================\n\n";
@@ -188,7 +184,8 @@ int main(int argc, char** argv) {
 
     // Compute statistics
     double sum = 0.0;
-    for (double t : times) sum += t;
+    for (double t : times)
+        sum += t;
     double avg_time = sum / times.size();
 
     double variance = 0.0;
@@ -205,8 +202,10 @@ int main(int argc, char** argv) {
     // Verify output sanity
     std::cout << "\nOutput validation:\n";
     if (!result.empty()) {
-        std::cout << "  First point:  (" << result[0].x << ", " << result[0].y << ", " << result[0].z << ")\n";
-        std::cout << "  Last point:   (" << result.back().x << ", " << result.back().y << ", " << result.back().z << ")\n";
+        std::cout << "  First point:  (" << result[0].x << ", " << result[0].y << ", "
+                  << result[0].z << ")\n";
+        std::cout << "  Last point:   (" << result.back().x << ", " << result.back().y << ", "
+                  << result.back().z << ")\n";
     }
 
     return 0;

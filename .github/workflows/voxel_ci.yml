@@ -212,8 +212,11 @@ jobs:
           cppcheck --enable=all \
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
+            --suppress=useStlAlgorithm \
+            --suppress=unmatchedSuppression \
             --inline-suppr \
             --error-exitcode=1 \
+            -I include \
             src/voxel_downsampling_scalar.cpp \
             src/voxel_downsampling_rvv.cpp \
             tests/test_voxel_downsampling.cpp

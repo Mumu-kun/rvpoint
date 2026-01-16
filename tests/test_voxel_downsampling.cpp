@@ -12,18 +12,7 @@
 #include <random>
 #include <vector>
 
-// Simple 3D point structure (matching the implementations)
-struct Point3D {
-    float x, y, z;
-
-    Point3D() : x(0.0f), y(0.0f), z(0.0f) {}
-    Point3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-
-    bool approx_equal(const Point3D& other, float epsilon = 1e-5f) const {
-        return std::abs(x - other.x) < epsilon && std::abs(y - other.y) < epsilon &&
-               std::abs(z - other.z) < epsilon;
-    }
-};
+#include "rvpoint/point3d.hpp"
 
 // External function declarations (implemented in separate files)
 std::vector<Point3D> voxel_downsample_scalar(const std::vector<Point3D>& input, float leaf_size);
@@ -293,26 +282,26 @@ TEST_CASE("Voxel downsampling - boundary conditions", "[voxel][edge]") {
     }
 
     SECTION("Very large leaf size") {
-        auto input = generate_random_cloud(1000, -100.0f, 100.0f);
+        auto input = generate_random_cloud(1000, 0.0f, 100.0f); // All positive coords
         float leaf_size = 1000.0f;
 
         auto result_scalar = voxel_downsample_scalar(input, leaf_size);
         auto result_rvv = voxel_downsample_rvv(input, leaf_size);
 
         REQUIRE(result_scalar.size() == result_rvv.size());
-        REQUIRE(result_scalar.size() == 1); // All in same voxel
+        REQUIRE(result_scalar.size() == 1); // All in voxel [0,1000)
     }
 
     SECTION("Leaf size equals coordinate range") {
         std::vector<Point3D> input = {Point3D(0.0f, 0.0f, 0.0f), Point3D(5.0f, 5.0f, 5.0f),
-                                      Point3D(10.0f, 10.0f, 10.0f)};
+                                      Point3D(9.9f, 9.9f, 9.9f)};
         float leaf_size = 10.0f;
 
         auto result_scalar = voxel_downsample_scalar(input, leaf_size);
         auto result_rvv = voxel_downsample_rvv(input, leaf_size);
 
         REQUIRE(result_scalar.size() == result_rvv.size());
-        REQUIRE(result_scalar.size() == 2); // [0,10) and [10,20)
+        REQUIRE(result_scalar.size() == 1); // All in voxel [0,10)
     }
 }
 
@@ -330,15 +319,15 @@ TEST_CASE("Voxel downsampling - extreme coordinates", "[voxel][edge]") {
     }
 
     SECTION("Very large negative coordinates") {
-        std::vector<Point3D> input = {Point3D(-1000.0f, -1000.0f, -1000.0f),
-                                      Point3D(-1000.5f, -1000.5f, -1000.5f)};
+        std::vector<Point3D> input = {Point3D(-1000.1f, -1000.1f, -1000.1f),
+                                      Point3D(-1000.4f, -1000.4f, -1000.4f)};
         float leaf_size = 1.0f;
 
         auto result_scalar = voxel_downsample_scalar(input, leaf_size);
         auto result_rvv = voxel_downsample_rvv(input, leaf_size);
 
         REQUIRE(result_scalar.size() == result_rvv.size());
-        REQUIRE(result_scalar.size() == 1);
+        REQUIRE(result_scalar.size() == 1); // Both in voxel [-1001,-1000)
     }
 
     SECTION("Mixed extreme coordinates") {

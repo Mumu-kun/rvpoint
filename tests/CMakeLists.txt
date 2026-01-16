@@ -40,6 +40,8 @@ target_link_libraries(voxel_downsampling_tests
         Catch2::Catch2WithMain
 )
 
+target_include_directories(voxel_downsampling_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
 target_compile_options(voxel_downsampling_tests PRIVATE -Wall -Wextra)
 
 # Discover voxel downsampling tests
