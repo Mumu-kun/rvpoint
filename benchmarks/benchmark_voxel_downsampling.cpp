@@ -6,23 +6,19 @@
  */
 
 #include <benchmark/benchmark.h>
+
 #include <random>
 #include <vector>
 
-// Simple 3D point structure
-struct Point3D {
-    float x, y, z;
-
-    Point3D() : x(0.0f), y(0.0f), z(0.0f) {}
-    Point3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-};
+#include "rvpoint/point3d.hpp"
 
 // External function declarations
 std::vector<Point3D> voxel_downsample_scalar(const std::vector<Point3D>& input, float leaf_size);
 std::vector<Point3D> voxel_downsample_rvv(const std::vector<Point3D>& input, float leaf_size);
 
 // Helper to generate random point cloud
-std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = -100.0f, float max_coord = 100.0f) {
+std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = -100.0f,
+                                           float max_coord = 100.0f) {
     static std::mt19937 gen(42); // Fixed seed for reproducibility
     std::uniform_real_distribution<float> dis(min_coord, max_coord);
 
@@ -49,7 +45,8 @@ static void BM_VoxelDownsample_Scalar(benchmark::State& state) {
     }
 
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(num_points));
-    state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(num_points) * sizeof(Point3D));
+    state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(num_points) *
+                            sizeof(Point3D));
 }
 
 // Benchmark: RVV implementation with varying point counts
@@ -65,7 +62,8 @@ static void BM_VoxelDownsample_RVV(benchmark::State& state) {
     }
 
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(num_points));
-    state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(num_points) * sizeof(Point3D));
+    state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(num_points) *
+                            sizeof(Point3D));
 }
 
 // Benchmark: Scalar implementation with varying leaf sizes
@@ -115,17 +113,17 @@ BENCHMARK(BM_VoxelDownsample_RVV)
 
 // Register benchmarks with different leaf sizes
 BENCHMARK(BM_VoxelDownsample_Scalar_LeafSize)
-    ->Args({5})   // 0.5
-    ->Args({10})  // 1.0
-    ->Args({20})  // 2.0
-    ->Args({50})  // 5.0
+    ->Args({5})  // 0.5
+    ->Args({10}) // 1.0
+    ->Args({20}) // 2.0
+    ->Args({50}) // 5.0
     ->Unit(benchmark::kMillisecond);
 
 BENCHMARK(BM_VoxelDownsample_RVV_LeafSize)
-    ->Args({5})   // 0.5
-    ->Args({10})  // 1.0
-    ->Args({20})  // 2.0
-    ->Args({50})  // 5.0
+    ->Args({5})  // 0.5
+    ->Args({10}) // 1.0
+    ->Args({20}) // 2.0
+    ->Args({50}) // 5.0
     ->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();

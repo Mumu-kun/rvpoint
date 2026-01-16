@@ -12,18 +12,7 @@
 #include <random>
 #include <vector>
 
-// Simple 3D point structure (matching the implementations)
-struct Point3D {
-    float x, y, z;
-
-    Point3D() : x(0.0f), y(0.0f), z(0.0f) {}
-    Point3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-
-    bool approx_equal(const Point3D& other, float epsilon = 1e-5f) const {
-        return std::abs(x - other.x) < epsilon && std::abs(y - other.y) < epsilon &&
-               std::abs(z - other.z) < epsilon;
-    }
-};
+#include "rvpoint/point3d.hpp"
 
 // External function declarations (implemented in separate files)
 std::vector<Point3D> voxel_downsample_scalar(const std::vector<Point3D>& input, float leaf_size);

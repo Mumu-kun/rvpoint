@@ -18,13 +18,17 @@
 #include <iostream>
 #include <vector>
 
-// Simple 3D point structure
+#ifndef BUILD_STANDALONE
+#include "rvpoint/point3d.hpp"
+#else
+// Standalone build - define Point3D locally
 struct Point3D {
     float x, y, z;
 
     Point3D() : x(0.0f), y(0.0f), z(0.0f) {}
     Point3D(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
 };
+#endif
 
 // Point with voxel key for sorting
 struct PointWithKey {
@@ -41,11 +45,8 @@ struct PointWithKey {
  * For GCC11, we use inline assembly to access RVV instructions.
  * This computes floor(x * inv_leaf) for each coordinate.
  */
-void compute_voxel_indices_rvv(
-    const std::vector<Point3D>& input,
-    std::vector<PointWithKey>& output,
-    float inv_leaf)
-{
+void compute_voxel_indices_rvv(const std::vector<Point3D>& input, std::vector<PointWithKey>& output,
+                               float inv_leaf) {
 #ifdef PCL_HAS_RVV
     size_t n = input.size();
     output.resize(n);
@@ -57,53 +58,27 @@ void compute_voxel_indices_rvv(
         size_t vl;
 
         // Set vector length for this iteration
-        asm volatile(
-            "vsetvli %0, %1, e32, m1, ta, ma"
-            : "=r"(vl)
-            : "r"(n - i)
-        );
+        asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(n - i));
 
         // Load X coordinates
-        asm volatile(
-            "vle32.v v0, (%0)"
-            :
-            : "r"(&input[i].x)
-            : "v0"
-        );
+        asm volatile("vle32.v v0, (%0)" : : "r"(&input[i].x) : "v0");
 
         // Load Y coordinates (stride = sizeof(Point3D))
-        asm volatile(
-            "vle32.v v1, (%0)"
-            :
-            : "r"(&input[i].y)
-            : "v1"
-        );
+        asm volatile("vle32.v v1, (%0)" : : "r"(&input[i].y) : "v1");
 
         // Load Z coordinates
-        asm volatile(
-            "vle32.v v2, (%0)"
-            :
-            : "r"(&input[i].z)
-            : "v2"
-        );
+        asm volatile("vle32.v v2, (%0)" : : "r"(&input[i].z) : "v2");
 
         // Broadcast inv_leaf to vector v3
-        asm volatile(
-            "vfmv.v.f v3, %0"
-            :
-            : "f"(inv_leaf)
-            : "v3"
-        );
+        asm volatile("vfmv.v.f v3, %0" : : "f"(inv_leaf) : "v3");
 
         // Multiply: v0 = x * inv_leaf, v1 = y * inv_leaf, v2 = z * inv_leaf
-        asm volatile(
-            "vfmul.vv v0, v0, v3\n"
-            "vfmul.vv v1, v1, v3\n"
-            "vfmul.vv v2, v2, v3"
-            :
-            :
-            : "v0", "v1", "v2"
-        );
+        asm volatile("vfmul.vv v0, v0, v3\n"
+                     "vfmul.vv v1, v1, v3\n"
+                     "vfmul.vv v2, v2, v3"
+                     :
+                     :
+                     : "v0", "v1", "v2");
 
         // Convert float to int with floor semantics (fcvt.w.f with RDN rounding)
         // For simplicity, use standard conversion and handle floor separately
@@ -171,24 +146,18 @@ Point3D compute_centroid_rvv(const std::vector<PointWithKey>& points, size_t sta
     size_t i = start;
 
     // Initialize vector accumulators to zero
-    asm volatile(
-        "vsetvli zero, %0, e32, m1, ta, ma\n"
-        "vfmv.v.f v4, zero\n"  // sum_x accumulator
-        "vfmv.v.f v5, zero\n"  // sum_y accumulator
-        "vfmv.v.f v6, zero"    // sum_z accumulator
-        :
-        : "r"(count)
-        : "v4", "v5", "v6"
-    );
+    asm volatile("vsetvli zero, %0, e32, m1, ta, ma\n"
+                 "vfmv.v.f v4, zero\n" // sum_x accumulator
+                 "vfmv.v.f v5, zero\n" // sum_y accumulator
+                 "vfmv.v.f v6, zero"   // sum_z accumulator
+                 :
+                 : "r"(count)
+                 : "v4", "v5", "v6");
 
     while (i < end) {
         size_t vl;
 
-        asm volatile(
-            "vsetvli %0, %1, e32, m1, ta, ma"
-            : "=r"(vl)
-            : "r"(end - i)
-        );
+        asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(end - i));
 
         // Load X, Y, Z coordinates
         // Note: This is simplified; actual implementation needs proper strided loads
@@ -228,10 +197,7 @@ Point3D compute_centroid_rvv(const std::vector<PointWithKey>& points, size_t sta
  * @param leaf_size Voxel size (same for all dimensions)
  * @return Downsampled point cloud
  */
-std::vector<Point3D> voxel_downsample_rvv(
-    const std::vector<Point3D>& input,
-    float leaf_size)
-{
+std::vector<Point3D> voxel_downsample_rvv(const std::vector<Point3D>& input, float leaf_size) {
     if (input.empty() || leaf_size <= 0.0f) {
         return std::vector<Point3D>();
     }
@@ -249,9 +215,7 @@ std::vector<Point3D> voxel_downsample_rvv(
 
     // Step 3: Sort by voxel key
     std::sort(points_with_keys.begin(), points_with_keys.end(),
-        [](const PointWithKey& a, const PointWithKey& b) {
-            return a.sort_key < b.sort_key;
-        });
+              [](const PointWithKey& a, const PointWithKey& b) { return a.sort_key < b.sort_key; });
 
     // Step 4: Reduce contiguous segments (vectorized centroid computation)
     std::vector<Point3D> output;
@@ -277,13 +241,13 @@ std::vector<Point3D> voxel_downsample_rvv(
 /**
  * @brief Print statistics about the downsampling
  */
-static void print_stats(const std::vector<Point3D>& input,
-                const std::vector<Point3D>& output,
-                double time_ms) {
+static void print_stats(const std::vector<Point3D>& input, const std::vector<Point3D>& output,
+                        double time_ms) {
     std::cout << "RVV Implementation Statistics:\n";
     std::cout << "  Input points:  " << input.size() << "\n";
     std::cout << "  Output points: " << output.size() << "\n";
-    std::cout << "  Reduction:     " << (100.0 * (1.0 - static_cast<double>(output.size()) / input.size())) << "%\n";
+    std::cout << "  Reduction:     "
+              << (100.0 * (1.0 - static_cast<double>(output.size()) / input.size())) << "%\n";
     std::cout << "  Time:          " << time_ms << " ms\n";
     std::cout << "  Throughput:    " << (input.size() / (time_ms / 1000.0) / 1e6) << " Mpoints/s\n";
 }
@@ -293,7 +257,8 @@ static void print_stats(const std::vector<Point3D>& input,
 #include <chrono>
 #include <random>
 
-std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = -100.0f, float max_coord = 100.0f) {
+std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = -100.0f,
+                                           float max_coord = 100.0f) {
     std::vector<Point3D> cloud;
     cloud.reserve(num_points);
 
@@ -310,13 +275,16 @@ std::vector<Point3D> generate_random_cloud(size_t num_points, float min_coord = 
 
 int main(int argc, char** argv) {
     // Parse command line arguments
-    size_t num_points = 1000000;  // 1M points default
+    size_t num_points = 1000000; // 1M points default
     float leaf_size = 1.0f;
     int num_iterations = 5;
 
-    if (argc > 1) num_points = std::stoull(argv[1]);
-    if (argc > 2) leaf_size = std::stof(argv[2]);
-    if (argc > 3) num_iterations = std::stoi(argv[3]);
+    if (argc > 1)
+        num_points = std::stoull(argv[1]);
+    if (argc > 2)
+        leaf_size = std::stof(argv[2]);
+    if (argc > 3)
+        num_iterations = std::stoi(argv[3]);
 
     std::cout << "Voxel Grid Downsampling - RVV Implementation\n";
     std::cout << "=============================================\n\n";
@@ -357,7 +325,8 @@ int main(int argc, char** argv) {
 
     // Compute statistics
     double sum = 0.0;
-    for (double t : times) sum += t;
+    for (double t : times)
+        sum += t;
     double avg_time = sum / times.size();
 
     double variance = 0.0;
@@ -374,8 +343,10 @@ int main(int argc, char** argv) {
     // Verify output sanity
     std::cout << "\nOutput validation:\n";
     if (!result.empty()) {
-        std::cout << "  First point:  (" << result[0].x << ", " << result[0].y << ", " << result[0].z << ")\n";
-        std::cout << "  Last point:   (" << result.back().x << ", " << result.back().y << ", " << result.back().z << ")\n";
+        std::cout << "  First point:  (" << result[0].x << ", " << result[0].y << ", "
+                  << result[0].z << ")\n";
+        std::cout << "  Last point:   (" << result.back().x << ", " << result.back().y << ", "
+                  << result.back().z << ")\n";
     }
 
     return 0;
