@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 # Default values
 BUILD_TYPE="Release"
 ENABLE_RVV="OFF"
-BUILD_DIR="build"
+BUILD_DIR="build/native"
 TOOLCHAIN_FILE=""
 VCPKG_TRIPLET=""
 EMULATOR="qemu"
@@ -30,6 +30,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --riscv)
+            BUILD_DIR="build/riscv"
             TOOLCHAIN_FILE="-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
             VCPKG_TRIPLET="-DVCPKG_TARGET_TRIPLET=riscv64-linux -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/vcpkg/cmake/riscv64-linux-gnu.cmake"
             shift

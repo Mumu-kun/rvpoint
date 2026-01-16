@@ -69,7 +69,9 @@ RUN echo 'alias ll="ls -lah"' >> /root/.bashrc && \
     echo 'alias build="./scripts/build.sh"' >> /root/.bashrc && \
     echo 'alias build-riscv="./scripts/build.sh --riscv"' >> /root/.bashrc && \
     echo 'alias build-rvv="./scripts/build.sh --riscv --rvv"' >> /root/.bashrc && \
-    echo 'alias test-qemu="cd build && ctest --output-on-failure"' >> /root/.bashrc
+    echo 'alias test-qemu="cd build && ctest --output-on-failure"' >> /root/.bashrc && \
+    echo 'alias run="./scripts/run.sh"' >> /root/.bashrc && \
+    echo 'alias dev="./scripts/dev.sh"' >> /root/.bashrc
 
 # Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
@@ -87,6 +89,10 @@ RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "║    build-riscv   - RISC-V cross-compile (scalar)           ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    build-rvv     - RISC-V cross-compile (with RVV)         ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    test-qemu     - Run tests in QEMU                       ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    run           - Run executables (native/RISC-V)         ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    dev           - Smart build & run with ccache           ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║                  --tests, --examples, --benchmarks         ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║                  --native, --riscv, --qemu, --spike        ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "╚════════════════════════════════════════════════════════════╝"' >> /usr/local/bin/welcome.sh && \
     chmod +x /usr/local/bin/welcome.sh && \
     echo '/usr/local/bin/welcome.sh' >> /root/.bashrc
