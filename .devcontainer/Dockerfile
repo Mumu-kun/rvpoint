@@ -76,7 +76,7 @@ RUN echo 'alias ll="ls -lah"' >> /root/.bashrc && \
 # Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "╔════════════════════════════════════════════════════════════╗"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║  PCL-RISC-V Development Container                         ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║  PCL-RISC-V Development Container                          ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "╠════════════════════════════════════════════════════════════╣"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  Available tools:                                          ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    - GCC/G++ (native)                                      ║"' >> /usr/local/bin/welcome.sh && \

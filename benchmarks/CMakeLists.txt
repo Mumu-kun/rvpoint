@@ -12,3 +12,20 @@ cmake_minimum_required(VERSION 3.15)
 # )
 #
 # target_compile_options(benchmark_suite PRIVATE -O3)
+
+# ============================================================================
+# Voxel Downsampling Benchmarks
+# ============================================================================
+
+add_executable(benchmark_voxel_downsampling
+    benchmark_voxel_downsampling.cpp
+    ${CMAKE_SOURCE_DIR}/src/voxel_downsampling_scalar.cpp
+    ${CMAKE_SOURCE_DIR}/src/voxel_downsampling_rvv.cpp
+)
+
+target_link_libraries(benchmark_voxel_downsampling
+    PRIVATE
+        benchmark::benchmark
+)
+
+target_compile_options(benchmark_voxel_downsampling PRIVATE -O3)

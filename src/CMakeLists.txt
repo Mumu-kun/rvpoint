@@ -35,3 +35,31 @@ target_link_libraries(rvpoint INTERFACE
 
 # Compiler features
 target_compile_features(rvpoint INTERFACE cxx_std_17)
+
+# ============================================================================
+# Voxel Downsampling Implementations
+# ============================================================================
+
+# Object library for voxel downsampling implementations (for testing)
+add_library(voxel_downsampling_impl OBJECT
+    voxel_downsampling_scalar.cpp
+    voxel_downsampling_rvv.cpp
+)
+
+target_compile_features(voxel_downsampling_impl PUBLIC cxx_std_17)
+
+# Standalone executable - Scalar implementation
+add_executable(voxel_downsample_scalar
+    voxel_downsampling_scalar.cpp
+)
+
+target_compile_definitions(voxel_downsample_scalar PRIVATE BUILD_STANDALONE)
+target_compile_features(voxel_downsample_scalar PRIVATE cxx_std_17)
+
+# Standalone executable - RVV implementation
+add_executable(voxel_downsample_rvv
+    voxel_downsampling_rvv.cpp
+)
+
+target_compile_definitions(voxel_downsample_rvv PRIVATE BUILD_STANDALONE)
+target_compile_features(voxel_downsample_rvv PRIVATE cxx_std_17)

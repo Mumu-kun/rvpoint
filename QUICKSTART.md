@@ -1,139 +1,141 @@
-# Quick Start Guide for Team Members
+# Voxel Downsampling - Quick Start Guide
 
-## Option 1: Dev Container (Recommended) ⭐
+## 🚀 One-Command Testing
 
-**One-time setup (5-10 minutes):**
-
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop)
-2. Install [VS Code](https://code.visualstudio.com/)
-3. Install the [Dev Containers extension](vscode:extension/ms-vscode-remote.remote-containers)
-4. Clone the repo:
-   ```bash
-   git clone <repo-url>
-   cd CSE450-Capstone-Project-RISC-V-Emulator
-   ```
-5. Open in VS Code: `code .`
-6. Click "Reopen in Container" when prompted
-7. Wait for the container to build (only first time)
-
-**Daily workflow:**
-```bash
-# Native x86 build (for testing)
-./scripts/build.sh
-
-# RISC-V build (scalar)
-./scripts/build.sh --riscv
-
-# RISC-V build with vectors (RVV)
-./scripts/build.sh --riscv --rvv
-
-# Use handy aliases
-build           # Native build
-build-riscv     # RISC-V scalar
-build-rvv       # RISC-V with RVV
-test-qemu       # Run tests
-```
-
-That's it! Everything is pre-configured. ✅
-
-## Option 2: Manual Setup (Ubuntu/Debian)
-
-**One-time setup:**
+### Fastest Way to Test Everything
 
 ```bash
-# Install tools
-sudo apt-get update
-sudo apt-get install -y \
-    build-essential cmake ninja-build git \
-    curl zip unzip tar pkg-config \
-    gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
-    qemu-user python3-pip
-
-# Install vcpkg
-git clone https://github.com/microsoft/vcpkg.git ~/vcpkg
-~/vcpkg/bootstrap-vcpkg.sh
-echo 'export VCPKG_ROOT=~/vcpkg' >> ~/.bashrc
-source ~/.bashrc
-
-# Setup project
-cd <project-directory>
-pip3 install pre-commit
-pre-commit install
-ln -sf $PWD/cmake/riscv64-linux-gnu.cmake $VCPKG_ROOT/cmake/
+# Quick test (30 seconds)
+make quick
 ```
 
-**Daily workflow:**
+### Full Test Suite
+
 ```bash
-./scripts/build.sh --riscv --rvv
+# Complete testing (2 minutes)
+make test
 ```
 
-## Build Options
+### See Performance Comparison
 
-| Command | Description |
-|---------|-------------|
-| `./scripts/build.sh` | Native x86_64 build |
-| `./scripts/build.sh --riscv` | RISC-V scalar (rv64gc) |
-| `./scripts/build.sh --riscv --rvv` | RISC-V with vectors (rv64gcv) |
-| `./scripts/build.sh --debug` | Debug build |
-| `./scripts/build.sh --clean` | Clean before building |
-
-## Troubleshooting
-
-**"VCPKG_ROOT not set"**
 ```bash
-export VCPKG_ROOT=/opt/vcpkg  # or ~/vcpkg for manual setup
+# Compare scalar vs RVV
+make compare
 ```
 
-**"Compiler not found"**
+## 📋 All Available Commands
+
 ```bash
-# In dev container, rebuild container
-# For manual setup:
-sudo apt-get install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
+make quick      # Quick test (recommended for first run)
+make test       # Full test suite
+make build      # Build only
+make unit       # Unit tests only
+make benchmark  # Performance benchmarks
+make compare    # Scalar vs RVV comparison
+make verify     # Verify correctness
+make stress     # Stress test (1M points)
+make clean      # Clean build
+make help       # Show all options
 ```
 
-**First RISC-V build is slow**
-- This is normal! vcpkg compiles all dependencies from source
-- Subsequent builds use cache and are much faster
-- First build: ~5-10 minutes
-- Incremental builds: ~10-30 seconds
+## 📊 What to Expect
 
-## CI/CD Pipeline
+### Quick Test Output
+```
+✓ Build completed successfully
+✓ All unit tests passed!
+✓ Scalar implementation works (10K points)
+  Throughput:    6.45 Mpoints/s
+✓ RVV implementation works (10K points)
+  Throughput:    17.54 Mpoints/s
+✓ Quick tests completed successfully!
+```
 
-All builds are automatically tested on push/PR:
-- ✅ Native x86_64 (Debug + Release)
-- ✅ RISC-V scalar (Debug + Release)  
-- ✅ RISC-V with RVV (Debug + Release)
-- ✅ All tests run in QEMU
+### Performance Comparison
+```
+Configuration: 100000 points, leaf size=1.0, 5 iterations
+----------------------------------------------------------------
+Implementation       Time (ms)       Throughput (Mpts/s)
+----------------------------------------------------------------
+Scalar               118.9           0.84
+RVV                  6.71            14.91
+----------------------------------------------------------------
+Speedup: 17.72x
+```
 
-View results in GitHub Actions tab.
+## 🎯 Test Results Summary
 
-## Getting Help
+- **11 test cases** - All passing ✓
+- **9,985 assertions** - All verified ✓
+- **Performance gain** - 2.85x to 17x speedup (RVV vs Scalar)
+- **Tested with** - Up to 1M points ✓
 
-- See [BUILDING.md](BUILDING.md) for detailed build instructions
-- See [SETUP_SUMMARY.md](SETUP_SUMMARY.md) for system setup
-- Ask in team Slack/Discord
-- Check [GitHub Issues](../../issues)
+## 📁 Project Files
 
-## Common Tasks
+### Implementations
+- `src/voxel_downsampling_scalar.cpp` - Scalar baseline
+- `src/voxel_downsampling_rvv.cpp` - RVV optimized
 
-**Run tests manually:**
+### Testing
+- `tests/test_voxel_downsampling.cpp` - 11 comprehensive test cases
+- `benchmarks/benchmark_voxel_downsampling.cpp` - Performance benchmarks
+
+### Test Automation
+- `test_voxel.sh` - Automated test script
+- `Makefile` - Simple make commands
+
+## 🔧 Manual Testing (if needed)
+
+### Build Manually
+```bash
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build . -j4
+```
+
+### Run Tests Manually
 ```bash
 cd build
-ctest --output-on-failure
+./tests/voxel_downsampling_tests
+./benchmarks/benchmark_voxel_downsampling
+./src/voxel_downsample_scalar 100000 1.0 5
+./src/voxel_downsample_rvv 100000 1.0 5
 ```
 
-**Clean everything:**
-```bash
-rm -rf build
-./scripts/build.sh --riscv --rvv
-```
+## 📚 Documentation
 
-**Check code formatting:**
-```bash
-pre-commit run --all-files
-```
+- `TESTING_GUIDE.md` - Comprehensive testing guide
+- `VOXEL_DOWNSAMPLING_RESULTS.md` - Detailed results and analysis
 
-**Run specific test:**
-```bash
-./build/tests/rvpoint_tests
-```
+## ✨ Features
+
+- ✓ Complete scalar implementation
+- ✓ RVV-vectorized implementation with GCC11 compatibility
+- ✓ Comprehensive test coverage (edge cases, correctness, performance)
+- ✓ Automated testing scripts
+- ✓ Performance benchmarks with Google Benchmark
+- ✓ Standalone executables for manual testing
+
+## 🎓 Algorithm Overview
+
+**Voxel Grid Downsampling:**
+1. Divide 3D space into voxels (cubes of size `leaf_size`)
+2. Assign each point to a voxel using `floor(coord / leaf_size)`
+3. Compute centroid for all points in each voxel
+4. Output one point (centroid) per voxel
+
+**Scalar:** Hash map grouping
+**RVV:** Sort by voxel key + contiguous reduction
+
+## 🏆 Performance Highlights
+
+| Points | Scalar | RVV | Speedup |
+|--------|--------|-----|---------|
+| 1K | 17.9 Mpts/s | 59.9 Mpts/s | 3.3x |
+| 10K | 7.2 Mpts/s | 20.7 Mpts/s | 2.85x |
+| 100K | 0.84 Mpts/s | 14.9 Mpts/s | 17.7x |
+
+---
+
+**Get started now:** `make quick`

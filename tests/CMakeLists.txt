@@ -23,3 +23,24 @@ target_compile_options(rvpoint_tests PRIVATE -Wall -Wextra)
 
 # Discover tests
 catch_discover_tests(rvpoint_tests)
+
+# ============================================================================
+# Voxel Downsampling Tests
+# ============================================================================
+
+# Test executable for voxel downsampling
+add_executable(voxel_downsampling_tests
+    test_voxel_downsampling.cpp
+    ${CMAKE_SOURCE_DIR}/src/voxel_downsampling_scalar.cpp
+    ${CMAKE_SOURCE_DIR}/src/voxel_downsampling_rvv.cpp
+)
+
+target_link_libraries(voxel_downsampling_tests
+    PRIVATE
+        Catch2::Catch2WithMain
+)
+
+target_compile_options(voxel_downsampling_tests PRIVATE -Wall -Wextra)
+
+# Discover voxel downsampling tests
+catch_discover_tests(voxel_downsampling_tests)

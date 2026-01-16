@@ -64,9 +64,9 @@
         "seccomp=unconfined"
     ],
     // Mount git config as read-only, copy to allow modifications
-    "mounts": [
-        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/tmp/.gitconfig-host,type=bind,readonly"
-    ],
+    //"mounts": [
+    //    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/tmp/.gitconfig-host,type=bind,readonly"
+    //],
     // Use 'postStartCommand' for commands that should run every time
     // User settings
     "remoteUser": "root",
