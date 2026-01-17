@@ -64,3 +64,7 @@ target_link_libraries(test_radius PRIVATE rvvpcl)
 # RANSAC Test
 add_executable(test_ransac tests/test_ransac.cpp)
 target_link_libraries(test_ransac PRIVATE rvvpcl)
+
+# Benchmark Suite
+add_executable(benchmark tests/benchmark.cpp)
+target_link_libraries(benchmark PRIVATE rvvpcl)
