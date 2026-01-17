@@ -82,6 +82,21 @@ RUN echo "Verifying RISC-V toolchain installation..." \
 # Default command
 CMD ["/bin/bash"]
 
-# Add welcome message
-RUN echo "echo 'Welcome to the rvpoint devcontainer!'" >> /etc/bash.bashrc
+# Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
+RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
+    echo 'echo "╔════════════════════════════════════════════════════════════╗"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║  RVPoint: RISC-V Vector Optimized Point Cloud Library      ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "╠════════════════════════════════════════════════════════════╣"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║  Environment Ready:                                        ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - RISC-V GCC Toolchain (rv64gcv)                        ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - QEMU & Spike Simulators                               ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - CMake, Ninja, Python3, VCPKG                          ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║                                                            ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║  Quick Commands:                                           ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Verify All:   scripts/verify_container.sh               ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Manual Build: mkdir build && cd build && cmake ..       ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Run Tests:    qemu-riscv64 ...                          ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "╚════════════════════════════════════════════════════════════╝"' >> /usr/local/bin/welcome.sh && \
+    chmod +x /usr/local/bin/welcome.sh && \
+    echo '/usr/local/bin/welcome.sh' >> /etc/bash.bashrc
 
