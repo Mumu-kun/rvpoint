@@ -90,5 +90,24 @@ This repository is protected by a robust CI/CD pipeline:
 *   **Local Git Hooks**: A `pre-push` hook is available to prevent pushing broken code.
     *   Enable with: `bash scripts/setup_git_hooks.sh`
 
+## 📊 Benchmarking
+
+We support instruction-level benchmarking using QEMU's tracing feature. This allows for accurate "architectural instruction count" comparison between Scalar and RVV implementations, independent of emulation speed.
+
+### Running the Benchmark
+To generate the instruction count report:
+```bash
+scripts/run_trace_benchmark.sh
+```
+This will:
+1.  Build the benchmark executable.
+2.  Run each algorithm in initialization-only (`setup`), Scalar (`sc`), and RVV (`rvv`) modes.
+3.  Use QEMU trace logs to count executed Translation Blocks (TBs).
+4.  Subtract baseline overhead to report accurate kernel instruction counts.
+5.  Output results to `results/report_sc_rvv_qemu.txt`.
+
+### Expected Results
+You should see significant instruction reduction for compute-bound kernels (e.g., Normal Estimation ~5x reduction).
+
 ## 📄 License
 [MIT](LICENSE)
