@@ -5,6 +5,7 @@ BLUE="\033[1;34m"
 RESET="\033[0m"
 
 echo -e "${BLUE}Building Benchmarks...${RESET}"
+rm -rf build_cmake
 mkdir -p build_cmake
 cd build_cmake || exit 1
 cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/riscv.cmake > /dev/null

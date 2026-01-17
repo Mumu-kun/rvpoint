@@ -76,6 +76,7 @@ fi
 
 # 1. Configuration
 log_step "1. Configuring CMake"
+rm -rf build_cmake
 mkdir -p build_cmake
 cd build_cmake || exit 1
 cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/riscv.cmake > /dev/null
