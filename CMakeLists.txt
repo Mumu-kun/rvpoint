@@ -19,6 +19,11 @@ message(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
 # 1. The Library (rvvpcl)
 list(APPEND SOURCES 
     "src/voxel_grid_downsamp.cpp"
+    "src/rvv_common.cpp"
+    "src/statistical_outlier_removal.cpp"
+    "src/normal_estimation.cpp"
+    "src/radius_search.cpp"
+    "src/ransac_plane.cpp"
 )
 # Note: placeholder.c removed, real source used.
 add_library(rvvpcl ${SOURCES})
@@ -43,3 +48,19 @@ endif()
 # Voxel Grid Test
 add_executable(test_voxel_grid tests/test_voxel_grid.cpp)
 target_link_libraries(test_voxel_grid PRIVATE rvvpcl)
+
+# SOR Test
+add_executable(test_sor tests/test_sor.cpp)
+target_link_libraries(test_sor PRIVATE rvvpcl)
+
+# Normal Estimation Test
+add_executable(test_normal tests/test_normal.cpp)
+target_link_libraries(test_normal PRIVATE rvvpcl)
+
+# Radius Search Test
+add_executable(test_radius tests/test_radius.cpp)
+target_link_libraries(test_radius PRIVATE rvvpcl)
+
+# RANSAC Test
+add_executable(test_ransac tests/test_ransac.cpp)
+target_link_libraries(test_ransac PRIVATE rvvpcl)

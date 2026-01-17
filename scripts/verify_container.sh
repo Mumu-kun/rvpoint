@@ -41,4 +41,16 @@ echo "4. Running Vector Test..."
 echo "5. Running Voxel Grid Verification (Scalar vs RVV check)..."
 /opt/riscv/bin/qemu-riscv64 -cpu max ./test_voxel_grid
 
+echo "6. Running SOR Verification (Scalar vs RVV check)..."
+/opt/riscv/bin/qemu-riscv64 -cpu max ./test_sor
+
+echo "7. Running Normal Estimation Verification..."
+/opt/riscv/bin/qemu-riscv64 -cpu max ./test_normal
+
+echo "8. Running Radius Search Verification..."
+/opt/riscv/bin/qemu-riscv64 -cpu max ./test_radius
+
+echo "9. Running RANSAC Verification..."
+/opt/riscv/bin/qemu-riscv64 -cpu max ./test_ransac
+
 echo "Verification Complete!"
