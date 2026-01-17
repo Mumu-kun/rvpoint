@@ -1,56 +1,164 @@
 #!/bin/bash
 set -e
 
-# Get the root directory of the project
-PROJECT_ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"
-echo "Running verification from ${PROJECT_ROOT}..."
-cd "${PROJECT_ROOT}"
+# ==============================================================================
+# Styling Constants
+# ==============================================================================
+BOLD="\033[1m"
+RESET="\033[0m"
+RED="\033[1;31m"
+GREEN="\033[1;32m"
+YELLOW="\033[1;33m"
+BLUE="\033[1;34m"
+CYAN="\033[1;36m"
+MAGENTA="\033[1;35m"
 
-echo "0. Running Workflow Checks..."
-if [ -f "scripts/check_format.sh" ]; then
-    bash scripts/check_format.sh
+# ==============================================================================
+# Helper Functions
+# ==============================================================================
+log_header() {
+    echo -e "\n${BLUE}${BOLD}============================================================${RESET}"
+    echo -e "${BLUE}${BOLD}  $1${RESET}"
+    echo -e "${BLUE}${BOLD}============================================================${RESET}"
+}
+
+log_step() {
+    echo -e "\n${CYAN}${BOLD}>> $1${RESET}"
+}
+
+log_success() {
+    echo -e "${GREEN}${BOLD}✔ $1${RESET}"
+}
+
+log_error() {
+    echo -e "${RED}${BOLD}✘ $1${RESET}"
+}
+
+log_info() {
+    echo -e "${RESET}$1"
+}
+
+print_banner() {
+    clear
+    echo -e "${MAGENTA}${BOLD}"
+    echo "  _____  _    __   ___      _       _   "
+    echo " |  __ \| |   \ \ / / |    (_)     | |  "
+    echo " | |__) | |__  \ V /| |____ _ _ __ | |_ "
+    echo " |  _  /| '_ \  > < | |__  | | '_ \| __|"
+    echo " | | \ \| | \ \/ . \| |  | | | | | | |_ "
+    echo " |_|  \_\_|  \_\_/  |_|  |_|_|_| |_|\__|"
+    echo " RISC-V Optimization Verification Suite"
+    echo -e "${RESET}"
+}
+
+# ==============================================================================
+# Main Script
+# ==============================================================================
+
+print_banner
+log_header "Starting Verification Suite"
+
+# 0. Workflow Checks
+log_step "0. Running Workflow Checks"
+if [ -f scripts/check_format.sh ]; then
+    bash scripts/check_format.sh || { log_error "Format check failed"; exit 1; }
+    log_success "Formatting OK"
+else
+    log_info "Skipping format check (script not found)"
 fi
 
-if [ -f "scripts/lint.sh" ]; then
-    if command -v cppcheck &> /dev/null; then
-        bash scripts/lint.sh
-    else
-        echo "[WARNING] cppcheck not found. Skipping."
-    fi
+if [ -f scripts/lint.sh ]; then
+    bash scripts/lint.sh || { log_error "Lint check failed"; exit 1; }
+    log_success "Linting OK"
+else
+    log_info "Skipping lint check (script not found)"
 fi
 
-echo "1. Configuring CMake..."
-export CC=/opt/riscv/bin/riscv64-unknown-elf-gcc
-export CXX=/opt/riscv/bin/riscv64-unknown-elf-g++
-
-rm -rf build_cmake
+# 1. Configuration
+log_step "1. Configuring CMake"
 mkdir -p build_cmake
-cd build_cmake
+cd build_cmake || exit 1
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/riscv.cmake > /dev/null
+log_success "CMake Configured"
 
-cmake .. -G "Unix Makefiles"
+# 2. Building
+log_step "2. Building Project"
+make -j$(nproc) > /dev/null
+log_success "Build Complete"
+cd .. || exit 1
 
-echo "2. Building Project..."
-make -j$(nproc)
+# 3. Scalar Test
+log_step "3. Running Scalar Test"
+if /opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_scalar | grep -q "verification"; then
+    log_success "Scalar Test Passed"
+else
+    log_error "Scalar Test Failed"
+    exit 1
+fi
 
-echo "3. Running Scalar Test..."
-/opt/riscv/bin/qemu-riscv64 -cpu max ./test_scalar
+# 4. Vector Test
+log_step "4. Running Vector Test"
+if /opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_vector | grep -q "verification"; then
+    log_success "Vector Test Passed"
+else
+    log_error "Vector Test Failed"
+    exit 1
+fi
 
-echo "4. Running Vector Test..."
-/opt/riscv/bin/qemu-riscv64 -cpu max ./test_vector
+# 5. Voxel Grid
+log_step "5. Verifying Voxel Grid"
+OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_voxel_grid)
+echo "$OUT"
+if echo "$OUT" | grep -q "PASS"; then
+    log_success "Voxel Grid OK"
+else
+    log_error "Voxel Grid Failed"
+    exit 1
+fi
 
-echo "5. Running Voxel Grid Verification (Scalar vs RVV check)..."
-/opt/riscv/bin/qemu-riscv64 -cpu max ./test_voxel_grid
+# 6. SOR
+log_step "6. Verifying SOR"
+OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_sor)
+echo "$OUT"
+if echo "$OUT" | grep -q "PASS"; then
+    log_success "SOR OK"
+else
+    log_error "SOR Failed"
+    exit 1
+fi
 
-echo "6. Running SOR Verification (Scalar vs RVV check)..."
-/opt/riscv/bin/qemu-riscv64 -cpu max ./test_sor
+# 7. Normal Estimation
+log_step "7. Verifying Normal Estimation"
+OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_normal)
+echo "$OUT"
+if echo "$OUT" | grep -q "PASS"; then
+    log_success "Normal Estimation OK"
+else
+    log_error "Normal Estimation Failed"
+    exit 1
+fi
 
-echo "7. Running Normal Estimation Verification..."
-/opt/riscv/bin/qemu-riscv64 -cpu max ./test_normal
+# 8. Radius Search
+log_step "8. Verifying Radius Search"
+OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_radius)
+echo "$OUT"
+if echo "$OUT" | grep -q "PASS"; then
+    log_success "Radius Search OK"
+else
+    log_error "Radius Search Failed"
+    exit 1
+fi
 
-echo "8. Running Radius Search Verification..."
-/opt/riscv/bin/qemu-riscv64 -cpu max ./test_radius
+# 9. RANSAC
+log_step "9. Verifying RANSAC"
+OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_ransac)
+echo "$OUT"
+if echo "$OUT" | grep -q "PASS"; then
+    log_success "RANSAC OK"
+else
+    log_error "RANSAC Failed"
+    exit 1
+fi
 
-echo "9. Running RANSAC Verification..."
-/opt/riscv/bin/qemu-riscv64 -cpu max ./test_ransac
-
-echo "Verification Complete!"
+log_header "All Verification Steps Passed! 🚀"
+exit 0
