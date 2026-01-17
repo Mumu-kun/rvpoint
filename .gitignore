@@ -1,0 +1,21 @@
+# Build Directories
+build/
+build_cmake/
+
+# Executables
+test_scalar
+test_vector
+test_voxel_grid
+rvv_test
+check_rvv.c
+*.o
+*.a
+
+# Editor/Temp
+.vscode/
+.agent/
+.DS_Store
+*.swp
+
+# Artifacts
+.gemini/

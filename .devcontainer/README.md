@@ -31,35 +31,45 @@ This Docker development container provides a complete RISC-V development environ
 ```
 
 3. When prompted, click **"Reopen in Container"**
-
    - Or press `Cmd+Shift+P` and select "Dev Containers: Reopen in Container"
 
 4. Wait for the container to build (first time takes ~15-20 minutes)
 
-5. Verify installation in the VS Code terminal:
+5. Verify installation:
 
 ```bash
-   riscv64-unknown-elf-gcc --version
-   spike --version
+   scripts/verify_container.sh
 ```
 
 ## Usage Examples
 
-### Compile a RISC-V Program
+### Compile and Run Tests
+
+Use the provided `Makefile` to compile and run tests:
 
 ```bash
-# Compile
-riscv64-unknown-elf-gcc -o hello hello.c
+# Run Scalar Test
+make run_scalar
 
-# Run with Spike
-spike pk hello
+# Run Vector Test
+make run_vector
+
+# Clean build artifacts
+make clean
 ```
 
-### Compile with Vector Extensions
+### Manual Compilation
+
+If you prefer to compile manually:
 
 ```bash
-riscv64-unknown-elf-gcc -march=rv64gcv -o vector_program vector_program.c
-spike --isa=rv64gcv pk vector_program
+# Compile Scalar
+rubriscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o build/test_scalar tests/test_scalar.c
+qemu-riscv64 -cpu max build/test_scalar
+
+# Compile Vector
+riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o build/test_vector tests/test_vector.c
+qemu-riscv64 -cpu max build/test_vector
 ```
 
 ## Troubleshooting

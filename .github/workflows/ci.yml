@@ -1,0 +1,44 @@
+name: RISC-V CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          qemu-user \
+          qemu-system-misc \
+          cppcheck \
+          clang-format \
+          build-essential \
+          wget \
+          tar
+
+    - name: Install RISC-V Toolchain
+      run: |
+        wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2024.09.03/riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz
+        sudo mkdir -p /opt/riscv
+        sudo tar -xzf riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz -C /opt
+        rm riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz
+        echo "/opt/riscv/bin" >> $GITHUB_PATH
+        export PATH="/opt/riscv/bin:$PATH"
+        riscv64-unknown-elf-gcc --version
+
+    - name: Run Verification
+      run: |
+        # Ensure path is set for this shell session too, though GITHUB_PATH handles subsequent steps
+        export PATH="/opt/riscv/bin:$PATH"
+        bash scripts/verify_container.sh

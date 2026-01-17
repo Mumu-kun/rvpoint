@@ -76,7 +76,7 @@ WORKDIR /workspace
 # Verify installations
 RUN echo "Verifying RISC-V toolchain installation..." \
     && riscv64-unknown-elf-gcc --version \
-    && spike --version \
+    && which spike \
     && echo "RISC-V environment ready!"
 
 # Default command
