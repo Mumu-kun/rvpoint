@@ -81,3 +81,7 @@ RUN echo "Verifying RISC-V toolchain installation..." \
 
 # Default command
 CMD ["/bin/bash"]
+
+# Add welcome message
+RUN echo "echo 'Welcome to the rvpoint devcontainer!'" >> /etc/bash.bashrc
+
