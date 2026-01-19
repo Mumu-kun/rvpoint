@@ -126,7 +126,6 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
         size_t n = cloud.n;
         size_t i = 0;
         
-#ifdef __riscv_vector
         while (i < n) {
             size_t vl = __riscv_vsetvl_e32m8(n - i);
             
@@ -156,13 +155,6 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
             
             i += vl;
         }
-#else
-        // Fallback if not compiled with vector
-        for(; i < n; ++i) {
-             float val = a*cloud.x[i] + b*cloud.y[i] + c*cloud.z[i] + d;
-             if(std::abs(val) <= dist_thresh) current_inliers++;
-        }
-#endif
 
         if(current_inliers > best_inliers) {
             best_inliers = current_inliers;

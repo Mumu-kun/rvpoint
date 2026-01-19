@@ -67,7 +67,7 @@ std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
     // Max VLEN is usually reasonable, assume max 256 or 512 elements for buffer logic if needed,
     // but here we just loop standard strip mining.
 
-    #ifdef __riscv_vector
+
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m8(n - i);
 
@@ -112,20 +112,6 @@ std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
 
         i += vl;
     }
-    #else
-    // Fallback if vector offline
-    for (size_t k = 0; k < n; ++k) {
-        int vx = std::floor(in.x[k] * inv_leaf);
-        int vy = std::floor(in.y[k] * inv_leaf);
-        int vz = std::floor(in.z[k] * inv_leaf);
-        auto key = std::make_tuple(vx, vy, vz);
-        
-        grid[key].first.x += in.x[k];
-        grid[key].first.y += in.y[k];
-        grid[key].first.z += in.z[k];
-        grid[key].second++;
-    }
-    #endif
 
     // Compute centroids
     std::size_t count = 0;

@@ -10,6 +10,10 @@ rvv_test
 check_rvv.c
 *.o
 *.a
+*_manual
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
 
 # Editor/Temp
 .vscode/

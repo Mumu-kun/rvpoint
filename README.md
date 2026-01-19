@@ -109,5 +109,39 @@ This will:
 ### Expected Results
 You should see significant instruction reduction for compute-bound kernels (e.g., Normal Estimation ~5x reduction).
 
+### Verify without CMake (Manual Compilation)
+You can manually compile and verify each function against its scalar counterpart using the provided script or manual commands.
+
+**Using the script:**
+```bash
+scripts/verify_manual.sh
+```
+
+**Individual commands:**
+
+*Voxel Grid:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/voxel_grid_downsamp.cpp tests/test_voxel_grid.cpp -o test_voxel_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_voxel_rvv_manual
+```
+
+*RANSAC Plane:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/ransac_plane.cpp tests/test_ransac.cpp -o test_ransac_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_ransac_rvv_manual
+```
+
+*Radius Search:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/radius_search.cpp tests/test_radius.cpp -o test_radius_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_radius_rvv_manual
+```
+
+*Statistical Outlier Removal:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/statistical_outlier_removal.cpp tests/test_sor.cpp -o test_sor_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_sor_rvv_manual
+```
+
 ## 📄 License
 [MIT](LICENSE)

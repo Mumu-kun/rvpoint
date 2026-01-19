@@ -9,7 +9,6 @@ void get_dist_sq_rvv(const float* x, const float* y, const float* z,
                      float qx, float qy, float qz,
                      float* out_d2, std::size_t n)
 {
-#ifdef __riscv_vector
   std::size_t i = 0;
   while (i < n) {
     std::size_t vl = __riscv_vsetvl_e32m8(n - i);
@@ -32,14 +31,6 @@ void get_dist_sq_rvv(const float* x, const float* y, const float* z,
     __riscv_vse32_v_f32m8(&out_d2[i], sum, vl);
     i += vl;
   }
-#else
-  for (std::size_t i = 0; i < n; i++) {
-    float dx = x[i] - qx;
-    float dy = y[i] - qy;
-    float dz = z[i] - qz;
-    out_d2[i] = dx*dx + dy*dy + dz*dz;
-  }
-#endif
 }
 
 } // namespace rvv_pcl
