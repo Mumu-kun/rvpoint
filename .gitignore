@@ -25,3 +25,11 @@ cmake_install.cmake
 .gemini/
 
 .gitignore
+
+# Local Toolchain
+riscv-toolchain/
+
+# Test Artifacts
+tests/test_rvv_features
+tests/test_tuples
+tests/test_autovec.s

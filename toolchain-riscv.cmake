@@ -1,7 +1,12 @@
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR riscv64)
 
-set(RISCV_PATH "/opt/riscv")
+if(DEFINED ENV{RISCV_PATH})
+    set(RISCV_PATH "$ENV{RISCV_PATH}")
+else()
+    set(RISCV_PATH "/opt/riscv")
+endif()
+
 set(CMAKE_C_COMPILER "${RISCV_PATH}/bin/riscv64-unknown-elf-gcc")
 set(CMAKE_CXX_COMPILER "${RISCV_PATH}/bin/riscv64-unknown-elf-g++")
 

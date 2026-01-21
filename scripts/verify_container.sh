@@ -88,9 +88,15 @@ make -j$(nproc) > /dev/null
 log_success "Build Complete"
 cd .. || exit 1
 
+# Helper: Find QEMU
+if [ -f "${RISCV_PATH:-/opt/riscv}/bin/qemu-riscv64" ]; then
+    QEMU_BIN="${RISCV_PATH:-/opt/riscv}/bin/qemu-riscv64"
+else
+    QEMU_BIN="qemu-riscv64"
+fi
 # 3. Scalar Test
 log_step "3. Running Scalar Test"
-if /opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_scalar | grep -q "verification"; then
+if "$QEMU_BIN" -cpu max build_cmake/test_scalar | grep -q "verification"; then
     log_success "Scalar Test Passed"
 else
     log_error "Scalar Test Failed"
@@ -99,7 +105,7 @@ fi
 
 # 4. Vector Test
 log_step "4. Running Vector Test"
-if /opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_vector | grep -q "verification"; then
+if "$QEMU_BIN" -cpu max build_cmake/test_vector | grep -q "verification"; then
     log_success "Vector Test Passed"
 else
     log_error "Vector Test Failed"
@@ -108,7 +114,7 @@ fi
 
 # 5. Voxel Grid
 log_step "5. Verifying Voxel Grid"
-OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_voxel_grid)
+OUT=$("$QEMU_BIN" -cpu max build_cmake/test_voxel_grid)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "Voxel Grid OK"
@@ -119,7 +125,7 @@ fi
 
 # 6. SOR
 log_step "6. Verifying SOR"
-OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_sor)
+OUT=$("$QEMU_BIN" -cpu max build_cmake/test_sor)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "SOR OK"
@@ -130,7 +136,7 @@ fi
 
 # 7. Normal Estimation
 log_step "7. Verifying Normal Estimation"
-OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_normal)
+OUT=$("$QEMU_BIN" -cpu max build_cmake/test_normal)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "Normal Estimation OK"
@@ -141,7 +147,7 @@ fi
 
 # 8. Radius Search
 log_step "8. Verifying Radius Search"
-OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_radius)
+OUT=$("$QEMU_BIN" -cpu max build_cmake/test_radius)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "Radius Search OK"
@@ -152,7 +158,7 @@ fi
 
 # 9. RANSAC
 log_step "9. Verifying RANSAC"
-OUT=$(/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_ransac)
+OUT=$("$QEMU_BIN" -cpu max build_cmake/test_ransac)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "RANSAC OK"

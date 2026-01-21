@@ -38,6 +38,7 @@ RUN apt-get update && apt-get install -y \
     vim \
     nano \
     htop \
+    qemu-user-static \
     && pip3 install --no-cache-dir pre-commit \
     && rm -rf /var/lib/apt/lists/*
 
@@ -47,10 +48,10 @@ ENV PATH="${RISCV}/bin:${PATH}"
 
 # Layer 2: Install RISC-V GNU Toolchain (matching your version)
 WORKDIR /tmp
-RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2024.09.03/riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz \
+RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.01.20/riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz \
     && mkdir -p ${RISCV} \
-    && tar -xzf riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz -C /opt \
-    && rm riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz
+    && tar -xJf riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz -C /opt \
+    && rm riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz
 
 # Layer 3: Build and install Spike (RISC-V ISA Simulator)
 RUN git clone https://github.com/riscv-software-src/riscv-isa-sim.git \

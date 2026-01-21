@@ -31,7 +31,13 @@ This library implements 5 core point cloud processing algorithms, each with a hi
 2.  **Open in Dev Container**:
     *   Open VS Code (`code .`).
     *   Click "Reopen in Container" when prompted.
-    *   *This automatically sets up the GCC 13+ RISC-V Toolchain, QEMU, CMake, and all dependencies.*
+    *   *This automatically sets up the GCC 13+ (or GCC 14 if configured) RISC-V Toolchain, QEMU, CMake, and all dependencies.*
+
+### Custom Toolchain Path
+If you installed the toolchain in a custom location, set the `RISCV_PATH` environment variable before running scripts or building:
+```bash
+export RISCV_PATH=/path/to/riscv
+```
 
 ## 🏗️ Building & Testing
 

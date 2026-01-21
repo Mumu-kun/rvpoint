@@ -2,9 +2,11 @@
 set -e
 
 # Compiler and Flags
-CXX="/opt/riscv/bin/riscv64-unknown-elf-g++"
+# Compiler and Flags
+RISCV_PATH=${RISCV_PATH:-"/opt/riscv"}
+CXX="${RISCV_PATH}/bin/riscv64-unknown-elf-g++"
 FLAGS="-march=rv64gcv -mabi=lp64d -I src/include"
-QEMU="qemu-riscv64 -cpu rv64,v=true,vlen=128"
+QEMU="${RISCV_PATH}/bin/qemu-riscv64 -cpu rv64,v=true,vlen=128"
 
 echo "========================================"
 echo "Verifying Voxel Grid..."

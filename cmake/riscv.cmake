@@ -1,8 +1,14 @@
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR riscv)
 
-set(CMAKE_C_COMPILER /opt/riscv/bin/riscv64-unknown-elf-gcc)
-set(CMAKE_CXX_COMPILER /opt/riscv/bin/riscv64-unknown-elf-g++)
+if(DEFINED ENV{RISCV_PATH})
+    set(RISCV_PATH "$ENV{RISCV_PATH}")
+else()
+    set(RISCV_PATH "/opt/riscv")
+endif()
+
+set(CMAKE_C_COMPILER "${RISCV_PATH}/bin/riscv64-unknown-elf-gcc")
+set(CMAKE_CXX_COMPILER "${RISCV_PATH}/bin/riscv64-unknown-elf-g++")
 
 set(CMAKE_C_FLAGS "-march=rv64gcv -mabi=lp64d" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS "-march=rv64gcv -mabi=lp64d" CACHE STRING "" FORCE)
