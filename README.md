@@ -171,6 +171,40 @@ Run the standard check:
 scripts/verify_container.sh
 ```
 
+### Detailed Verification Steps (Manual)
+If you want to verify specific GCC 14 capabilities manually, run these commands:
+
+**1. Verify Toolchain Version & Environment**
+```bash
+echo $RISCV_PATH  # Should output /opt/riscv (or your custom path)
+riscv64-unknown-elf-gcc --version
+```
+*(If RISCV_PATH is empty, run `export RISCV_PATH=/opt/riscv` first)*
+
+**2. Verify New RVV 1.0 Features (Fractional LMUL)**
+```bash
+# Compile
+$RISCV_PATH/bin/riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o tests/test_rvv_features tests/test_rvv_features.c
+# Run (Expect "vl=2" for mf2)
+qemu-riscv64 -cpu rv64,v=true,vlen=128 tests/test_rvv_features
+```
+
+**3. Verify Tuple Types & Segmented Operations**
+```bash
+# Compile
+$RISCV_PATH/bin/riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o tests/test_tuples tests/test_tuples.c
+# Run
+qemu-riscv64 -cpu rv64,v=true,vlen=128 tests/test_tuples
+```
+
+**4. Verify Auto-Vectorization**
+```bash
+# Compile to assembly
+$RISCV_PATH/bin/riscv64-unknown-elf-gcc -O3 -march=rv64gcv -mabi=lp64d -S -o tests/test_autovec.s tests/test_autovec.c
+# Check for vector instructions (should show 'vle32.v', 'vadd.vv', etc.)
+grep -E "vle|vadd|vse" tests/test_autovec.s
+```
+
 ### New Features Enabled
 *   **Auto-Vectorization**: `-O3 -march=rv64gcv` now automatically vectorizes standard loops.
 *   **RVV 1.0 Intrinsics**: Full support for fractional LMUL (`mf2`) and Tuple types (`vfloat32m1x2_t`).
