@@ -33,3 +33,6 @@ riscv-toolchain/
 tests/test_rvv_features
 tests/test_tuples
 tests/test_autovec.s
+
+# Data
+data/
