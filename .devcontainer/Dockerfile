@@ -38,10 +38,13 @@ RUN apt-get update && apt-get install -y \
     vim \
     nano \
     htop \
-    qemu-user-static \
-    && ln -s /usr/bin/qemu-riscv64-static /usr/bin/qemu-riscv64 \
     && pip3 install --no-cache-dir pre-commit \
     && rm -rf /var/lib/apt/lists/*
+    
+# Layer 1.5: Install QEMU 7.2+ Static (Required for RVV 1.0 support)
+RUN wget https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/qemu-riscv64-static \
+    && chmod +x qemu-riscv64-static \
+    && mv qemu-riscv64-static /usr/bin/qemu-riscv64
 
 # Set environment variables
 ENV RISCV=/opt/riscv
