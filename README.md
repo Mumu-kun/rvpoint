@@ -151,3 +151,27 @@ qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_sor_rvv_manual
 
 ## 📄 License
 [MIT](LICENSE)
+
+## ⚡ GCC 14 Upgrade (Teammates Read Here)
+
+We have upgraded the toolchain to **GCC 14** (supports RVV 1.0, Auto-vectorization, Tuple types).
+
+### How to use
+1.  **Checkout the branch**:
+    ```bash
+    git checkout dev_arian
+    ```
+2.  **Rebuild Dev Container**:
+    *   Command Palette (`Ctrl+Shift+P`) -> `Dev Containers: Rebuild Container`.
+    *   *This will automatically install GCC 14 and configure QEMU.*
+
+### Verification
+Run the standard check:
+```bash
+scripts/verify_container.sh
+```
+
+### New Features Enabled
+*   **Auto-Vectorization**: `-O3 -march=rv64gcv` now automatically vectorizes standard loops.
+*   **RVV 1.0 Intrinsics**: Full support for fractional LMUL (`mf2`) and Tuple types (`vfloat32m1x2_t`).
+*   **Tests**: See `tests/test_rvv_features.c` and `tests/test_tuples.c` for examples.
