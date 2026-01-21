@@ -94,9 +94,13 @@ if [ -f "${RISCV_PATH:-/opt/riscv}/bin/qemu-riscv64" ]; then
 else
     QEMU_BIN="qemu-riscv64"
 fi
+
+# CPU Flags (Use specific config instead of 'max' for better compatibility with older QEMU)
+QEMU_FLAGS="-cpu rv64,v=true,vlen=128"
+
 # 3. Scalar Test
 log_step "3. Running Scalar Test"
-if "$QEMU_BIN" -cpu max build_cmake/test_scalar | grep -q "verification"; then
+if "$QEMU_BIN" $QEMU_FLAGS build_cmake/test_scalar | grep -q "verification"; then
     log_success "Scalar Test Passed"
 else
     log_error "Scalar Test Failed"
@@ -105,7 +109,7 @@ fi
 
 # 4. Vector Test
 log_step "4. Running Vector Test"
-if "$QEMU_BIN" -cpu max build_cmake/test_vector | grep -q "verification"; then
+if "$QEMU_BIN" $QEMU_FLAGS build_cmake/test_vector | grep -q "verification"; then
     log_success "Vector Test Passed"
 else
     log_error "Vector Test Failed"
@@ -114,7 +118,7 @@ fi
 
 # 5. Voxel Grid
 log_step "5. Verifying Voxel Grid"
-OUT=$("$QEMU_BIN" -cpu max build_cmake/test_voxel_grid)
+OUT=$("$QEMU_BIN" $QEMU_FLAGS build_cmake/test_voxel_grid)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "Voxel Grid OK"
@@ -125,7 +129,7 @@ fi
 
 # 6. SOR
 log_step "6. Verifying SOR"
-OUT=$("$QEMU_BIN" -cpu max build_cmake/test_sor)
+OUT=$("$QEMU_BIN" $QEMU_FLAGS build_cmake/test_sor)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "SOR OK"
@@ -136,7 +140,7 @@ fi
 
 # 7. Normal Estimation
 log_step "7. Verifying Normal Estimation"
-OUT=$("$QEMU_BIN" -cpu max build_cmake/test_normal)
+OUT=$("$QEMU_BIN" $QEMU_FLAGS build_cmake/test_normal)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "Normal Estimation OK"
@@ -147,7 +151,7 @@ fi
 
 # 8. Radius Search
 log_step "8. Verifying Radius Search"
-OUT=$("$QEMU_BIN" -cpu max build_cmake/test_radius)
+OUT=$("$QEMU_BIN" $QEMU_FLAGS build_cmake/test_radius)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "Radius Search OK"
@@ -158,7 +162,7 @@ fi
 
 # 9. RANSAC
 log_step "9. Verifying RANSAC"
-OUT=$("$QEMU_BIN" -cpu max build_cmake/test_ransac)
+OUT=$("$QEMU_BIN" $QEMU_FLAGS build_cmake/test_ransac)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
     log_success "RANSAC OK"
