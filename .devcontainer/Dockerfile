@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install -y \
     nano \
     htop \
     qemu-user-static \
+    && ln -s /usr/bin/qemu-riscv64-static /usr/bin/qemu-riscv64 \
     && pip3 install --no-cache-dir pre-commit \
     && rm -rf /var/lib/apt/lists/*
 
