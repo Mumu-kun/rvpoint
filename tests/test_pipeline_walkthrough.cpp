@@ -54,9 +54,9 @@ int main(int argc, char** argv) {
     savePCD(output_file, final_points);
 
 
-    // 3. Normal Estimation with ViewPoint
-    std::cout << "\n[Step 3] Estimating Normals (K=10) with ViewPoint(0,0,0)..." << std::endl;
-    // We need SoA for the filtered cloud to feed into Normal Estimation RVV
+    // 3. Build Octree (Explicit Step)
+    std::cout << "\n[Step 3] Building Octree..." << std::endl;
+    // We need SoA for the filtered cloud
     std::vector<float> fx(n_filtered), fy(n_filtered), fz(n_filtered);
     for(size_t i=0; i<n_filtered; ++i) {
         fx[i] = filtered_points[i].x;
@@ -65,10 +65,17 @@ int main(int argc, char** argv) {
     }
     PointCloudSoA filtered_soa = {fx.data(), fy.data(), fz.data(), n_filtered};
     
+    Octree octree;
+    octree.setInputCloud(filtered_soa);
+    octree.build();
+    std::cout << "Octree built successfully." << std::endl;
+
+    // 4. Normal Estimation using Octree
+    std::cout << "\n[Step 4] Estimating Normals (K=10) with ViewPoint(0,0,0)..." << std::endl;
     std::vector<float> nx(n_filtered), ny(n_filtered), nz(n_filtered);
     
     // Viewpoint at origin (0,0,0) - simulating scanner position
-    normal_estimation_rvv(filtered_soa, nx.data(), ny.data(), nz.data(), 10, 0.0f, 0.0f, 0.0f);
+    normal_estimation_rvv(filtered_soa, octree, nx.data(), ny.data(), nz.data(), 10, 0.0f, 0.0f, 0.0f);
     
     // Check index 0
     float vp_dx = 0 - fx[0];
@@ -81,17 +88,10 @@ int main(int argc, char** argv) {
         std::cout << "[PASS] Normal orientation correct (aligned with line of sight)." << std::endl;
     } else {
         std::cerr << "[FAIL] Normal points away from viewpoint!" << std::endl;
-        // return 1; // Don't fail hard, just warn for visual check
     }
-
-
-    // 4. Octree Radius Search
-    std::cout << "\n[Step 4] Octree Radius Search..." << std::endl;
-    Octree octree;
-    octree.setInputCloud(filtered_soa);
-    octree.build();
     
-    // Search around middle point
+    // 5. Verify Radius Search (Sanity Check)
+    std::cout << "\n[Step 5] Octree Radius Search Verification..." << std::endl;
     size_t mid_idx = n_filtered / 2;
     PointXYZ query = filtered_points[mid_idx];
     float radius = 0.05f; 
@@ -107,6 +107,7 @@ int main(int argc, char** argv) {
     for(float d : dists) {
         if(d < 1e-9) found_self = true;
     }
+
     
     if (found > 0 && found_self) {
         std::cout << "[PASS] Search returned valid results." << std::endl;

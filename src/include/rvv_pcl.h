@@ -20,6 +20,8 @@ struct PointCloudSoA {
   std::size_t n;
 };
 
+class Octree; // Forward declaration
+
 // Voxel Grid Downsampling
 // Returns number of points in the output
 std::size_t voxel_grid_downsamp_sc(const PointXYZ* in, std::size_t n,
@@ -37,11 +39,13 @@ std::size_t sor_rvv(const PointCloudSoA& in,
 
 // 3) Normal Estimation (output normals per point)
 // Added ViewPoint support for consistent orientation
+// Now requires a pre-built Octree for neighbor search
 void normal_estimation_sc(const PointXYZ* in, std::size_t n,
                           float* nx, float* ny, float* nz, int k,
                           float vp_x = 0, float vp_y = 0, float vp_z = 0);
 
 void normal_estimation_rvv(const PointCloudSoA& in,
+                           const Octree& octree, // <--- Added dependency
                            float* nx, float* ny, float* nz, int k,
                            float vp_x = 0, float vp_y = 0, float vp_z = 0);
 

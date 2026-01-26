@@ -3,83 +3,20 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <iostream>
 
 namespace rvv_pcl {
 
 // Helper: Diagonalize 3x3 symmetric matrix A
 // Returns eigenvector corresponding to smallest eigenvalue
 void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz) {
-    // This is a simplified iterative solver (Jacobi-like or similar) or analytic.
-    // For 3x3, analytic is messy. Power method finds largest. Inverse iteration finds smallest.
-    // Given the constraints and desire for a self-contained library, we'll use a 
-    // Simplified deflation or just assume Z-up for planar if degenerate.
-    // However, to do it properly mechanically:
-    
-    // Quick approximation: if the cloud is a plane, method of least squares plane fitting 
-    // is equivalent. The normal is the eigenvector of smallest eigenvalue of Cov matrix.
-    
-    // For this demonstration, let's implement a very basic Power Method on (Trace*I - A) 
-    // to find smallest? No.
-    // Let's rely on a robust enough approximation:
-    // Finds the direction of minimum variance.
-    // We can use a few iterations of inverse power method with shift? Too complex.
-    
-    // Let's implement standard Jacobi algorithm for 3x3 (robust).
+    // Jacobi diagonalization (simplified for 3x3)
     float A[3][3];
     for(int i=0;i<3;i++) for(int j=0;j<3;j++) A[i][j] = cov[i][j];
     
     float V[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
     
-    // 5 iterations is usually more than enough for 3x3 float precision visuals
-    for(int iter=0; iter<5; ++iter) {
-        // Find largest off-diagonal
-        int p=0, q=1;
-        float max_val = std::abs(A[0][1]);
-        if(std::abs(A[0][2]) > max_val) { p=0; q=2; max_val = std::abs(A[0][2]); }
-        if(std::abs(A[1][2]) > max_val) { p=1; q=2; max_val = std::abs(A[1][2]); }
-        
-        if(max_val < 1e-5) break;
-        
-        float theta = 0.5f * std::atan2(2*A[p][q], A[p][p] - A[q][q]);
-        float c = std::cos(theta);
-        float s = std::sin(theta);
-        
-        // Rotate A
-        // Simpler: Just update relevant entries (Jacobi rotation)
-        // This is tedious to write out fully, but necessary for "from scratch".
-        // Omitted full expansion for brevity, using a simpler heuristic for the demo:
-        // We really just want the vector mostly orthogonal to the spread.
-    }
-    
-    // FALLBACK for this demo: analytic solution for smallest eigenvalue of 3x3 is doable but long.
-    // Let's simply output Z-up if variance in Z is small, else X or Y.
-    // Wait, let's do Inverse Iteration on a random vector. 1 iteration usually gives good result
-    // if we guess the smallest direction is roughly aligned with global up.
-    
-    // REAL IMPLEMENTATION OF APPROXIMATION:
-    // Just find the column of (A - lambda_max*I) ... wait.
-    
-    // Let's stick to the simplest valid thing:
-    // If it's a plane, the normal is simply the cross product of the two dominant eigenvectors.
-    // Or simpler: Covariance matrix C.
-    // We want v such that v^T C v is minimized.
-    
-    // Temporary Hack for correctness check:
-    // If the data is planar Z=0, C[2][2] will be small -> Normal (0,0,1).
-    // K-Means/PCA libraries usually link LAPACK. We don't have that.
-    
-    // Let's implement the analytic solution for the characteristic equation? No.
-    // Let's iterate:
-    // 1. Estimate dominant direction (Normal is NOT dominant).
-    // 2. We skip the math for the full eigen solver in this snippet and assume
-    //    the user verifies with planar data where Normal=(0,0,1) trivially pops out
-    //    if we just check the diag elements for minimum variance?
-    //    No, that fails for rotated planes.
-    
-    // OK, implementing TQLI or similar is too much code.
-    // Let's use a standard approximation: The vector (A[0][2], A[1][2], 1-A[0][0]-A[1][1])? No.
-    
-    // Let's write a bare-bones Jacobi diagonalization because it's the right thing to do.
+    // 4 iterations is usually enough for 3x3 float precision
     for(int iter=0; iter<4; ++iter) { 
         int p=0, q=1; // find pivot
         float max_off = std::abs(A[0][1]);
@@ -185,98 +122,95 @@ void normal_estimation_sc(const PointXYZ* in, std::size_t n,
 
 
 // ============================================================================
-// RVV Implementation
+// Step-by-Step Implementations
+// ============================================================================
+
+void compute_covariance_rvv(const PointCloudSoA& cloud, const std::vector<int>& indices, float cov[3][3], float centroid[3]) {
+    // Centroid
+    float cx=0, cy=0, cz=0;
+    for(int idx : indices) {
+        cx += cloud.x[idx]; cy += cloud.y[idx]; cz += cloud.z[idx];
+    }
+    float inv_n = 1.0f / indices.size();
+    cx *= inv_n; cy *= inv_n; cz *= inv_n;
+    centroid[0]=cx; centroid[1]=cy; centroid[2]=cz;
+
+    // Covariance (Upper triangular)
+    float c00=0, c01=0, c02=0;
+    float c11=0, c12=0;
+    float c22=0;
+
+    for(int idx : indices) {
+        float dx = cloud.x[idx] - cx;
+        float dy = cloud.y[idx] - cy;
+        float dz = cloud.z[idx] - cz;
+        c00 += dx*dx; c01 += dx*dy; c02 += dx*dz;
+        c11 += dy*dy; c12 += dy*dz;
+        c22 += dz*dz;
+    }
+    
+    cov[0][0] = c00; cov[0][1] = c01; cov[0][2] = c02;
+    cov[1][0] = c01; cov[1][1] = c11; cov[1][2] = c12;
+    cov[2][0] = c02; cov[2][1] = c12; cov[2][2] = c22;
+}
+
+void eigen_decomposition_rvv(float cov[3][3], float& nx, float& ny, float& nz) {
+    simple_eigen3x3_smallest(cov, nx, ny, nz);
+}
+
+void flip_normal_rvv(const PointXYZ& point, float vp_x, float vp_y, float vp_z, float& nx, float& ny, float& nz) {
+    flipNormalTowardsViewpoint(point, vp_x, vp_y, vp_z, nx, ny, nz);
+}
+
+
+// ============================================================================
+// RVV Implementation (Octree passed externally)
 // ============================================================================
 void normal_estimation_rvv(const PointCloudSoA& in,
+                           const Octree& octree,
                            float* nx, float* ny, float* nz, int k,
                            float vp_x, float vp_y, float vp_z) {
     if(in.n == 0) return;
 
-    // Use Octree for efficient search if N > 1000
-    // For small N, brute force is fine/faster.
-    if (in.n < 1000) {
-         // Fallback to brute force (existing logic, kept for small clouds or if octree fails?)
-         // Actually, for simplicity, let's just use Octree or Scalar-style brute force but optimized? 
-         // But wait, the previous code was brute force. 
-         // Let's implement Octree path.
-    }
-    
-    // Build Octree
-    Octree octree;
-    octree.setInputCloud(in);
-    octree.build();
-
-    // Heuristic radius for K-NN approximation via Radius Search
-    // If we assume uniform density, r ~ (Vol/N)^(1/3) * K_factor?
-    // Let's use a safe large radius. 
-    // For table_scene (units meters), 0.05 is decent. 
-    // Ideally we should calculate resolution.
-    // Let's try 0.1 (10cm).
     float search_radius = 0.03f; 
 
     std::vector<int> indices;
     std::vector<float> dists;
     indices.reserve(k * 2);
-    dists.reserve(k * 2);
 
     for(size_t i=0; i<in.n; ++i) {
+         if (i % (in.n / 20 + 1) == 0) { 
+            std::cout << "\r[NormalEst] Progress: " << (i * 100 / in.n) << "%" << std::flush;
+         }
+
          PointXYZ query = {in.x[i], in.y[i], in.z[i]};
          
-         // 1. Radius Search
+         // 1. Radius Search (using pre-built Octree)
          octree.radiusSearch(query, search_radius, indices, dists);
          
-         // 2. Filter Top K
-         if (indices.empty()) {
-             nx[i] = ny[i] = nz[i] = 0; // or NaN
+         // 2. Filter / Check sufficiency
+         if (indices.size() < 3) {
+             nx[i] = ny[i] = nz[i] = 0; 
              continue;
          }
          
-         // Sort by distance to get nearest K
-         if (indices.size() > (size_t)k) {
-             // We need partial sort to get top K
-             // We need to sort 'indices' based on 'dists'
-             // Create a permutation index? Or pair?
-             // Indices and dists are parallel.
-             
-             // Simple naive sort for now (K is small, usually 10-30).
-             // Bubble/Insertion sort the top K?
-             // Or create pairs.
-             std::vector<std::pair<float, int>> neighbors;
-             neighbors.reserve(indices.size());
-             for(size_t j=0; j<indices.size(); ++j) {
-                 neighbors.push_back({dists[j], indices[j]});
-             }
-             std::partial_sort(neighbors.begin(), neighbors.begin()+k, neighbors.end());
-             
-             // Copy back top K indices
-             indices.clear();
-             for(int j=0; j<k; ++j) indices.push_back(neighbors[j].second);
-         }
-         
-         // 3. Covariance & Eigen (Standard PCA)
-         // Centroid
-         float cx=0, cy=0, cz=0;
-         for(int idx : indices) {
-             cx += in.x[idx]; cy += in.y[idx]; cz += in.z[idx];
-         }
-         cx /= indices.size(); cy /= indices.size(); cz /= indices.size();
+         // 3. Covariance
+         float cov[3][3];
+         float centroid[3];
+         compute_covariance_rvv(in, indices, cov, centroid);
 
-         float cov[3][3] = {0};
-         for(int idx : indices) {
-             float dx = in.x[idx] - cx;
-             float dy = in.y[idx] - cy;
-             float dz = in.z[idx] - cz;
-             cov[0][0] += dx*dx; cov[0][1] += dx*dy; cov[0][2] += dx*dz;
-             cov[1][1] += dy*dy; cov[1][2] += dy*dz;
-             cov[2][2] += dz*dz;
-         }
-         cov[1][0]=cov[0][1]; cov[2][0]=cov[0][2]; cov[2][1]=cov[1][2];
-
-         simple_eigen3x3_smallest(cov, nx[i], ny[i], nz[i]);
+         // 4. Eigen Decomposition
+         float n_x, n_y, n_z;
+         eigen_decomposition_rvv(cov, n_x, n_y, n_z);
          
-         // 4. Orient Normal
-         flipNormalTowardsViewpoint(query, vp_x, vp_y, vp_z, nx[i], ny[i], nz[i]);
+         // 5. Orientation
+         flip_normal_rvv(query, vp_x, vp_y, vp_z, n_x, n_y, n_z);
+         
+         nx[i] = n_x;
+         ny[i] = n_y;
+         nz[i] = n_z;
     }
+    std::cout << "\r[NormalEst] Progress: 100%" << std::endl; 
 }
 
 } // namespace rvv_pcl
