@@ -115,6 +115,25 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // 5. Visualization (Automatic)
+    // Assumes script is in ../scripts/ relative to build dir, or /workspace/scripts/
+    std::string png_file = output_file.substr(0, output_file.find_last_of('.')) + ".png";
+    // Try relative path first
+    std::string script_path = "../scripts/visualize_result.py";
+    // Fallback to absolute if needed? simpler to just try one.
+    
+    std::string cmd = "python3 " + script_path + " " + output_file + " " + png_file;
+    std::cout << "\n[Step 5] Generating Visualization..." << std::endl;
+    std::cout << "Executing: " << cmd << std::endl;
+    
+    int ret = std::system(cmd.c_str());
+    if (ret == 0) {
+        std::cout << "[SUCCESS] Visualization saved to " << png_file << std::endl;
+    } else {
+        std::cerr << "[WARN] Visualization script failed (Python/Matplotlib missing or path error?)." << std::endl;
+        std::cerr << "       Try running manually: " << cmd << std::endl;
+    }
+
     std::cout << "\n[SUCCESS] Custom Pipeline Walkthrough Complete!" << std::endl;
     return 0;
 }
