@@ -93,6 +93,7 @@ After building, you can run specific tests using QEMU:
 │   ├── statistical_outlier...  # SOR Implementation
 │   ├── normal_estimation.cpp   # Normal Estimation Implementation
 │   ├── radius_search.cpp       # Radius Search Implementation
+│   ├── octree.cpp              # Octree spatial index
 │   ├── spatial_hashing.cpp     # RVV Optimized Hash Grid
 │   └── ransac_plane.cpp        # RANSAC Implementation
 ├── tests/                      # Unit Tests (C++)

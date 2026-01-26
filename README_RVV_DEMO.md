@@ -23,6 +23,7 @@ This branch contains the optimized RISC-V Vector (RVV 1.0) implementation of the
 │   ├── include/rvv_pcl.h   # Public API
 │   ├── rvv_common.cpp      # Fused gather-filter kernel
 │   ├── octree.cpp          # Octree implementation
+│   ├── spatial_hashing.cpp # Spatial Hash implementation
 │   └── normal_estimation.cpp  # Step-by-step normal estimation
 └── tests/
     └── test_pipeline_walkthrough.cpp  # Main test harness
