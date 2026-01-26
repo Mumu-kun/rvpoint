@@ -24,4 +24,16 @@ We successfully benchmarked the RISC-V Vector (RVV) vs Scalar implementations by
 - **Radius Search** (N=100) was too fast to show significant divergence or is dominated by scalar KD-Tree traversal.
 
 ## Conclusion
-The benchmarks confirm that for compute-bound kernels (`normal`, `ransac`), RVV provides a massive reduction in the number of executed instructions.
+These micro-benchmarks confirm that for compute-bound kernels (`normal`, `ransac`), RVV provides a massive reduction in the number of executed instructions even at small scales.
+
+---
+
+## 🚀 Advanced Benchmarks (Large-Scale)
+
+For evaluations with real-world datasets (460k points) and advanced spatial indexing optimizations (Octree/SpatialHash), please refer to the specialized reports:
+
+1.  [**Spatial Hash vs Octree Report**](spatial_hash_vs_octree_report.md)
+    *   Compares the latest O(N) spatial indexing against O(N log N) recursive trees.
+    *   Shows **1.33x faster build times** for Spatial Hashing on large clouds.
+2.  [**Pipeline Walkthrough Results**](report_sc_rvv_qemu.txt)
+    *   Logs of the full optimized pipeline execution on the SpacemiT K1 (emulated).

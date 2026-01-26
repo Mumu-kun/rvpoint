@@ -26,6 +26,7 @@ This library implements 5 core point cloud processing algorithms, each with a hi
 | **Normal Estimation** | `normal_estimation_rvv` | Accelerated neighbor search for covariance matrix building. |
 | **Radius Search** | `radius_search_rvv` | Vectorized global distance scan & filter mask. |
 | **RANSAC Plane Fitting** | `ransac_plane_rvv` | High-throughput inlier counting using vector masks (`vmfle`, `vcpop`). |
+| **Spatial Hashing** | `SpatialHash::radiusSearch` | O(1) cell lookup with RVV fused gather-filter candidate processing. |
 
 ## 🛠️ Installation & Setup
 
@@ -92,6 +93,7 @@ After building, you can run specific tests using QEMU:
 │   ├── statistical_outlier...  # SOR Implementation
 │   ├── normal_estimation.cpp   # Normal Estimation Implementation
 │   ├── radius_search.cpp       # Radius Search Implementation
+│   ├── spatial_hashing.cpp     # RVV Optimized Hash Grid
 │   └── ransac_plane.cpp        # RANSAC Implementation
 ├── tests/                      # Unit Tests (C++)
 ├── scripts/

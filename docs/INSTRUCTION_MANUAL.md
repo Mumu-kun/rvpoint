@@ -14,7 +14,8 @@
 5. [RVV Programming Concepts](#rvv-programming-concepts)
 6. [Testing & Verification](#testing--verification)
 7. [API Reference](#api-reference)
-8. [Quick Reference](#quick-reference)
+8. [Team Integration & Usage Guide](#team-integration--usage-guide)
+9. [Quick Reference](#quick-reference)
 
 ---
 
@@ -1655,5 +1656,5 @@ v = vfmacc(vc, va, vb, vl);  // ✓ Faster, one instruction
 
 ---
 
-**Last Updated:** 2026-01-25  
+**Last Updated:** 2026-01-26  
 **Author:** RVPoint Development Team

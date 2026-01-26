@@ -66,5 +66,7 @@ Results are saved to `results/` with timestamps for serialization.
 |------|-------------|
 | `src/rvv_common.cpp` | Fused `get_inds_in_radius_rvv` kernel |
 | `src/octree.cpp` | Octree spatial index |
+| `src/spatial_hashing.cpp` | Spatial Hash Grid implementation |
 | `src/normal_estimation.cpp` | Octree-based normal estimation |
 | `tests/test_pipeline_walkthrough.cpp` | Main pipeline test |
+| `tests/test_spatial_hash_comparison.cpp` | Benchmark: Octree vs Spatial Hash |
