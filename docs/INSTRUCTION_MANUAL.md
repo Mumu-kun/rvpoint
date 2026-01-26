@@ -1445,6 +1445,19 @@ Calculates squared Euclidean distances for a batch of points.
 
 ---
 
+### Utilities
+
+#### `loadPCD(file_path, points_vector)`
+Robust loader for `.pcd` files. Supports both **ASCII** and **Binary** formats.
+*   **Returns**: Number of points loaded or -1 on error.
+*   **Namespace**: `rvv_pcl`
+
+#### `savePCD(file_path, points_vector)`
+Saves a point cloud to a `.pcd` file in ASCII format.
+*   **Namespace**: `rvv_pcl`
+
+---
+
 ## Quick Reference
 
 ### Compilation Commands

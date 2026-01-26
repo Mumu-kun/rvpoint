@@ -48,6 +48,9 @@ make test_pipeline_walkthrough
 ```bash
 cd bin
 /usr/bin/qemu-riscv64 -L /opt/riscv/sysroot -cpu rv64,v=true ./test_pipeline_walkthrough bunny.pcd
+
+# For large-scale data (460k points):
+/usr/bin/qemu-riscv64 -L /opt/riscv/sysroot -cpu rv64,v=true ./test_pipeline_walkthrough table_scene_lms400.pcd
 ```
 
 ### 3. Expected Output
