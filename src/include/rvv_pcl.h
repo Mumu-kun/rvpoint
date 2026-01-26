@@ -46,12 +46,14 @@ std::size_t sor_rvv(const PointCloudSoA& in,
 // Now requires a pre-built Octree for neighbor search
 void normal_estimation_sc(const PointXYZ* in, std::size_t n,
                           float* nx, float* ny, float* nz, int k, float radius,
-                          float vp_x = 0, float vp_y = 0, float vp_z = 0);
+                          float vp_x = 0, float vp_y = 0, float vp_z = 0,
+                          int eigen_iters = 4);
 
 void normal_estimation_rvv(const PointCloudSoA& in,
                            const Octree& octree,
                            float* nx, float* ny, float* nz, int k, float radius,
-                           float vp_x = 0, float vp_y = 0, float vp_z = 0);
+                           float vp_x = 0, float vp_y = 0, float vp_z = 0,
+                           int eigen_iters = 4);
 
 // 4) Radius Search
 std::size_t radius_search_sc(const PointXYZ* cloud, std::size_t n, 
@@ -145,14 +147,15 @@ public:
                              std::vector<int>& indices,
                              std::vector<float>& dists, int max_nn = 0) const;
 
-    void setCellSizeEpsilon(float eps) { eps_scale_ = eps; }
-    void setHashReserveFactor(float factor) { reserve_factor_ = factor; }
+    void setHashPrimes(int64_t p1, int64_t p2) { p1_ = p1; p2_ = p2; }
     
 private:
     PointCloudSoA cloud_;
     float cell_size_;
     float eps_scale_ = 0.01f;
-    float reserve_factor_ = 0.25f; // 1/4
+    float reserve_factor_ = 0.25f; 
+    int64_t p1_ = 73856093LL;
+    int64_t p2_ = 19349663LL;
     
     // Hash table: key = cell hash, value = point indices in that cell
     std::unordered_map<int64_t, std::vector<int>> grid_;
@@ -164,7 +167,7 @@ private:
     
     // Hash function: (ix, iy, iz) -> unique key
     inline int64_t hashCell(int ix, int iy, int iz) const {
-        return (int64_t)ix + (int64_t)iy * 73856093LL + (int64_t)iz * 19349663LL;
+        return (int64_t)ix + (int64_t)iy * p1_ + (int64_t)iz * p2_;
     }
     
     // Get cell indices for a point

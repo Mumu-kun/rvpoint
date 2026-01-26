@@ -9,7 +9,7 @@ namespace rvv_pcl {
 
 // Helper: Diagonalize 3x3 symmetric matrix A
 // Returns eigenvector corresponding to smallest eigenvalue
-void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz) {
+void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz, int eigen_iters) {
     // Jacobi diagonalization (simplified for 3x3)
     float A[3][3];
     for(int i=0;i<3;i++) for(int j=0;j<3;j++) A[i][j] = cov[i][j];
@@ -17,7 +17,8 @@ void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz) 
     float V[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
     
     // 4 iterations is usually enough for 3x3 float precision
-    for(int iter=0; iter<4; ++iter) { 
+    for(int iter=0; iter<eigen_iters; ++iter) { 
+    // JACOBI ROTATION
         int p=0, q=1; // find pivot
         float max_off = std::abs(A[0][1]);
         if(std::abs(A[0][2]) > max_off) { p=0; q=2; max_off=std::abs(A[0][2]); }
@@ -74,7 +75,7 @@ void flipNormalTowardsViewpoint(const PointXYZ& point, float vp_x, float vp_y, f
 // ============================================================================
 void normal_estimation_sc(const PointXYZ* in, std::size_t n,
                           float* nx, float* ny, float* nz, int k, float radius,
-                          float vp_x, float vp_y, float vp_z) {
+                          float vp_x, float vp_y, float vp_z, int eigen_iters) {
     if (n == 0) return;
     std::vector<float> dists(n);
     std::vector<int> indices(n);
@@ -113,7 +114,7 @@ void normal_estimation_sc(const PointXYZ* in, std::size_t n,
          }
          cov[1][0]=cov[0][1]; cov[2][0]=cov[0][2]; cov[2][1]=cov[1][2];
 
-         simple_eigen3x3_smallest(cov, nx[i], ny[i], nz[i]);
+         simple_eigen3x3_smallest(cov, nx[i], ny[i], nz[i], eigen_iters);
          
          // Orient Normal
          flipNormalTowardsViewpoint(in[i], vp_x, vp_y, vp_z, nx[i], ny[i], nz[i]);
@@ -154,8 +155,8 @@ void compute_covariance_rvv(const PointCloudSoA& cloud, const std::vector<int>& 
     cov[2][0] = c02; cov[2][1] = c12; cov[2][2] = c22;
 }
 
-void eigen_decomposition_rvv(float cov[3][3], float& nx, float& ny, float& nz) {
-    simple_eigen3x3_smallest(cov, nx, ny, nz);
+void eigen_decomposition_rvv(float cov[3][3], float& nx, float& ny, float& nz, int eigen_iters) {
+    simple_eigen3x3_smallest(cov, nx, ny, nz, eigen_iters);
 }
 
 void flip_normal_rvv(const PointXYZ& point, float vp_x, float vp_y, float vp_z, float& nx, float& ny, float& nz) {
@@ -169,7 +170,7 @@ void flip_normal_rvv(const PointXYZ& point, float vp_x, float vp_y, float vp_z, 
 void normal_estimation_rvv(const PointCloudSoA& in,
                            const Octree& octree,
                            float* nx, float* ny, float* nz, int k, float radius,
-                           float vp_x, float vp_y, float vp_z) {
+                           float vp_x, float vp_y, float vp_z, int eigen_iters) {
     if(in.n == 0) return;
 
     float search_radius = radius;
@@ -179,9 +180,8 @@ void normal_estimation_rvv(const PointCloudSoA& in,
     indices.reserve(k * 2);
 
     for(size_t i=0; i<in.n; ++i) {
-         if (i % (in.n / 20 + 1) == 0) { 
-            std::cout << "\r[NormalEst] Progress: " << (i * 100 / in.n) << "%" << std::flush;
-         }
+         // Progress logging removed for benchmarking
+
 
          PointXYZ query = {in.x[i], in.y[i], in.z[i]};
          
@@ -201,7 +201,7 @@ void normal_estimation_rvv(const PointCloudSoA& in,
 
          // 4. Eigen Decomposition
          float n_x, n_y, n_z;
-         eigen_decomposition_rvv(cov, n_x, n_y, n_z);
+         eigen_decomposition_rvv(cov, n_x, n_y, n_z, eigen_iters);
          
          // 5. Orientation
          flip_normal_rvv(query, vp_x, vp_y, vp_z, n_x, n_y, n_z);
@@ -210,7 +210,7 @@ void normal_estimation_rvv(const PointCloudSoA& in,
          ny[i] = n_y;
          nz[i] = n_z;
     }
-    std::cout << "\r[NormalEst] Progress: 100%" << std::endl; 
+
 }
 
 } // namespace rvv_pcl
