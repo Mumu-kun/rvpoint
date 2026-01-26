@@ -172,4 +172,14 @@ else
 fi
 
 log_header "All Verification Steps Passed! 🚀"
+
+# 10. Linux Toolchain Verification (Optional)
+if [ -f "scripts/verify_linux.sh" ] && [ -f "${RISCV_PATH:-/opt/riscv}/bin/riscv64-unknown-linux-gnu-gcc" ]; then
+    log_header "10. Linux Toolchain Detected - Verifying..."
+    bash scripts/verify_linux.sh || { log_error "Linux Verification Failed"; exit 1; }
+    log_success "Linux Toolchain Verified"
+else
+    log_info "Skipping Linux Toolchain verification (toolchain or script not found)"
+fi
+
 exit 0

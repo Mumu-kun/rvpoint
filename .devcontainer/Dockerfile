@@ -38,9 +38,11 @@ RUN apt-get update && apt-get install -y \
     vim \
     nano \
     htop \
+    gcc-riscv64-linux-gnu \
+    g++-riscv64-linux-gnu \
     && pip3 install --no-cache-dir pre-commit \
     && rm -rf /var/lib/apt/lists/*
-    
+
 # Layer 1.5: Install QEMU 7.2+ Static (Required for RVV 1.0 support)
 RUN wget https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/qemu-riscv64-static \
     && chmod +x qemu-riscv64-static \
@@ -56,6 +58,11 @@ RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2
     && mkdir -p ${RISCV} \
     && tar -xJf riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz -C /opt \
     && rm riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz
+
+# Layer 2.5: Install RISC-V Linux (glibc) Toolchain (GCC 14)
+RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.01.20/riscv64-glibc-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz \
+    && tar -xJf riscv64-glibc-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz -C /opt \
+    && rm riscv64-glibc-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz
 
 # Layer 3: Build and install Spike (RISC-V ISA Simulator)
 RUN git clone https://github.com/riscv-software-src/riscv-isa-sim.git \

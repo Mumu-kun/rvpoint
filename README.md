@@ -152,23 +152,30 @@ qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_sor_rvv_manual
 ## 📄 License
 [MIT](LICENSE)
 
-## ⚡ GCC 14 Upgrade (Teammates Read Here)
+## ⚡ GCC 14 Upgrade & Linux Toolchain
 
 We have upgraded the toolchain to **GCC 14** (supports RVV 1.0, Auto-vectorization, Tuple types).
+We now provide **two** toolchains in the container:
+1.  **Embedded/ELF** (`riscv64-unknown-elf-`): Default, for bare-metal/simulated verification.
+2.  **Linux/Glibc** (`riscv64-unknown-linux-gnu-`): For building full Linux applications.
 
 ### How to use
-1.  **Checkout the branch**:
-    ```bash
-    git checkout dev_arian
-    ```
-2.  **Rebuild Dev Container**:
+1.  **Rebuild Dev Container**:
     *   Command Palette (`Ctrl+Shift+P`) -> `Dev Containers: Rebuild Container`.
-    *   *This will automatically install GCC 14 and configure QEMU.*
+    *   *This will automatically install both GCC 14 toolchains.*
+2.  **Verify Setup**:
+    ```bash
+    scripts/verify_container.sh
+    ```
+    *This runs tests for both toolchains.*
 
-### Verification
-Run the standard check:
+### Building for Linux
+To build using the Linux (glibc) toolchain, use the specialized CMake file:
 ```bash
-scripts/verify_container.sh
+mkdir build_linux
+cd build_linux
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/riscv_linux.cmake
+make
 ```
 
 ### Detailed Verification Steps (Manual)
