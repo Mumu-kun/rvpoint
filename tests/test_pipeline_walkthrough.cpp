@@ -3,6 +3,8 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <chrono>
+#include <ctime>
 
 using namespace rvv_pcl;
 
@@ -15,7 +17,25 @@ int main(int argc, char** argv) {
     std::string input_file = "bunny.pcd";
     if (argc > 1) input_file = argv[1];
     
-    std::string output_file = input_file.substr(0, input_file.find_last_of('.')) + "_voxelized.pcd";
+    std::string base_name = input_file;
+    size_t last_slash = base_name.find_last_of("/\\");
+    if (last_slash != std::string::npos) base_name = base_name.substr(last_slash + 1);
+    std::string stem = base_name.substr(0, base_name.find_last_of('.'));
+    
+    // Generate timestamp for serialization
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm* tm_now = std::localtime(&time_t_now);
+    char timestamp[32];
+    std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_now);
+    
+    // Output to results/ directory
+    // If running from bin/, we need ../results/
+    std::string output_dir = "results/";
+    std::ifstream check_res("results");
+    if (!check_res.good()) output_dir = "../results/";
+    
+    std::string output_file = output_dir + stem + "_" + timestamp + "_voxelized.pcd";
 
     // 1. Load Cloud
     std::cout << "\n[Step 1] Loading " << input_file << "..." << std::endl;

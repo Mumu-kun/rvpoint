@@ -1,38 +1,22 @@
-# Build Directories
-build/
+# Build directories
 build_cmake/
+build/
 
-# Executables
-test_scalar
-test_vector
-test_voxel_grid
-rvv_test
-check_rvv.c
+# Binaries
+bin/
 *.o
 *.a
-*_manual
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
+*.so
 
-# Editor/Temp
+# Output results
+results/
+*.pcd
+*.png
+
+# Editors
 .vscode/
-.agent/
-.DS_Store
-*.swp
+.idea/
 
-# Artifacts
-.gemini/
-
-.gitignore
-
-# Local Toolchain
-riscv-toolchain/
-
-# Test Artifacts
-tests/test_rvv_features
-tests/test_tuples
-tests/test_autovec.s
-
-# Data
-data/
+# Exceptions (keep data if needed, but usually large files ignored)
+!data/*.pcd
+!doc/*.png
