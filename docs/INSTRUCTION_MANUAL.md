@@ -1429,6 +1429,63 @@ qemu-riscv64 -cpu help | grep vector
 
 ---
 
+## Team Integration & Usage Guide
+
+This section is designed for team members who need to maintain, extend, or integrate the RVPoint library into their projects.
+
+### 1. Standardized Development Workflow
+
+To ensure performance consistency across the team, follow these steps:
+
+#### **A. Clean Build (Targeting GCC 14)**
+We use the Linux-GNU cross-compiler because it supports complex C++ features and dynamic linking.
+```bash
+# From the root of the project
+rm -rf build_cmake && mkdir build_cmake && cd build_cmake
+cmake -DCMAKE_C_COMPILER=/opt/riscv/bin/riscv64-unknown-linux-gnu-gcc \
+      -DCMAKE_CXX_COMPILER=/opt/riscv/bin/riscv64-unknown-linux-gnu-g++ ..
+make -j$(npos)
+```
+
+#### **B. Running with System Libraries**
+Since we link against glibc, you **must** provide the sysroot path to QEMU so it can find `ld-linux-riscv64-lp64d.so.1`.
+```bash
+cd bin
+/usr/bin/qemu-riscv64 -L /opt/riscv/sysroot -cpu rv64,v=true ./test_pipeline_walkthrough ../data/bunny.pcd
+```
+
+### 2. How to Function & Extend the Code
+
+#### **Adding a New Algorithm**
+When implementing a new point cloud filter (e.g., a "Pass-Through" filter), follow the established patterns:
+
+1.  **Header (`src/include/rvv_pcl.h`)**:
+    Add both Scalar and RVV declarations.
+    ```cpp
+    void pass_through_sc(const PointXYZ* in, size_t n, PointXYZ* out, float min_z, float max_z);
+    void pass_through_rvv(const PointCloudSoA& in, PointXYZ* out, float min_z, float max_z);
+    ```
+
+2.  **Implementation**:
+    - Use the **SoA (Structure of Arrays)** layout for the RVV path.
+    - Use **LMUL=8** for maximum throughput.
+    - Leverage existing kernels in `rvv_common.cpp` (like `get_dist_sq_rvv`) if applicable.
+
+3.  **Spatial Search**:
+    - For neighbor searches, prefer `SpatialHash` over `Octree` for datasets >10k points (it yields ~30% faster builds).
+    ```cpp
+    SpatialHash grid;
+    grid.setInputCloud(soa, radius * 1.5f);
+    grid.build();
+    grid.radiusSearch(query, radius, indices, dists);
+    ```
+
+### 3. Serialization & Results
+- **Results Directory**: All output images and PCDs are saved to the `results/` folder to keep the workspace clean.
+- **Timestamps**: The pipeline automatically appends timestamps (e.g., `_20260126_103000`) to filenames. This allows for serialized benchmarking where you can track progress over multiple runs.
+
+---
+
 ## Advanced Topics
 
 ### RVV 1.0 Features
