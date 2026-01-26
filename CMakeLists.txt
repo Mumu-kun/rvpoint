@@ -5,11 +5,16 @@ project(RVVPCL LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set output directory for executables
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+
 # RISC-V Specific Flags
 # These are critical for RVV support
 set(RISCV_FLAGS "-march=rv64gcv -mabi=lp64d")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${RISCV_FLAGS}")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RISCV_FLAGS}")
+# Ensure we use the correct toolchain paths if not set externally
+# We will just print them to be sure.
+message(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
 
 # Ensure we use the correct toolchain paths if not set externally
 # But usually best to let the environment (CC/CXX vars) handle it.
@@ -29,6 +34,7 @@ list(APPEND SOURCES
 # Note: placeholder.c removed, real source used.
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC src/include)
+target_compile_options(rvvpcl PUBLIC "-march=rv64gcv" "-mabi=lp64d")
 
 
 # 2. Test Executables

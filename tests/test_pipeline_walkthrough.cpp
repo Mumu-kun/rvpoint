@@ -22,6 +22,8 @@ int main(int argc, char** argv) {
     std::vector<PointXYZ> loaded_points;
     // Try current directory first, then data/, then absolute
     int n = loadPCD(input_file, loaded_points);
+    if (n < 0) n = loadPCD("../" + input_file, loaded_points); // Check parent (e.g. if in bin/)
+    if (n < 0) n = loadPCD("data/" + input_file, loaded_points);
     if (n < 0) n = loadPCD("../data/" + input_file, loaded_points); 
     if (n < 0) n = loadPCD("/workspace/data/" + input_file, loaded_points);
     
@@ -121,6 +123,9 @@ int main(int argc, char** argv) {
     std::string png_file = output_file.substr(0, output_file.find_last_of('.')) + ".png";
     // Try relative path first
     std::string script_path = "../scripts/visualize_result.py";
+    // If running from root, it might be just scripts/
+    std::ifstream check_s("scripts/visualize_result.py");
+    if (check_s.good()) script_path = "scripts/visualize_result.py";
     // Fallback to absolute if needed? simpler to just try one.
     
     std::string cmd = "python3 " + script_path + " " + output_file + " " + png_file;

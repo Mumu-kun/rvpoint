@@ -91,11 +91,11 @@ std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
         // BUT let's do the floating point scale in vector.
         
         // Storing back to analyze one by one (Hybrid)
-        // Ideally we would compress/scatter, but map insertion is serial.
-        float raw_sx[vl], raw_sy[vl], raw_sz[vl];
-        __riscv_vse32_v_f32m8(raw_sx, vsx, vl);
-        __riscv_vse32_v_f32m8(raw_sy, vsy, vl);
-        __riscv_vse32_v_f32m8(raw_sz, vsz, vl);
+        // Hybrid: Store back to memory for scalar processing
+        std::vector<float> raw_sx(vl), raw_sy(vl), raw_sz(vl);
+        __riscv_vse32_v_f32m8(raw_sx.data(), vsx, vl);
+        __riscv_vse32_v_f32m8(raw_sy.data(), vsy, vl);
+        __riscv_vse32_v_f32m8(raw_sz.data(), vsz, vl);
 
         for(size_t j=0; j<vl; ++j) {
             // "Scalar" part of the loop (Map Insertion)
