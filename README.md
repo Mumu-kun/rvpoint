@@ -4,7 +4,7 @@
 
 Optimized for **RV64GCV** (targeting `v0.10+` vector specs).
 
-## � Documentation & Resources
+##  Documentation & Resources
 
 Explore these guides for a deeper understanding of the codebase and its performance:
 
@@ -15,7 +15,7 @@ Explore these guides for a deeper understanding of the codebase and its performa
 | [**Performance Report**](results/spatial_hash_vs_octree_report.md) | Benchmarks comparing different spatial indexing methods. |
 | [**Vector Theory**](docs/vector_operations_explained.md) | Geometric logic behind the RVV implementations. |
 
-## �🚀 Key Features
+## 🚀 Key Features
 
 This library implements 5 core point cloud processing algorithms, each with a highly optimized **RVV** path alongside a standard Scalar reference path.
 
