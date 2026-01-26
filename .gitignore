@@ -20,3 +20,4 @@ results/
 # Exceptions (keep data if needed, but usually large files ignored)
 !data/*.pcd
 !doc/*.png
+docs/doxygen/

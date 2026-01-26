@@ -1,3 +1,4 @@
+/** @page vector_theory Vector Theory */
 # RISC-V Vector (RVV) Implementation Guide
 
 This document explains the vector operations used in the project, specifically focusing on the `get_dist_sq_rvv` function found in `src/rvv_common.cpp`.
@@ -8,10 +9,10 @@ This document explains the vector operations used in the project, specifically f
 
 | Document | Purpose |
 |----------|---------|
-| [**Pipeline Demo**](../README_RVV_DEMO.md) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
-| [**Instruction Manual**](INSTRUCTION_MANUAL.md) | **The Master Guide**. API docs, Team SOPs, and naming conventions. |
-| [**Performance Report**](../results/spatial_hash_vs_octree_report.md) | Benchmarks for spatial indexing optimizations. |
-| [**Main Overview**](../README.md) | General project scope and feature set. |
+| [**Pipeline Demo**](@ref pipeline_demo) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
+| [**Instruction Manual**](@ref instruction_manual) | **The Master Guide**. API docs, Team SOPs, and naming conventions. |
+| [**Performance Report**](@ref performance_report) | Benchmarks for spatial indexing optimizations. |
+| [**Main Overview**](@ref main_page) | General project scope and feature set. |
 
 ---
 
@@ -71,7 +72,7 @@ The instruction `__riscv_vsetvl_e32m8(n - i)` is the magic behind RVV's portabil
 *   **Behavior**:
     *   If `n - i` is large, `vl` will be set to the hardware's maximum vector length (e.g., 4, 8, 16 elements).
     *   If `n - i` is small (the tail end of the loop), `vl` will be exactly `n - i`.
-    *   **Result**: No need for "fringe" or "cleanup" loops common in SSE/AVX programming. One loop handles everything.
+    *   Result: No need for "fringe" or "cleanup" loops common in SSE/AVX programming. One loop handles everything.
 
 #### 2. LMUL (Register Grouping)
 The `m8` suffix in `vfloat32m8_t` stands for **LMUL=8** (Length Multiplier).

@@ -4,16 +4,18 @@
 
 Optimized for **RV64GCV** (targeting `v0.10+` vector specs).
 
+> 📘 **[Online Code Documentation](https://mumu-kun.github.io/rvpoint/)**
+
 ##  Documentation & Resources
 
 Explore these guides for a deeper understanding of the codebase and its performance:
 
 | Guide | Description |
 |-------|-------------|
-| [**Instruction Manual**](docs/INSTRUCTION_MANUAL.md) | **The Master Guide**. Contains API documentation, Team SOPs, and Intrinsic Naming conventions. |
-| [**Pipeline Demo**](README_RVV_DEMO.md) | **Recommended for Quick-start**. Detailed walkthrough of the optimized Octree/SpatialHash pipeline. |
-| [**Performance Report**](results/spatial_hash_vs_octree_report.md) | Benchmarks comparing different spatial indexing methods. |
-| [**Vector Theory**](docs/vector_operations_explained.md) | Geometric logic behind the RVV implementations. |
+| [**Instruction Manual**](@ref instruction_manual) | **The Master Guide**. Contains API documentation, Team SOPs, and Intrinsic Naming conventions. |
+| [**Pipeline Demo**](@ref pipeline_demo) | **Recommended for Quick-start**. Detailed walkthrough of the optimized Octree/SpatialHash pipeline. |
+| [**Performance Report**](@ref performance_report) | Benchmarks comparing different spatial indexing methods. |
+| [**Vector Theory**](@ref vector_theory) | Geometric logic behind the RVV implementations. |
 
 ## 🚀 Key Features
 
@@ -44,6 +46,28 @@ This library implements 5 core point cloud processing algorithms, each with a hi
     *   Open VS Code (`code .`).
     *   Click "Reopen in Container" when prompted.
     *   *This automatically sets up the GCC 13+ (or GCC 14 if configured) RISC-V Toolchain, QEMU, CMake, and all dependencies.*
+
+### Running with Docker (Manual)
+If you prefer to run Docker commands manually in your terminal, use these commands:
+
+**Option 1: Open Already Built Image**
+(Requires an existing image tagged as `rvpoint-built`)
+```bash
+docker run -it --rm -v $(pwd):/workspace -w /workspace rvpoint-built /bin/bash
+```
+
+**Option 2: Clean Build & Run (Simulate New User)**
+Test the build process from scratch:
+
+1. **Build the Image**:
+    ```bash
+    docker build -f .devcontainer/Dockerfile -t rvpoint-clean-test .
+    ```
+
+2. **Run the Clean Image**:
+    ```bash
+    docker run -it --rm -v $(pwd):/workspace -w /workspace rvpoint-clean-test /bin/bash
+    ```
 
 ### Custom Toolchain Path
 If you installed the toolchain in a custom location, set the `RISCV_PATH` environment variable before running scripts or building:

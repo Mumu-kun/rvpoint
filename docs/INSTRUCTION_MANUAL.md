@@ -1,3 +1,4 @@
+/** @page instruction_manual Instruction Manual */
 # RVPoint Instruction Manual & Reference Guide
 
 > **Purpose:** Comprehensive guide for understanding, building, and working with the RVPoint library.  
@@ -23,10 +24,10 @@
 
 | Document | Purpose |
 |----------|---------|
-| [**Pipeline Demo**](../README_RVV_DEMO.md) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
-| [**Performance Report**](../results/spatial_hash_vs_octree_report.md) | Detailed benchmarks for spatial indexing optimizations. |
-| [**Vector Theory**](vector_operations_explained.md) | Deep dive into RVV geometric kernels. |
-| [**Main Overview**](../README.md) | General project scope and scalar/vector feature set. |
+| [**Pipeline Demo**](@ref pipeline_demo) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
+| [**Performance Report**](@ref performance_report) | Detailed benchmarks for spatial indexing optimizations. |
+| [**Vector Theory**](@ref vector_theory) | Deep dive into RVV geometric kernels. |
+| [**Main Overview**](@ref main_page) | General project scope and scalar/vector feature set. |
 
 ---
 
@@ -1547,15 +1548,15 @@ qemu-riscv64 -cpu help | grep vector
 
 **Common errors:**
 
-1. **"unknown type 'vfloat32m8_t'"**
+1. "unknown type 'vfloat32m8_t'"
    - Missing `-march=rv64gcv` flag
    - Add the `v` extension!
 
-2. **Illegal instruction**
+2. Illegal instruction
    - QEMU missing `v=true` flag
    - Add `-cpu rv64,v=true,vlen=128`
 
-3. **Different results scalar vs RVV**
+3. Different results scalar vs RVV
    - Floating point rounding differences (expected!)
    - Use epsilon comparison: `abs(a - b) < 1e-4`
 

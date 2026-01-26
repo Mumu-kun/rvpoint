@@ -1,3 +1,4 @@
+/** @page pipeline_demo Pipeline Demo */
 # RVV Point Cloud Pipeline Demo (Branch: arian_exps)
 
 This branch contains the optimized RISC-V Vector (RVV 1.0) implementation of the PCL pipeline.
