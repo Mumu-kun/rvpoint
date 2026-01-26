@@ -1,6 +1,8 @@
 #pragma once
 #include <cstddef>
 #include <vector>
+#include <unordered_map>
+#include <cmath>
 
 #ifdef __riscv_vector
   #include <riscv_vector.h>
@@ -117,5 +119,46 @@ void get_inds_in_radius_rvv(const float* x, const float* y, const float* z,
                             std::vector<int>& out_indices, 
                             std::vector<float>& out_dists);
 
+// ============================================================================
+// Spatial Hash Grid for Fast Neighbor Search (Alternative to Octree)
+// ============================================================================
+
+class SpatialHash {
+public:
+    SpatialHash();
+    ~SpatialHash();
+    
+    void setInputCloud(const PointCloudSoA& cloud, float cell_size);
+    void build();
+    
+    // Returns number of neighbors found
+    std::size_t radiusSearch(const PointXYZ& query, float radius,
+                             std::vector<int>& indices,
+                             std::vector<float>& dists, int max_nn = 0) const;
+    
+private:
+    PointCloudSoA cloud_;
+    float cell_size_;
+    
+    // Hash table: key = cell hash, value = point indices in that cell
+    std::unordered_map<int64_t, std::vector<int>> grid_;
+    
+    // Bounding box
+    float min_x_, min_y_, min_z_;
+    float max_x_, max_y_, max_z_;
+    int grid_size_x_, grid_size_y_, grid_size_z_;
+    
+    // Hash function: (ix, iy, iz) -> unique key
+    inline int64_t hashCell(int ix, int iy, int iz) const {
+        return (int64_t)ix + (int64_t)iy * 73856093LL + (int64_t)iz * 19349663LL;
+    }
+    
+    // Get cell indices for a point
+    inline void getCellIndices(float x, float y, float z, int& ix, int& iy, int& iz) const {
+        ix = (int)std::floor((x - min_x_) / cell_size_);
+        iy = (int)std::floor((y - min_y_) / cell_size_);
+        iz = (int)std::floor((z - min_z_) / cell_size_);
+    }
+};
 
 } // namespace rvv_pcl
