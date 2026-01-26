@@ -18,6 +18,17 @@
 
 ---
 
+## 🗺️ Project Navigation
+
+| Document | Purpose |
+|----------|---------|
+| [**Pipeline Demo**](../README_RVV_DEMO.md) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
+| [**Performance Report**](../results/spatial_hash_vs_octree_report.md) | Detailed benchmarks for spatial indexing optimizations. |
+| [**Vector Theory**](vector_operations_explained.md) | Deep dive into RVV geometric kernels. |
+| [**Main Overview**](../README.md) | General project scope and scalar/vector feature set. |
+
+---
+
 ## Codebase Architecture
 
 ### Overview

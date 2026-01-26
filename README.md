@@ -4,7 +4,18 @@
 
 Optimized for **RV64GCV** (targeting `v0.10+` vector specs).
 
-## 🚀 Key Features
+## � Documentation & Resources
+
+Explore these guides for a deeper understanding of the codebase and its performance:
+
+| Guide | Description |
+|-------|-------------|
+| [**Instruction Manual**](docs/INSTRUCTION_MANUAL.md) | **The Master Guide**. Contains API documentation, Team SOPs, and Intrinsic Naming conventions. |
+| [**Pipeline Demo**](README_RVV_DEMO.md) | **Recommended for Quick-start**. Detailed walkthrough of the optimized Octree/SpatialHash pipeline. |
+| [**Performance Report**](results/spatial_hash_vs_octree_report.md) | Benchmarks comparing different spatial indexing methods. |
+| [**Vector Theory**](docs/vector_operations_explained.md) | Geometric logic behind the RVV implementations. |
+
+## �🚀 Key Features
 
 This library implements 5 core point cloud processing algorithms, each with a highly optimized **RVV** path alongside a standard Scalar reference path.
 
@@ -149,8 +160,7 @@ qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_radius_rvv_manual
 qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_sor_rvv_manual
 ```
 
-## 📄 License
-[MIT](LICENSE)
+
 
 ## ⚡ GCC 14 Upgrade & Linux Toolchain
 
@@ -216,3 +226,7 @@ grep -E "vle|vadd|vse" tests/test_autovec.s
 *   **Auto-Vectorization**: `-O3 -march=rv64gcv` now automatically vectorizes standard loops.
 *   **RVV 1.0 Intrinsics**: Full support for fractional LMUL (`mf2`) and Tuple types (`vfloat32m1x2_t`).
 *   **Tests**: See `tests/test_rvv_features.c` and `tests/test_tuples.c` for examples.
+
+
+## 📄 License
+[MIT](LICENSE)
