@@ -11,9 +11,10 @@
 2. [Target Hardware (Banana Pi BPI-F3)](#target-hardware-banana-pi-bpi-f3)
 3. [Compilation Deep Dive](#compilation-deep-dive)
 4. [Execution Flow](#execution-flow)
-4. [RVV Programming Concepts](#rvv-programming-concepts)
-5. [Testing & Verification](#testing--verification)
-6. [Quick Reference](#quick-reference)
+5. [RVV Programming Concepts](#rvv-programming-concepts)
+6. [Testing & Verification](#testing--verification)
+7. [API Reference](#api-reference)
+8. [Quick Reference](#quick-reference)
 
 ---
 
@@ -1335,6 +1336,100 @@ scripts/run_trace_benchmark.sh
 - Voxel Grid: ~3x reduction
 - Normal Estimation: ~5x reduction
 - RANSAC: ~4x reduction
+
+---
+
+## API Reference
+
+### Data Structures
+
+#### `struct PointXYZ`
+Represents a single 3D point in Array of Structures (AoS) format.
+*   `float x, y, z`: Coordinates of the point.
+
+#### `struct PointCloudSoA`
+Represents a point cloud in Structure of Arrays (SoA) format. Essential for RVV performance as it allows contiguous vector loads.
+*   `float* x, * y, * z`: Contiguous arrays of coordinates.
+*   `std::size_t n`: Total number of points.
+
+---
+
+### Core Algorithms
+
+Every algorithm provides two paths: `_sc` (Scalar Reference) and `_rvv` (Vector Optimized).
+
+#### **Voxel Grid Downsampling**
+Reduces point cloud density by averaging points within 3D grid cells (voxels).
+*   `voxel_grid_downsamp_sc(const PointXYZ* in, std::size_t n, PointXYZ* out, float leaf_size)`
+*   `voxel_grid_downsamp_rvv(const PointCloudSoA& in, PointXYZ* out, float leaf_size)`
+*   **Returns**: Number of points in the filtered output.
+*   **Parameters**:
+    *   `leaf_size`: The dimension of each voxel (cube) used for downsampling.
+
+#### **Statistical Outlier Removal (SOR)**
+Filters sparse noise and artifacts based on mean distance to $K$ nearest neighbors.
+*   `sor_sc(const PointXYZ* in, std::size_t n, PointXYZ* out, int k, float alpha)`
+*   `sor_rvv(const PointCloudSoA& in, PointXYZ* out, int k, float alpha)`
+*   **Returns**: Number of points remaining after filtering.
+*   **Parameters**:
+    *   `k`: Number of neighbors to consider for mean distance calculation.
+    *   `alpha`: Standard deviation multiplier for the global threshold.
+
+#### **Normal Estimation**
+Computes surface normals for every point using local plane fitting.
+*   `normal_estimation_sc(const PointXYZ* in, std::size_t n, float* nx, float* ny, float* nz, int k, ...)`
+*   `normal_estimation_rvv(const PointCloudSoA& in, const Octree& octree, float* nx, float* ny, float* nz, int k, ...)`
+*   **Note**: The RVV version requires a pre-built `Octree` for efficient neighbor discovery.
+*   **Parameters**:
+    *   `k`: Number of neighbors for local covariance matrix estimation.
+    *   `vp_x, vp_y, vp_z`: Viewpoint coordinates (default 0,0,0) used to orient normals consistently toward the sensor.
+
+#### **Radius Search**
+Finds all neighbors within a specified spherical radius of a query point.
+*   `radius_search_sc(...)` / `radius_search_rvv(...)`
+*   **Parameters**:
+    *   `radius`: Search sphere radius.
+    *   `indices`: Output buffer for neighbor indices.
+    *   `dists`: Output buffer for squared distances.
+    *   `max_nn`: Limit for neighbors found (0 = unlimited).
+
+#### **RANSAC Plane Fitting**
+Robustly fits a plane model to a point cloud by maximizing inlier count.
+*   `ransac_plane_sc(...)` / `ransac_plane_rvv(...)`
+*   **Returns**: Number of inliers found for the best plane model.
+*   **Parameters**:
+    *   `dist_thresh`: Max distance from the plane to consider a point an inlier.
+    *   `max_iters`: Maximum number of random sampling iterations.
+    *   `model`: Pointer to a `float[4]` where (a, b, c, d) plane coefficients will be stored.
+
+---
+
+### Spatial Indexing
+
+#### **Class `Octree`**
+A hierarchical tree structure for multidimensional spatial partitioning.
+*   `setInputCloud(const PointCloudSoA& cloud)`: Attach the point cloud to the tree.
+*   `build()`: Construct the tree structure recursively.
+*   `radiusSearch(...)`: Perform efficient neighbor search using tree traversal.
+
+#### **Class `SpatialHash`**
+A high-performance hash grid optimized for uniform or near-uniform datasets. Built specifically for RVV 1.0 hardware.
+*   `setInputCloud(const PointCloudSoA& cloud, float cell_size)`: Attach cloud and define grid resolution.
+*   `build()`: Map points to hash cells using vectorized bounding box kernels.
+*   `radiusSearch(...)`: Fast neighbor discovery using O(1) cell lookups and RVV fused gather-filter kernels.
+*   **Recommendation**: Use `SpatialHash` for clouds >10k points; it typically builds ~30% faster than `Octree`.
+
+---
+
+### Helper Kernels (RVV Only)
+
+#### `get_dist_sq_rvv`
+Calculates squared Euclidean distances for a batch of points.
+*   **Hardware**: Uses `vfmul` and `vfadd` for high-throughput distance scans.
+
+#### `get_inds_in_radius_rvv`
+**Fused Gather-Filter Kernel**. Performs indexed load (gather) followed by distance thresholding in a single pass.
+*   **Hardware**: Leverages `vluxei32` (indexed load) and `vmfle` (comparison mask).
 
 ---
 
