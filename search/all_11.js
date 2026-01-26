@@ -1,0 +1,26 @@
+var searchData=
+[
+  ['large_20scale_0',['🚀 Advanced Benchmarks (Large-Scale)',['../md_results_2benchmark__summary__report.html#autotoc_md-advanced-benchmarks-large-scale',1,'']]],
+  ['length_1',['1. &lt;tt&gt;vsetvl&lt;/tt&gt; (Vector Set Vector Length)',['../vector_theory.html#autotoc_md1-vsetvl-vector-set-vector-length',1,'']]],
+  ['length_20multiplier_2',['2. LMUL (Length Multiplier)',['../instruction_manual.html#autotoc_md2-lmul-length-multiplier',1,'']]],
+  ['libraries_20strong_3',['&lt;strong&gt;B. Running with System Libraries&lt;/strong&gt;',['../instruction_manual.html#b-running-with-system-libraries',1,'']]],
+  ['library_4',['RVPoint: RISC-V Vector Optimized Point Cloud Library',['../index.html',1,'']]],
+  ['license_5',['📄 License',['../index.html#autotoc_md-license',1,'']]],
+  ['linking_6',['Stage 4: Linking',['../instruction_manual.html#stage-4-linking',1,'']]],
+  ['linux_7',['Building for Linux',['../index.html#building-for-linux',1,'']]],
+  ['linux_20cross_20compiler_8',['1. &lt;tt&gt;riscv64-linux-gnu-g++&lt;/tt&gt; - The Linux Cross-Compiler',['../instruction_manual.html#autotoc_md1-riscv64-linux-gnu-g---the-linux-cross-compiler',1,'']]],
+  ['linux_20gnu_20g_20tt_20the_20linux_20cross_20compiler_9',['1. &lt;tt&gt;riscv64-linux-gnu-g++&lt;/tt&gt; - The Linux Cross-Compiler',['../instruction_manual.html#autotoc_md1-riscv64-linux-gnu-g---the-linux-cross-compiler',1,'']]],
+  ['linux_20target_10',['Basic Compilation Command (Linux Target)',['../instruction_manual.html#basic-compilation-command-linux-target',1,'']]],
+  ['linux_20toolchain_11',['⚡ GCC 14 Upgrade &amp; Linux Toolchain',['../index.html#autotoc_md-gcc-14-upgrade--linux-toolchain',1,'']]],
+  ['linux_20vs_20bare_20metal_12',['Compiler Selection: Linux vs Bare Metal',['../instruction_manual.html#compiler-selection-linux-vs-bare-metal',1,'']]],
+  ['lmul_20length_20multiplier_13',['2. LMUL (Length Multiplier)',['../instruction_manual.html#autotoc_md2-lmul-length-multiplier',1,'']]],
+  ['lmul_20register_20grouping_14',['2. LMUL (Register Grouping)',['../vector_theory.html#autotoc_md2-lmul-register-grouping',1,'']]],
+  ['load_15',['The Solution: &lt;tt&gt;vluxei32&lt;/tt&gt; (Indexed Load)',['../vector_theory.html#the-solution-vluxei32-indexed-load',1,'']]],
+  ['load_5fpcd_16',['load_pcd',['../namespacevisualize__result.html#a01ab7ebdc0417d3f4a6544af600cdc46',1,'visualize_result']]],
+  ['loadpcd_17',['loadPCD',['../namespacervv__pcl.html#ad513fe0e21cc1b7ae4c1086b415473d0',1,'rvv_pcl']]],
+  ['loadpcd_20file_5fpath_20points_5fvector_20tt_18',['&lt;tt&gt;loadPCD(file_path, points_vector)&lt;/tt&gt;',['../instruction_manual.html#loadpcdfile_path-points_vector',1,'']]],
+  ['logging_20tt_20d_20exec_20nochain_20tt_19',['2. Trace Logging (&lt;tt&gt;-d exec,nochain&lt;/tt&gt;)',['../md_tests_2INSTRUCTION__COUNTING.html#autotoc_md2-trace-logging--d-execnochain',1,'']]],
+  ['logic_3a_20tt_20get_5fdist_5fsq_5frvv_20tt_20',['Core Logic: &lt;tt&gt;get_dist_sq_rvv&lt;/tt&gt;',['../vector_theory.html#core-logic-get_dist_sq_rvv',1,'']]],
+  ['loop_20strong_21',['&lt;strong&gt;Phase 2: Instruction Execution Loop&lt;/strong&gt;',['../instruction_manual.html#phase-2-instruction-execution-loop',1,'']]],
+  ['lp64d_20tt_20application_20binary_20interface_22',['3. &lt;tt&gt;-mabi=lp64d&lt;/tt&gt; - Application Binary Interface',['../instruction_manual.html#autotoc_md3--mabilp64d---application-binary-interface',1,'']]]
+];

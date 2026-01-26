@@ -1,0 +1,4 @@
+var searchData=
+[
+  ['🗺️_20project_20navigation_0',['🗺️ project navigation',['../instruction_manual.html#️-project-navigation',1,'🗺️ Project Navigation'],['../vector_theory.html#️-project-navigation-1',1,'🗺️ Project Navigation'],['../md_results_2benchmark__summary__report.html#️-project-navigation-2',1,'🗺️ Project Navigation'],['../md_tests_2INSTRUCTION__COUNTING.html#️-project-navigation-3',1,'🗺️ Project Navigation']]]
+];
