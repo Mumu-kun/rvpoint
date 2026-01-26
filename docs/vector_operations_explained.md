@@ -2,6 +2,19 @@
 
 This document explains the vector operations used in the project, specifically focusing on the `get_dist_sq_rvv` function found in `src/rvv_common.cpp`.
 
+---
+
+### 🗺️ Project Navigation
+
+| Document | Purpose |
+|----------|---------|
+| [**Pipeline Demo**](../README_RVV_DEMO.md) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
+| [**Instruction Manual**](INSTRUCTION_MANUAL.md) | **The Master Guide**. API docs, Team SOPs, and naming conventions. |
+| [**Performance Report**](../results/spatial_hash_vs_octree_report.md) | Benchmarks for spatial indexing optimizations. |
+| [**Main Overview**](../README.md) | General project scope and feature set. |
+
+---
+
 ## Core Logic: `get_dist_sq_rvv`
 
 The goal of this function is to calculate the squared Euclidean distance between a single query point $(qx, qy, qz)$ and a large array of points $(x[i], y[i], z[i])$.

@@ -2,6 +2,19 @@
 
 We successfully benchmarked the RISC-V Vector (RVV) vs Scalar implementations by counting "architectural instructions" executed by QEMU. This method isolated the kernel instructions from the simulation overhead.
 
+---
+
+### 🗺️ Project Navigation
+
+| Document | Purpose |
+|----------|---------|
+| [**Pipeline Demo**](../README_RVV_DEMO.md) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
+| [**Instruction Manual**](../docs/INSTRUCTION_MANUAL.md) | **The Master Guide**. API docs, Team SOPs, and naming conventions. |
+| [**Spatial Hash vs Octree**](spatial_hash_vs_octree_report.md) | Specialized O(N) indexing benchmarks. |
+| [**Vector Theory**](../docs/vector_operations_explained.md) | Deep dive into RVV kernels. |
+
+---
+
 ## Methodology
 - **Simulator**: QEMU (`qemu-riscv64`)
 - **Metric**: Dynamic Instruction Count (Translation Blocks executed).
