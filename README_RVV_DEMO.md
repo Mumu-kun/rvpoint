@@ -1,48 +1,70 @@
-# RVV Point Cloud Pipeline Optimization Demo (Member: Arian)
+# RVV Point Cloud Pipeline Demo (Branch: arian_exps)
 
-This branch `arian_exps` contains the optimized RISC-V implementation of the PCL pipeline, specifically featuring:
-1.  **Octree-based Normal Estimation**: Reduced complexity from O(N^2) to O(N log N).
-2.  **Fused RVV Gather-Filter Kernel**: Optimized `vluxei32` implementation for high-performance radius search on RVV 1.0 hardware/emulator.
+This branch contains the optimized RISC-V Vector (RVV 1.0) implementation of the PCL pipeline.
+
+## Key Optimizations
+1.  **Octree-based Spatial Search**: Reduced neighbor search complexity from O(N²) to O(N log N).
+2.  **Fused RVV Gather-Filter Kernel**: High-performance `vluxei32` implementation with byte-offset correction.
+3.  **Explicit Pipeline Steps**: Clear separation of Octree Build → Normal Estimation → Verification.
+
+## Project Structure
+```
+.
+├── bin/                    # Compiled executables (gitignored)
+├── build_cmake/            # CMake build directory (gitignored)
+├── data/                   # Input datasets
+│   ├── bunny.pcd           # Small test dataset (397 points)
+│   └── table_scene_lms400.pcd  # Large dataset (460k points)
+├── results/                # Timestamped output files
+│   └── bunny_YYYYMMDD_HHMMSS_voxelized.pcd/.png
+├── scripts/
+│   └── visualize_result.py # Visualization script
+├── src/
+│   ├── include/rvv_pcl.h   # Public API
+│   ├── rvv_common.cpp      # Fused gather-filter kernel
+│   ├── octree.cpp          # Octree implementation
+│   └── normal_estimation.cpp  # Step-by-step normal estimation
+└── tests/
+    └── test_pipeline_walkthrough.cpp  # Main test harness
+```
 
 ## Prerequisites
-- RISC-V Toolchain (gcc 10+ with vector support)
-- QEMU (`qemu-riscv64` with `v=true` support)
-- CMake
-- Python 3 + Matplotlib (for visualization)
+- **GCC 14** RISC-V Toolchain (`/opt/riscv/bin/riscv64-unknown-linux-gnu-g++`)
+- **QEMU** with RVV support (`qemu-riscv64 -cpu rv64,v=true`)
+- **Python 3** + Matplotlib (for visualization)
 
 ## Quick Start
 
 ### 1. Build
 ```bash
-mkdir -p build_cmake
-cd build_cmake
-cmake ..
+mkdir -p build_cmake && cd build_cmake
+cmake -DCMAKE_C_COMPILER=/opt/riscv/bin/riscv64-unknown-linux-gnu-gcc \
+      -DCMAKE_CXX_COMPILER=/opt/riscv/bin/riscv64-unknown-linux-gnu-g++ ..
 make test_pipeline_walkthrough
 ```
 
-### 2. Run Verification (Bunny Dataset)
-Run the pipeline on the small `bunny.pcd` dataset for instant verification:
+### 2. Run Pipeline
 ```bash
-/usr/bin/qemu-riscv64 -cpu rv64,v=true -s 8192000 ./test_pipeline_walkthrough bunny.pcd
-```
-**Expected Output:**
-- `Neighbors found within r=0.05: 81`
-- `[PASS]` checks.
-
-### 3. Run Stress Test (Table Scene)
-Run on the larger dataset (this may take a few minutes on QEMU):
-```bash
-/usr/bin/qemu-riscv64 -cpu rv64,v=true -s 8192000 ./test_pipeline_walkthrough table_scene_lms400.pcd
+cd bin
+/usr/bin/qemu-riscv64 -L /opt/riscv/sysroot -cpu rv64,v=true ./test_pipeline_walkthrough bunny.pcd
 ```
 
-### 4. Visualize Results
-Use the python script to generate a 3D plot of the voxelized output:
-```bash
-python3 ../scripts/visualize_result.py bunny_voxelized.pcd bunny_view.png
+### 3. Expected Output
 ```
-(Outputs `bunny_view.png`)
+[Step 1] Loading bunny.pcd... Loaded 397 points.
+[Step 2] Voxel Grid Downsampling... Filtered: 294 points.
+[Step 3] Building Octree... Success.
+[Step 4] Estimating Normals... [PASS]
+[Step 5] Radius Search Verification... [PASS]
+[SUCCESS] Visualization saved to results/bunny_YYYYMMDD_HHMMSS_voxelized.png
+```
+
+Results are saved to `results/` with timestamps for serialization.
 
 ## Key Files
-- `src/rvv_common.cpp`: Contains the fused `get_inds_in_radius_rvv` kernel.
-- `src/normal_estimation.cpp`: Contains the Octree-optimized normal estimation logic.
-- `tests/test_pipeline_walkthrough.cpp`: The main test harness.
+| File | Description |
+|------|-------------|
+| `src/rvv_common.cpp` | Fused `get_inds_in_radius_rvv` kernel |
+| `src/octree.cpp` | Octree spatial index |
+| `src/normal_estimation.cpp` | Octree-based normal estimation |
+| `tests/test_pipeline_walkthrough.cpp` | Main pipeline test |
