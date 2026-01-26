@@ -1143,30 +1143,47 @@ Example (VLEN=128):
 
 **Rule of thumb:** Use m8 for maximum throughput (when registers available).
 
-#### 3. Vector Intrinsics Naming
+#### 3. Vector Intrinsics Naming Guide
 
-**Pattern:** `__riscv_<operation>_<src_types>_<dst_type>(<args>, vl)`
+Every RISC-V Vector (RVV) intrinsic follows a **strict naming pattern**. Understanding this pattern is crucial for reading and writing optimized code.
 
-**Examples:**
-```cpp
-// Vector Load: e32 elements, m8 group, returns f32m8
-vfloat32m8_t __riscv_vle32_v_f32m8(const float* ptr, size_t vl)
+**General Pattern:**
+`__riscv_<operation>_<operand_types>_<result_type><LMUL><policy>`
 
-// Vector-Scalar Multiply: f32m8 × float = f32m8
-vfloat32m8_t __riscv_vfmul_vf_f32m8(vfloat32m8_t vs2, float rs1, size_t vl)
+##### **Common Examples Breakdown**
 
-// Vector-Vector Add: f32m8 + f32m8 = f32m8
-vfloat32m8_t __riscv_vfadd_vv_f32m8(vfloat32m8_t vs2, vfloat32m8_t vs1, size_t vl)
+| Intrinsic | Breakdown | Meaning |
+|-----------|-----------|---------|
+| `__riscv_vle32_v_f32m8` | `vle` (**V**ector **L**oad **E**lement)<br>`32` (32-bit)<br>`_v_` (Vector load)<br>`f32m8` (Float32, LMUL=8) | Load `vl` elements of 32-bit floats into a group of 8 vector registers. |
+| `__riscv_vfmul_vv_f32m8`| `vfmul` (**V**ector **F**loat **MUL**)<br>`_vv_` (**V**ector x **V**ector)<br>`f32m8` (Float32, LMUL=8) | Multiply two vector groups element-wise and return the result. |
+| `__riscv_vfmul_vf_f32m8`| `vfmul` (**V**ector **F**loat **MUL**)<br>`_vf_` (**V**ector x **F**loat scalar)<br>`f32m8` (Float32, LMUL=8) | Multiply every element in a vector by a single scalar float value. |
+| `__riscv_vse32_v_f32m1` | `vse` (**V**ector **S**tore **E**lement)<br>`32` (32-bit)<br>`_v_` (Vector store)<br>`f32m1` (Float32, LMUL=1) | Store elements from a single vector register to memory. |
 
-// Fused Multiply-Add: d += a * b
-vfloat32m8_t __riscv_vfmacc_vf_f32m8(vfloat32m8_t vd, float rs1, vfloat32m8_t vs2, size_t vl)
-```
+##### **Decoding the Components**
 
-**Suffix breakdown:**
-- `vf` = Vector-Float (vector op scalar)
-- `vv` = Vector-Vector (vector op vector)
-- `f32m8` = Float32, LMUL=8
-- `b4` = Bool mask (one bit per 4 elements)
+**1. Operand Type Suffixes (`_vv`, `_vf`, `_vx`)**
+*   `_vv`: **V**ector-**V**ector (Operation between two vector registers).
+*   `_vf`: **V**ector-**F**loat (Operation between a vector and a floating-point scalar).
+*   `_vx`: **V**ector-**I**nteger (Operation between a vector and an integer scalar).
+*   `_vs`: **V**ector-**S**calar (Reduction: Whole vector reduced into a single scalar element).
+
+**2. Element Type Codes**
+*   `f32`: 32-bit Floating Point (Standard `float`).
+*   `i32`: 32-bit Signed Integer (`int32_t`).
+*   `u32`: 32-bit Unsigned Integer (`uint32_t`).
+*   `b4`: **B**oolean mask with 4-to-1 ratio (used for masks when LMUL=8).
+
+**3. LMUL (Length Multiplier)**
+Defines how many vector registers are grouped together to act as one large vector.
+*   `m1`: 1 Register.
+*   `m2`: 2 Registers grouped.
+*   `m8`: 8 Registers grouped (Maximum throughput).
+
+**4. Policy Suffixes (Optional)**
+*   `_ta`: **T**ail **A**gnostic (Unused elements at the end are undefined).
+*   `_ma`: **M**ask **A**gnostic (Masked-out elements are undefined).
+
+---
 
 #### 4. Vector Masks (Boolean Vectors)
 
