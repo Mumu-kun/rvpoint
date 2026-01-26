@@ -24,6 +24,7 @@ list(APPEND SOURCES
     "src/normal_estimation.cpp"
     "src/radius_search.cpp"
     "src/ransac_plane.cpp"
+    "src/octree.cpp" 
 )
 # Note: placeholder.c removed, real source used.
 add_library(rvvpcl ${SOURCES})
@@ -60,6 +61,14 @@ target_link_libraries(test_normal PRIVATE rvvpcl)
 # Radius Search Test
 add_executable(test_radius tests/test_radius.cpp)
 target_link_libraries(test_radius PRIVATE rvvpcl)
+
+# Octree Test (NEW)
+add_executable(test_octree tests/test_octree.cpp)
+target_link_libraries(test_octree PRIVATE rvvpcl)
+
+# PCL Walkthrough Test (NEW)
+add_executable(test_pipeline_walkthrough tests/test_pipeline_walkthrough.cpp)
+target_link_libraries(test_pipeline_walkthrough PRIVATE rvvpcl)
 
 # RANSAC Test
 add_executable(test_ransac tests/test_ransac.cpp)

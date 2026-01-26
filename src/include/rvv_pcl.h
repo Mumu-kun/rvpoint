@@ -36,11 +36,14 @@ std::size_t sor_rvv(const PointCloudSoA& in,
                     PointXYZ* out, int k, float alpha);
 
 // 3) Normal Estimation (output normals per point)
+// Added ViewPoint support for consistent orientation
 void normal_estimation_sc(const PointXYZ* in, std::size_t n,
-                          float* nx, float* ny, float* nz, int k);
+                          float* nx, float* ny, float* nz, int k,
+                          float vp_x = 0, float vp_y = 0, float vp_z = 0);
 
 void normal_estimation_rvv(const PointCloudSoA& in,
-                           float* nx, float* ny, float* nz, int k);
+                           float* nx, float* ny, float* nz, int k,
+                           float vp_x = 0, float vp_y = 0, float vp_z = 0);
 
 // 4) Radius Search
 std::size_t radius_search_sc(const PointXYZ* cloud, std::size_t n, 
@@ -59,10 +62,56 @@ int ransac_plane_sc(const PointXYZ* cloud, std::size_t n,
 int ransac_plane_rvv(const PointCloudSoA& cloud, 
                      float dist_thresh, int max_iters, float* model);
 
+// ============================================================================
+// Octree for Efficient Spatial Search
+// ============================================================================
+struct OctreeNode {
+    float min_x, min_y, min_z;
+    float max_x, max_y, max_z;
+    OctreeNode* children[8] = {nullptr};
+    std::vector<int> indices; // Only for leaves
+    bool is_leaf = true;
+
+    ~OctreeNode(); 
+};
+
+class Octree {
+public:
+    Octree();
+    ~Octree();
+
+    void setInputCloud(const PointCloudSoA& cloud);
+    void build();
+
+    // Returns number of neighbors found
+    std::size_t radiusSearch(const PointXYZ& query, float radius, 
+                             std::vector<int>& indices, 
+                             std::vector<float>& dists, int max_nn = 0) const;
+
+private:
+    PointCloudSoA cloud_;
+    OctreeNode* root_ = nullptr;
+    int max_points_per_leaf_ = 64; // Tunable for RVV
+    int max_depth_ = 8;
+
+    void buildParams(OctreeNode* node, const std::vector<int>& indices, int depth);
+    void recursiveSearch(OctreeNode* node, const PointXYZ& query, float radius_sq, 
+                         std::vector<int>& indices, std::vector<float>& dists) const;
+};
+
 // Helper: Squared Euclidean Distance Kernel (RVV)
 // Computes d2[i] = dist_sq( (x[i],y[i],z[i]), q )
 void get_dist_sq_rvv(const float* x, const float* y, const float* z,
                      float qx, float qy, float qz,
                      float* out_d2, std::size_t n);
+
+// Fused Gather-Filter Kernel
+// Reads x,y,z at 'indices' (SoA), computes dist to q, and stores matching indices/dists
+void get_inds_in_radius_rvv(const float* x, const float* y, const float* z,
+                            const int* subset_indices, std::size_t n,
+                            float qx, float qy, float qz, float r2,
+                            std::vector<int>& out_indices, 
+                            std::vector<float>& out_dists);
+
 
 } // namespace rvv_pcl
