@@ -4,9 +4,11 @@
 #include <unordered_map>
 #include <cmath>
 
-#ifdef __riscv_vector
-  #include <riscv_vector.h>
+#ifndef __riscv_vector
+  #error "RISC-V Vector (RVV) support is mandatory. Compile with -march=rv64gcv"
 #endif
+
+#include <riscv_vector.h>
 
 namespace rvv_pcl {
 
@@ -43,12 +45,12 @@ std::size_t sor_rvv(const PointCloudSoA& in,
 // Added ViewPoint support for consistent orientation
 // Now requires a pre-built Octree for neighbor search
 void normal_estimation_sc(const PointXYZ* in, std::size_t n,
-                          float* nx, float* ny, float* nz, int k,
+                          float* nx, float* ny, float* nz, int k, float radius,
                           float vp_x = 0, float vp_y = 0, float vp_z = 0);
 
 void normal_estimation_rvv(const PointCloudSoA& in,
-                           const Octree& octree, // <--- Added dependency
-                           float* nx, float* ny, float* nz, int k,
+                           const Octree& octree,
+                           float* nx, float* ny, float* nz, int k, float radius,
                            float vp_x = 0, float vp_y = 0, float vp_z = 0);
 
 // 4) Radius Search
@@ -63,10 +65,12 @@ std::size_t radius_search_rvv(const PointCloudSoA& cloud,
 // 5) RANSAC Plane Fitting
 // Returns number of inliers. 'model' must be float[4] (a,b,c,d).
 int ransac_plane_sc(const PointXYZ* cloud, std::size_t n, 
-                    float dist_thresh, int max_iters, float* model);
+                    float dist_thresh, int max_iters, float* model,
+                    float collinear_thresh = 1e-6f);
 
 int ransac_plane_rvv(const PointCloudSoA& cloud, 
-                     float dist_thresh, int max_iters, float* model);
+                     float dist_thresh, int max_iters, float* model,
+                     float collinear_thresh = 1e-6f);
 
 // ============================================================================
 // Octree for Efficient Spatial Search
@@ -94,11 +98,16 @@ public:
                              std::vector<int>& indices, 
                              std::vector<float>& dists, int max_nn = 0) const;
 
+    void setMaxPointsPerLeaf(int n) { max_points_per_leaf_ = n; }
+    void setMaxDepth(int d) { max_depth_ = d; }
+    void setBuildEpsilon(float eps) { build_epsilon_ = eps; }
+
 private:
     PointCloudSoA cloud_;
     OctreeNode* root_ = nullptr;
-    int max_points_per_leaf_ = 64; // Tunable for RVV
+    int max_points_per_leaf_ = 64; 
     int max_depth_ = 8;
+    float build_epsilon_ = 1e-4f;
 
     void buildParams(OctreeNode* node, const std::vector<int>& indices, int depth);
     void recursiveSearch(OctreeNode* node, const PointXYZ& query, float radius_sq, 
@@ -135,10 +144,15 @@ public:
     std::size_t radiusSearch(const PointXYZ& query, float radius,
                              std::vector<int>& indices,
                              std::vector<float>& dists, int max_nn = 0) const;
+
+    void setCellSizeEpsilon(float eps) { eps_scale_ = eps; }
+    void setHashReserveFactor(float factor) { reserve_factor_ = factor; }
     
 private:
     PointCloudSoA cloud_;
     float cell_size_;
+    float eps_scale_ = 0.01f;
+    float reserve_factor_ = 0.25f; // 1/4
     
     // Hash table: key = cell hash, value = point indices in that cell
     std::unordered_map<int64_t, std::vector<int>> grid_;

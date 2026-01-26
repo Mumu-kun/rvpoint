@@ -73,7 +73,7 @@ void flipNormalTowardsViewpoint(const PointXYZ& point, float vp_x, float vp_y, f
 // Scalar Implementation
 // ============================================================================
 void normal_estimation_sc(const PointXYZ* in, std::size_t n,
-                          float* nx, float* ny, float* nz, int k,
+                          float* nx, float* ny, float* nz, int k, float radius,
                           float vp_x, float vp_y, float vp_z) {
     if (n == 0) return;
     std::vector<float> dists(n);
@@ -168,11 +168,11 @@ void flip_normal_rvv(const PointXYZ& point, float vp_x, float vp_y, float vp_z, 
 // ============================================================================
 void normal_estimation_rvv(const PointCloudSoA& in,
                            const Octree& octree,
-                           float* nx, float* ny, float* nz, int k,
+                           float* nx, float* ny, float* nz, int k, float radius,
                            float vp_x, float vp_y, float vp_z) {
     if(in.n == 0) return;
 
-    float search_radius = 0.03f; 
+    float search_radius = radius;
 
     std::vector<int> indices;
     std::vector<float> dists;

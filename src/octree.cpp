@@ -36,8 +36,8 @@ void Octree::build() {
     root_ = new OctreeNode();
     
     // Bounds
-    root_->min_x = root_->min_y = root_->min_z = 1e9;
-    root_->max_x = root_->max_y = root_->max_z = -1e9;
+    root_->min_x = root_->min_y = root_->min_z = std::numeric_limits<float>::max();
+    root_->max_x = root_->max_y = root_->max_z = std::numeric_limits<float>::lowest();
 
     std::vector<int> all_indices(cloud_.n);
     for(size_t i=0; i<cloud_.n; ++i) {
@@ -50,9 +50,8 @@ void Octree::build() {
         if(cloud_.z[i] > root_->max_z) root_->max_z = cloud_.z[i];
     }
 
-    // Add small epsilon to max to ensure points are strictly inside [min, max) logic if needed,
-    // or just handle robustly.
-    root_->max_x += 1e-4; root_->max_y += 1e-4; root_->max_z += 1e-4;
+    // Add small epsilon to max to ensure points are strictly inside [min, max) logic
+    root_->max_x += build_epsilon_; root_->max_y += build_epsilon_; root_->max_z += build_epsilon_;
 
     buildParams(root_, all_indices, 0);
 }

@@ -3,9 +3,7 @@
 #include <algorithm>
 #include <limits>
 
-#ifdef __riscv_vector
 #include <riscv_vector.h>
-#endif
 
 namespace rvv_pcl {
 
@@ -30,7 +28,6 @@ void SpatialHash::setInputCloud(const PointCloudSoA& cloud, float cell_size) {
     min_x_ = min_y_ = min_z_ = std::numeric_limits<float>::max();
     max_x_ = max_y_ = max_z_ = std::numeric_limits<float>::lowest();
     
-#ifdef __riscv_vector
     // RVV-optimized bounding box computation
     size_t n = cloud.n;
     size_t i = 0;
@@ -78,25 +75,14 @@ void SpatialHash::setInputCloud(const PointCloudSoA& cloud, float cell_size) {
     __riscv_vse32_v_f32m1(&max_y_, max_y_red, 1);
     __riscv_vse32_v_f32m1(&max_z_, max_z_red, 1);
     
-#else
-    // Scalar fallback
-    for (size_t i = 0; i < cloud.n; ++i) {
-        min_x_ = std::min(min_x_, cloud.x[i]);
-        min_y_ = std::min(min_y_, cloud.y[i]);
-        min_z_ = std::min(min_z_, cloud.z[i]);
-        max_x_ = std::max(max_x_, cloud.x[i]);
-        max_y_ = std::max(max_y_, cloud.y[i]);
-        max_z_ = std::max(max_z_, cloud.z[i]);
-    }
-#endif
     
     // Add small epsilon to avoid boundary issues
-    min_x_ -= cell_size_ * 0.01f;
-    min_y_ -= cell_size_ * 0.01f;
-    min_z_ -= cell_size_ * 0.01f;
-    max_x_ += cell_size_ * 0.01f;
-    max_y_ += cell_size_ * 0.01f;
-    max_z_ += cell_size_ * 0.01f;
+    min_x_ -= cell_size_ * eps_scale_;
+    min_y_ -= cell_size_ * eps_scale_;
+    min_z_ -= cell_size_ * eps_scale_;
+    max_x_ += cell_size_ * eps_scale_;
+    max_y_ += cell_size_ * eps_scale_;
+    max_z_ += cell_size_ * eps_scale_;
     
     grid_size_x_ = (int)std::ceil((max_x_ - min_x_) / cell_size_) + 1;
     grid_size_y_ = (int)std::ceil((max_y_ - min_y_) / cell_size_) + 1;
@@ -105,7 +91,7 @@ void SpatialHash::setInputCloud(const PointCloudSoA& cloud, float cell_size) {
 
 void SpatialHash::build() {
     grid_.clear();
-    grid_.reserve(cloud_.n / 4); // Heuristic: average 4 points per cell
+    grid_.reserve((size_t)(cloud_.n * reserve_factor_)); 
     
     // Insert all points into grid using RVV-accelerated hashing
     for (size_t i = 0; i < cloud_.n; ++i) {

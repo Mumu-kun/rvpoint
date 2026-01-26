@@ -1370,6 +1370,9 @@ Represents a point cloud in Structure of Arrays (SoA) format. Essential for RVV 
 
 Every algorithm provides two paths: `_sc` (Scalar Reference) and `_rvv` (Vector Optimized).
 
+> [!IMPORTANT]
+> **RVV Support is Mandatory**: The library header strictly requires `-march=rv64gcv`. There is no silent scalar fallback in the `_rvv` functions; attempting to compile without vector support will result in a `#error`, and running on non-vector hardware will cause an illegal instruction crash.
+
 #### **Voxel Grid Downsampling**
 Reduces point cloud density by averaging points within 3D grid cells (voxels).
 *   `voxel_grid_downsamp_sc(const PointXYZ* in, std::size_t n, PointXYZ* out, float leaf_size)`
@@ -1394,6 +1397,7 @@ Computes surface normals for every point using local plane fitting.
 *   **Note**: The RVV version requires a pre-built `Octree` for efficient neighbor discovery.
 *   **Parameters**:
     *   `k`: Number of neighbors for local covariance matrix estimation.
+    *   `radius`: (Mandatory) The search sphere radius used to find the `k` neighbors via the Octree.
     *   `vp_x, vp_y, vp_z`: Viewpoint coordinates (default 0,0,0) used to orient normals consistently toward the sensor.
 
 #### **Radius Search**
@@ -1413,6 +1417,7 @@ Robustly fits a plane model to a point cloud by maximizing inlier count.
     *   `dist_thresh`: Max distance from the plane to consider a point an inlier.
     *   `max_iters`: Maximum number of random sampling iterations.
     *   `model`: Pointer to a `float[4]` where (a, b, c, d) plane coefficients will be stored.
+    *   `collinear_thresh`: (Optional) Threshold to detect near-collinear points during model fitting. Default: `1e-6`.
 
 ---
 
@@ -1423,12 +1428,19 @@ A hierarchical tree structure for multidimensional spatial partitioning.
 *   `setInputCloud(const PointCloudSoA& cloud)`: Attach the point cloud to the tree.
 *   `build()`: Construct the tree structure recursively.
 *   `radiusSearch(...)`: Perform efficient neighbor search using tree traversal.
+*   **Configuration**:
+    *   `setMaxPointsPerLeaf(n)`: Sets the maximum points before splitting a node. Default: `64`.
+    *   `setMaxDepth(d)`: Sets the recursion limit for the tree. Default: `8`.
+    *   `setBuildEpsilon(eps)`: Sets the tiny expansion factor for bounds. Default: `1e-4`.
 
 #### **Class `SpatialHash`**
 A high-performance hash grid optimized for uniform or near-uniform datasets. Built specifically for RVV 1.0 hardware.
 *   `setInputCloud(const PointCloudSoA& cloud, float cell_size)`: Attach cloud and define grid resolution.
 *   `build()`: Map points to hash cells using vectorized bounding box kernels.
 *   `radiusSearch(...)`: Fast neighbor discovery using O(1) cell lookups and RVV fused gather-filter kernels.
+*   **Configuration**:
+    *   `setCellSizeEpsilon(eps)`: Scales the cell overlap margin. Default: `0.01`.
+    *   `setHashReserveFactor(factor)`: Pre-allocates hash table size relative to point count. Default: `0.25`.
 *   **Recommendation**: Use `SpatialHash` for clouds >10k points; it typically builds ~30% faster than `Octree`.
 
 ---

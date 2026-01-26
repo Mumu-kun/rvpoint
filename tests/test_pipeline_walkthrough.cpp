@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
     std::vector<float> nx(n_filtered), ny(n_filtered), nz(n_filtered);
     
     // Viewpoint at origin (0,0,0) - simulating scanner position
-    normal_estimation_rvv(filtered_soa, octree, nx.data(), ny.data(), nz.data(), 10, 0.0f, 0.0f, 0.0f);
+    normal_estimation_rvv(filtered_soa, octree, nx.data(), ny.data(), nz.data(), 10, 0.03f, 0.0f, 0.0f, 0.0f);
     
     // Check index 0
     float vp_dx = 0 - fx[0];

@@ -116,9 +116,12 @@ void run_test(const std::string& algo, const std::string& mode) {
         int k=10;
 
         if (mode == "sc") {
-            normal_estimation_sc(input_aos.data(), N, nx.data(), ny.data(), nz.data(), k);
+            normal_estimation_sc(input_aos.data(), N, nx.data(), ny.data(), nz.data(), k, 2.0f);
         } else if (mode == "rvv") {
-            normal_estimation_rvv(input_soa, nx.data(), ny.data(), nz.data(), k);
+            Octree octree;
+            octree.setInputCloud(input_soa);
+            octree.build();
+            normal_estimation_rvv(input_soa, octree, nx.data(), ny.data(), nz.data(), k, 2.0f);
         } else if (mode == "setup") {
             return;
         }

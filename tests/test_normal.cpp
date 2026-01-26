@@ -30,11 +30,17 @@ int main() {
 
     // 2. Run Scalar
     std::vector<float> nx_sc(N), ny_sc(N), nz_sc(N);
-    normal_estimation_sc(input_aos.data(), N, nx_sc.data(), ny_sc.data(), nz_sc.data(), K);
+    normal_estimation_sc(input_aos.data(), N, nx_sc.data(), ny_sc.data(), nz_sc.data(), K, 2.0f);
 
     // 3. Run RVV
     std::vector<float> nx_rvv(N), ny_rvv(N), nz_rvv(N);
-    normal_estimation_rvv(input_soa, nx_rvv.data(), ny_rvv.data(), nz_rvv.data(), K);
+    
+    // RVV version now requires a pre-built Octree
+    Octree octree;
+    octree.setInputCloud(input_soa);
+    octree.build();
+    
+    normal_estimation_rvv(input_soa, octree, nx_rvv.data(), ny_rvv.data(), nz_rvv.data(), K, 2.0f);
 
     // 4. Verify
     // For a plane Z=0, normal should be approx (0,0,1) or (0,0,-1)

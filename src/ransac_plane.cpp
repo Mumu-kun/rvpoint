@@ -13,7 +13,7 @@ namespace rvv_pcl {
 static bool compute_plane_coefficients(float x1, float y1, float z1,
                                        float x2, float y2, float z2,
                                        float x3, float y3, float z3,
-                                       float* model) 
+                                       float* model, float collinear_thresh) 
 {
     float v1x = x2 - x1;
     float v1y = y2 - y1;
@@ -30,7 +30,7 @@ static bool compute_plane_coefficients(float x1, float y1, float z1,
     
     // Normalize
     float norm = std::sqrt(a*a + b*b + c*c);
-    if (norm < 1e-6) return false; // Collinear
+    if (norm < collinear_thresh) return false; // Collinear
     
     a /= norm;
     b /= norm;
@@ -48,7 +48,8 @@ static bool compute_plane_coefficients(float x1, float y1, float z1,
 // Scalar Implementation
 // ============================================================================
 int ransac_plane_sc(const PointXYZ* cloud, std::size_t n, 
-                    float dist_thresh, int max_iters, float* model) 
+                    float dist_thresh, int max_iters, float* model,
+                    float collinear_thresh) 
 {
     if (n < 3) return 0;
     std::srand(0); // Fixed seed for reproducibility
@@ -67,7 +68,7 @@ int ransac_plane_sc(const PointXYZ* cloud, std::size_t n,
         if(!compute_plane_coefficients(cloud[i1].x, cloud[i1].y, cloud[i1].z,
                                        cloud[i2].x, cloud[i2].y, cloud[i2].z,
                                        cloud[i3].x, cloud[i3].y, cloud[i3].z,
-                                       cand_model)) continue;
+                                       cand_model, collinear_thresh)) continue;
                                        
         // 2. Count Inliers
         int current_inliers = 0;
@@ -95,7 +96,8 @@ int ransac_plane_sc(const PointXYZ* cloud, std::size_t n,
 // RVV Implementation
 // ============================================================================
 int ransac_plane_rvv(const PointCloudSoA& cloud, 
-                     float dist_thresh, int max_iters, float* model) 
+                     float dist_thresh, int max_iters, float* model,
+                     float collinear_thresh) 
 {
     if (cloud.n < 3) return 0;
     std::srand(0);
@@ -114,7 +116,7 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
         if(!compute_plane_coefficients(cloud.x[i1], cloud.y[i1], cloud.z[i1],
                                        cloud.x[i2], cloud.y[i2], cloud.z[i2],
                                        cloud.x[i3], cloud.y[i3], cloud.z[i3],
-                                       cand_model)) continue;
+                                       cand_model, collinear_thresh)) continue;
         
         float a = cand_model[0];
         float b = cand_model[1];
