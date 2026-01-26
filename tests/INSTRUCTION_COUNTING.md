@@ -1,5 +1,18 @@
 # Instruction Counting Methodology
 
+---
+
+### 🗺️ Project Navigation
+
+| Document | Purpose |
+|----------|---------|
+| [**Pipeline Demo**](../README_RVV_DEMO.md) | Quick-start guide for the optimized Octree/SpatialHash pipeline. |
+| [**Instruction Manual**](../docs/INSTRUCTION_MANUAL.md) | **The Master Guide**. API docs, Team SOPs, and naming conventions. |
+| [**Benchmark Results**](../results/benchmark_summary_report.md) | Actual instruction count data. |
+| [**Main Overview**](../README.md) | General project scope and feature set. |
+
+---
+
 This document justifies the validity of the instruction counts reported by our benchmarks (`scripts/run_trace_benchmark.sh`). We use QEMU's internal tracing to generate **Architectural Instruction Counts**, which accurately reflect the computational work required by the CPU, independent of emulation speed.
 
 ## The Problem
