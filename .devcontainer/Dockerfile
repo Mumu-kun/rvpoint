@@ -127,13 +127,13 @@ RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "╠════════════════════════════════════════════════════════════╣"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  Environment Ready:                                        ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    - RISC-V GCC 14 Toolchain (rv64gcv)                     ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - QEMU 9.2 (full RVV v1.0) & Spike Simulators          ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - QEMU 9.2 (full RVV v1.0) & Spike Simulators           ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    - CMake, Ninja, Python3                                 ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║                                                            ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  Quick Commands:                                           ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    Verify All:   scripts/verify_container.sh               ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    Manual Build: mkdir build && cd build && cmake ..       ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    Run Tests:    qemu-riscv64 -L /opt/riscv/sysroot ...   ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Run Tests:    qemu-riscv64 -L /opt/riscv/sysroot ...    ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "╚════════════════════════════════════════════════════════════╝"' >> /usr/local/bin/welcome.sh && \
     chmod +x /usr/local/bin/welcome.sh && \
     echo '/usr/local/bin/welcome.sh' >> /etc/bash.bashrc

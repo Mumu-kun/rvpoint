@@ -8,10 +8,18 @@ bin/
 *.a
 *.so
 
+# Test binaries (root level)
+test_*_linux
+
 # Output results
 results/
 *.pcd
 *.png
+
+# Doxygen generated docs
+html/
+latex/
+docs/doxygen/
 
 # Editors
 .vscode/
@@ -20,4 +28,3 @@ results/
 # Exceptions (keep data if needed, but usually large files ignored)
 !data/*.pcd
 !doc/*.png
-docs/doxygen/
