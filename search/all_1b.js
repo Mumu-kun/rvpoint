@@ -29,8 +29,9 @@ var searchData=
   ['voxel_20grid_20test_26',['Step-by-Step Execution: Voxel Grid Test',['../instruction_manual.html#step-by-step-execution-voxel-grid-test',1,'']]],
   ['voxel_5fgrid_5fdownsamp_2ecpp_27',['voxel_grid_downsamp.cpp',['../voxel__grid__downsamp_8cpp.html',1,'']]],
   ['voxel_5fgrid_5fdownsamp_5frvv_28',['voxel_grid_downsamp_rvv',['../namespacervv__pcl.html#aeb6d0889fa7a2d26d799e33858c4997a',1,'rvv_pcl']]],
-  ['voxel_5fgrid_5fdownsamp_5fsc_29',['voxel_grid_downsamp_sc',['../namespacervv__pcl.html#a4ba723f597780e83a18f39b9bd31e8ac',1,'rvv_pcl']]],
-  ['vs_20bare_20metal_30',['Compiler Selection: Linux vs Bare Metal',['../instruction_manual.html#compiler-selection-linux-vs-bare-metal',1,'']]],
-  ['vs_20real_20hardware_31',['QEMU vs Real Hardware',['../instruction_manual.html#qemu-vs-real-hardware',1,'']]],
-  ['vsetvl_20tt_20vector_20set_20vector_20length_32',['1. &lt;tt&gt;vsetvl&lt;/tt&gt; (Vector Set Vector Length)',['../vector_theory.html#autotoc_md1-vsetvl-vector-set-vector-length',1,'']]]
+  ['voxel_5fgrid_5fdownsamp_5frvv_5fv2_29',['voxel_grid_downsamp_rvv_v2',['../namespacervv__pcl.html#a4704468dd499c2107740037f835751cc',1,'rvv_pcl']]],
+  ['voxel_5fgrid_5fdownsamp_5fsc_30',['voxel_grid_downsamp_sc',['../namespacervv__pcl.html#a4ba723f597780e83a18f39b9bd31e8ac',1,'rvv_pcl']]],
+  ['vs_20bare_20metal_31',['Compiler Selection: Linux vs Bare Metal',['../instruction_manual.html#compiler-selection-linux-vs-bare-metal',1,'']]],
+  ['vs_20real_20hardware_32',['QEMU vs Real Hardware',['../instruction_manual.html#qemu-vs-real-hardware',1,'']]],
+  ['vsetvl_20tt_20vector_20set_20vector_20length_33',['1. &lt;tt&gt;vsetvl&lt;/tt&gt; (Vector Set Vector Length)',['../vector_theory.html#autotoc_md1-vsetvl-vector-set-vector-length',1,'']]]
 ];

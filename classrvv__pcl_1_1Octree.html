@@ -83,6 +83,9 @@ $(function() {
 </div><!--header-->
 <div class="contents">
 
+<p><a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a> Data Structure for Spatial Indexing.  
+ <a href="classrvv__pcl_1_1Octree.html#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="rvv__pcl_8h_source.html">rvv_pcl.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
@@ -92,16 +95,22 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a667cf8285ec81395858ec32e72a13cd2" id="r_a667cf8285ec81395858ec32e72a13cd2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#a667cf8285ec81395858ec32e72a13cd2">~Octree</a> ()</td></tr>
 <tr class="separator:a667cf8285ec81395858ec32e72a13cd2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa607901983d3865078eeca2228260b27" id="r_aa607901983d3865078eeca2228260b27"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#aa607901983d3865078eeca2228260b27">setInputCloud</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
+<tr class="memdesc:aa607901983d3865078eeca2228260b27"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the Input Cloud for the <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a>.  <br /></td></tr>
 <tr class="separator:aa607901983d3865078eeca2228260b27"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac111c28a7fbad65e5a2e614677b28781" id="r_ac111c28a7fbad65e5a2e614677b28781"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#ac111c28a7fbad65e5a2e614677b28781">build</a> ()</td></tr>
+<tr class="memdesc:ac111c28a7fbad65e5a2e614677b28781"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build the <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a> structure. Recursively subdivides the bounding box until termination criteria are met.  <br /></td></tr>
 <tr class="separator:ac111c28a7fbad65e5a2e614677b28781"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9633283f15cfb3a44e3d0e7b0a071ec2" id="r_a9633283f15cfb3a44e3d0e7b0a071ec2"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#a9633283f15cfb3a44e3d0e7b0a071ec2">radiusSearch</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> &amp;query, float radius, std::vector&lt; int &gt; &amp;indices, std::vector&lt; float &gt; &amp;dists, int max_nn=0) const</td></tr>
+<tr class="memdesc:a9633283f15cfb3a44e3d0e7b0a071ec2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Perform a Radius Search on the <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a>.  <br /></td></tr>
 <tr class="separator:a9633283f15cfb3a44e3d0e7b0a071ec2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af5bba9b1fbe08da029bded7a47b69a1a" id="r_af5bba9b1fbe08da029bded7a47b69a1a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#af5bba9b1fbe08da029bded7a47b69a1a">setMaxPointsPerLeaf</a> (int n)</td></tr>
+<tr class="memdesc:af5bba9b1fbe08da029bded7a47b69a1a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set max points allowed per leaf node before subdivision.  <br /></td></tr>
 <tr class="separator:af5bba9b1fbe08da029bded7a47b69a1a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad88650c2708174d17c74dbafffbdeb45" id="r_ad88650c2708174d17c74dbafffbdeb45"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#ad88650c2708174d17c74dbafffbdeb45">setMaxDepth</a> (int d)</td></tr>
+<tr class="memdesc:ad88650c2708174d17c74dbafffbdeb45"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set maximum depth of the tree.  <br /></td></tr>
 <tr class="separator:ad88650c2708174d17c74dbafffbdeb45"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a0fb9ac6ecaf5822aa10f4c8e7c89701f" id="r_a0fb9ac6ecaf5822aa10f4c8e7c89701f"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#a0fb9ac6ecaf5822aa10f4c8e7c89701f">setBuildEpsilon</a> (float eps)</td></tr>
+<tr class="memdesc:a0fb9ac6ecaf5822aa10f4c8e7c89701f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set epsilon value to prevent zero-size nodes.  <br /></td></tr>
 <tr class="separator:a0fb9ac6ecaf5822aa10f4c8e7c89701f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pri-methods" name="pri-methods"></a>
@@ -124,7 +133,10 @@ Private Attributes</h2></td></tr>
 <tr class="memitem:ace0933d9bb09408d94c589932b657042" id="r_ace0933d9bb09408d94c589932b657042"><td class="memItemLeft" align="right" valign="top">float&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html#ace0933d9bb09408d94c589932b657042">build_epsilon_</a> = 1e-4f</td></tr>
 <tr class="separator:ace0933d9bb09408d94c589932b657042"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
-<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><p><a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a> Data Structure for Spatial Indexing. </p>
+<p>Provides efficient spatial partitioning to accelerate neighbor search operations. </p>
+</div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a790970c110caef92f22a11b224aca47b" name="a790970c110caef92f22a11b224aca47b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a790970c110caef92f22a11b224aca47b">&#9670;&#160;</a></span>Octree()</h2>
 
@@ -174,6 +186,8 @@ Private Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Build the <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a> structure. Recursively subdivides the bounding box until termination criteria are met. </p>
 
 </div>
 </div>
@@ -263,6 +277,19 @@ Private Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Perform a Radius Search on the <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">query</td><td>Query point. </td></tr>
+    <tr><td class="paramname">radius</td><td>Search radius. </td></tr>
+    <tr><td class="paramname">indices</td><td>Output vector for found point indices. </td></tr>
+    <tr><td class="paramname">dists</td><td>Output vector for found squared distances. </td></tr>
+    <tr><td class="paramname">max_nn</td><td>Maximum number of neighbors (0 for unlimited). </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>std::size_t Number of neighbors found. </dd></dl>
+
 </div>
 </div>
 <a id="a1129dfe61f40e154f0ed2cc72982d48c" name="a1129dfe61f40e154f0ed2cc72982d48c"></a>
@@ -343,6 +370,8 @@ Private Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Set epsilon value to prevent zero-size nodes. </p>
+
 </div>
 </div>
 <a id="aa607901983d3865078eeca2228260b27" name="aa607901983d3865078eeca2228260b27"></a>
@@ -360,6 +389,14 @@ Private Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Set the Input Cloud for the <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cloud</td><td>The point cloud (SoA) to index. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -387,6 +424,8 @@ Private Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Set maximum depth of the tree. </p>
+
 </div>
 </div>
 <a id="af5bba9b1fbe08da029bded7a47b69a1a" name="af5bba9b1fbe08da029bded7a47b69a1a"></a>
@@ -412,6 +451,8 @@ Private Attributes</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+<p>Set max points allowed per leaf node before subdivision. </p>
 
 </div>
 </div>

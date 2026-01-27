@@ -83,6 +83,9 @@ $(function() {
 </div><!--header-->
 <div class="contents">
 
+<p>Spatial Hash Grid for Fast Neighbor Search.  
+ <a href="classrvv__pcl_1_1SpatialHash.html#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="rvv__pcl_8h_source.html">rvv_pcl.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
@@ -92,12 +95,16 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a473ab34830da0bc82644a8158083f7b6" id="r_a473ab34830da0bc82644a8158083f7b6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1SpatialHash.html#a473ab34830da0bc82644a8158083f7b6">~SpatialHash</a> ()</td></tr>
 <tr class="separator:a473ab34830da0bc82644a8158083f7b6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3bbba309026c48c337cd535e7c9b17b6" id="r_a3bbba309026c48c337cd535e7c9b17b6"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1SpatialHash.html#a3bbba309026c48c337cd535e7c9b17b6">setInputCloud</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, float cell_size)</td></tr>
+<tr class="memdesc:a3bbba309026c48c337cd535e7c9b17b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the Input Cloud and Cell Size.  <br /></td></tr>
 <tr class="separator:a3bbba309026c48c337cd535e7c9b17b6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aeef3a803a087f37383705892c628d07c" id="r_aeef3a803a087f37383705892c628d07c"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1SpatialHash.html#aeef3a803a087f37383705892c628d07c">build</a> ()</td></tr>
+<tr class="memdesc:aeef3a803a087f37383705892c628d07c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Build the Hash Grid.  <br /></td></tr>
 <tr class="separator:aeef3a803a087f37383705892c628d07c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a541087deca1e78387f692077f42f4ce4" id="r_a541087deca1e78387f692077f42f4ce4"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1SpatialHash.html#a541087deca1e78387f692077f42f4ce4">radiusSearch</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> &amp;query, float radius, std::vector&lt; int &gt; &amp;indices, std::vector&lt; float &gt; &amp;dists, int max_nn=0) const</td></tr>
+<tr class="memdesc:a541087deca1e78387f692077f42f4ce4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Perform Radius Search using Spatial Hashing.  <br /></td></tr>
 <tr class="separator:a541087deca1e78387f692077f42f4ce4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a03f5b2ec370557f10d31261d69b902ea" id="r_a03f5b2ec370557f10d31261d69b902ea"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1SpatialHash.html#a03f5b2ec370557f10d31261d69b902ea">setHashPrimes</a> (int64_t p1, int64_t p2)</td></tr>
+<tr class="memdesc:a03f5b2ec370557f10d31261d69b902ea"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set custom hash primes (for tuning).  <br /></td></tr>
 <tr class="separator:a03f5b2ec370557f10d31261d69b902ea"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pri-methods" name="pri-methods"></a>
@@ -142,7 +149,10 @@ Private Attributes</h2></td></tr>
 <tr class="memitem:a50c38acdd1e9aa29bc9f3d8c0e1f74dc" id="r_a50c38acdd1e9aa29bc9f3d8c0e1f74dc"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1SpatialHash.html#a50c38acdd1e9aa29bc9f3d8c0e1f74dc">grid_size_z_</a></td></tr>
 <tr class="separator:a50c38acdd1e9aa29bc9f3d8c0e1f74dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
-<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Spatial Hash Grid for Fast Neighbor Search. </p>
+<p>Alternative to <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a>. Values are hashed into a grid for O(1) average lookup time. Particularly effective for fixed-radius searches. </p>
+</div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a5c29a96155ecf8bdd83a8b2a1febe975" name="a5c29a96155ecf8bdd83a8b2a1febe975"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a5c29a96155ecf8bdd83a8b2a1febe975">&#9670;&#160;</a></span>SpatialHash()</h2>
 
@@ -192,6 +202,8 @@ Private Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Build the Hash Grid. </p>
 
 </div>
 </div>
@@ -341,6 +353,19 @@ Private Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
+<p>Perform Radius Search using Spatial Hashing. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">query</td><td>Query point. </td></tr>
+    <tr><td class="paramname">radius</td><td>Search radius. </td></tr>
+    <tr><td class="paramname">indices</td><td>Output vector for found indices. </td></tr>
+    <tr><td class="paramname">dists</td><td>Output vector for found squared distances. </td></tr>
+    <tr><td class="paramname">max_nn</td><td>Maximum neighbors to return. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>std::size_t Number of neighbors found. </dd></dl>
+
 </div>
 </div>
 <a id="a03f5b2ec370557f10d31261d69b902ea" name="a03f5b2ec370557f10d31261d69b902ea"></a>
@@ -377,6 +402,8 @@ Private Attributes</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
+<p>Set custom hash primes (for tuning). </p>
+
 </div>
 </div>
 <a id="a3bbba309026c48c337cd535e7c9b17b6" name="a3bbba309026c48c337cd535e7c9b17b6"></a>
@@ -404,6 +431,15 @@ Private Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+<p>Set the Input Cloud and Cell Size. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramname">cloud</td><td>Input cloud (SoA). </td></tr>
+    <tr><td class="paramname">cell_size</td><td>Size of the hash grid cell. Expected to be roughly equal to search radius. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>

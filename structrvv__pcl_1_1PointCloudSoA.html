@@ -81,6 +81,9 @@ $(function() {
 </div><!--header-->
 <div class="contents">
 
+<p>Point Cloud stored in Structure of Arrays (SoA) layout.  
+ <a href="structrvv__pcl_1_1PointCloudSoA.html#details">More...</a></p>
+
 <p><code>#include &lt;<a class="el" href="rvv__pcl_8h_source.html">rvv_pcl.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
@@ -94,7 +97,10 @@ Public Attributes</h2></td></tr>
 <tr class="memitem:a7ecf4ac2c6f77461fea9136c19ab4856" id="r_a7ecf4ac2c6f77461fea9136c19ab4856"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1PointCloudSoA.html#a7ecf4ac2c6f77461fea9136c19ab4856">n</a></td></tr>
 <tr class="separator:a7ecf4ac2c6f77461fea9136c19ab4856"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
-<h2 class="groupheader">Member Data Documentation</h2>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Point Cloud stored in Structure of Arrays (SoA) layout. </p>
+<p>This layout is critical for RISC-V Vector (RVV) performance as it allows for unit-stride loads/stores (vle32.v / vse32.v), which are significantly faster than strided gather/scatter operations required for Array of Structures (AoS). </p>
+</div><h2 class="groupheader">Member Data Documentation</h2>
 <a id="a7ecf4ac2c6f77461fea9136c19ab4856" name="a7ecf4ac2c6f77461fea9136c19ab4856"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7ecf4ac2c6f77461fea9136c19ab4856">&#9670;&#160;</a></span>n</h2>
 
@@ -106,6 +112,7 @@ Public Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Number of points in the cloud </p>
 
 </div>
 </div>
@@ -120,6 +127,7 @@ Public Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Pointer to array of X coordinates </p>
 
 </div>
 </div>
@@ -134,6 +142,7 @@ Public Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Pointer to array of Y coordinates </p>
 
 </div>
 </div>
@@ -148,6 +157,7 @@ Public Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+<p>Pointer to array of Z coordinates </p>
 
 </div>
 </div>

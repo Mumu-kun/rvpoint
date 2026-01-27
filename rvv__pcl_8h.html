@@ -81,10 +81,10 @@ $(function() {
   <div class="headertitle"><div class="title">rvv_pcl.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &lt;cstddef&gt;</code><br />
-<code>#include &lt;vector&gt;</code><br />
+<div class="textblock"><code>#include &lt;cmath&gt;</code><br />
+<code>#include &lt;cstddef&gt;</code><br />
 <code>#include &lt;unordered_map&gt;</code><br />
-<code>#include &lt;cmath&gt;</code><br />
+<code>#include &lt;vector&gt;</code><br />
 <code>#include &lt;riscv_vector.h&gt;</code><br />
 </div>
 <p><a href="rvv__pcl_8h_source.html">Go to the source code of this file.</a></p>
@@ -92,46 +92,67 @@ $(function() {
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1PointXYZ.html">rvv_pcl::PointXYZ</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Standard 3D Point structure.  <a href="structrvv__pcl_1_1PointXYZ.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">rvv_pcl::PointCloudSoA</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Point Cloud stored in Structure of Arrays (SoA) layout.  <a href="structrvv__pcl_1_1PointCloudSoA.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1OctreeNode.html">rvv_pcl::OctreeNode</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Node structure for the <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a>.  <a href="structrvv__pcl_1_1OctreeNode.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1Octree.html">rvv_pcl::Octree</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a> Data Structure for Spatial Indexing.  <a href="classrvv__pcl_1_1Octree.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1SpatialHash.html">rvv_pcl::SpatialHash</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Spatial Hash Grid for Fast Neighbor Search.  <a href="classrvv__pcl_1_1SpatialHash.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:namespacervv__pcl" id="r_namespacervv__pcl"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></td></tr>
+<tr class="memdesc:namespacervv__pcl"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library. <br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:a4ba723f597780e83a18f39b9bd31e8ac" id="r_a4ba723f597780e83a18f39b9bd31e8ac"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a4ba723f597780e83a18f39b9bd31e8ac">rvv_pcl::voxel_grid_downsamp_sc</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *in, std::size_t n, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, float leaf_size)</td></tr>
+<tr class="memdesc:a4ba723f597780e83a18f39b9bd31e8ac"><td class="mdescLeft">&#160;</td><td class="mdescRight">Voxel Grid Downsampling (Scalar Reference).  <br /></td></tr>
 <tr class="separator:a4ba723f597780e83a18f39b9bd31e8ac"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aeb6d0889fa7a2d26d799e33858c4997a" id="r_aeb6d0889fa7a2d26d799e33858c4997a"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#aeb6d0889fa7a2d26d799e33858c4997a">rvv_pcl::voxel_grid_downsamp_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, float leaf_size)</td></tr>
+<tr class="memdesc:aeb6d0889fa7a2d26d799e33858c4997a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Voxel Grid Downsampling (RVV Optimized).  <br /></td></tr>
 <tr class="separator:aeb6d0889fa7a2d26d799e33858c4997a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4704468dd499c2107740037f835751cc" id="r_a4704468dd499c2107740037f835751cc"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a4704468dd499c2107740037f835751cc">rvv_pcl::voxel_grid_downsamp_rvv_v2</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, float leaf_size)</td></tr>
+<tr class="memdesc:a4704468dd499c2107740037f835751cc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Voxel Grid Downsampling (Fully Vectorized RVV, Sort-Based).  <br /></td></tr>
+<tr class="separator:a4704468dd499c2107740037f835751cc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a311c448d07adeb6a74fcea87f25c1f3c" id="r_a311c448d07adeb6a74fcea87f25c1f3c"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a311c448d07adeb6a74fcea87f25c1f3c">rvv_pcl::sor_sc</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *in, std::size_t n, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha)</td></tr>
+<tr class="memdesc:a311c448d07adeb6a74fcea87f25c1f3c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Statistical Outlier Removal (Scalar Reference).  <br /></td></tr>
 <tr class="separator:a311c448d07adeb6a74fcea87f25c1f3c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a10fef2e1c9e7aec2b93d045a7ac1fbad" id="r_a10fef2e1c9e7aec2b93d045a7ac1fbad"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a10fef2e1c9e7aec2b93d045a7ac1fbad">rvv_pcl::sor_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha)</td></tr>
+<tr class="memdesc:a10fef2e1c9e7aec2b93d045a7ac1fbad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Statistical Outlier Removal (RVV Optimized).  <br /></td></tr>
 <tr class="separator:a10fef2e1c9e7aec2b93d045a7ac1fbad"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:abf96dc6c8caa5cb1b0510b8abc4e225d" id="r_abf96dc6c8caa5cb1b0510b8abc4e225d"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#abf96dc6c8caa5cb1b0510b8abc4e225d">rvv_pcl::normal_estimation_sc</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *in, std::size_t n, float *nx, float *ny, float *nz, int k, float radius, float vp_x=0, float vp_y=0, float vp_z=0, int eigen_iters=4)</td></tr>
+<tr class="memdesc:abf96dc6c8caa5cb1b0510b8abc4e225d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Normal Estimation (Scalar Reference).  <br /></td></tr>
 <tr class="separator:abf96dc6c8caa5cb1b0510b8abc4e225d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a27cebb1b2546591b25f78c00b1bb7112" id="r_a27cebb1b2546591b25f78c00b1bb7112"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a27cebb1b2546591b25f78c00b1bb7112">rvv_pcl::normal_estimation_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, const <a class="el" href="classrvv__pcl_1_1Octree.html">Octree</a> &amp;octree, float *nx, float *ny, float *nz, int k, float radius, float vp_x=0, float vp_y=0, float vp_z=0, int eigen_iters=4)</td></tr>
+<tr class="memdesc:a27cebb1b2546591b25f78c00b1bb7112"><td class="mdescLeft">&#160;</td><td class="mdescRight">Normal Estimation (RVV Optimized).  <br /></td></tr>
 <tr class="separator:a27cebb1b2546591b25f78c00b1bb7112"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4fa0c868d09e8d4892c66405cb80d027" id="r_a4fa0c868d09e8d4892c66405cb80d027"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a4fa0c868d09e8d4892c66405cb80d027">rvv_pcl::radius_search_sc</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *cloud, std::size_t n, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> query, float radius, int *indices, float *dists, int max_nn)</td></tr>
+<tr class="memdesc:a4fa0c868d09e8d4892c66405cb80d027"><td class="mdescLeft">&#160;</td><td class="mdescRight">Radius Search (Scalar Reference).  <br /></td></tr>
 <tr class="separator:a4fa0c868d09e8d4892c66405cb80d027"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a25414ba9a167a367adf1eab651d0f57c" id="r_a25414ba9a167a367adf1eab651d0f57c"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a25414ba9a167a367adf1eab651d0f57c">rvv_pcl::radius_search_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> query, float radius, int *indices, float *dists, int max_nn)</td></tr>
+<tr class="memdesc:a25414ba9a167a367adf1eab651d0f57c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Radius Search (RVV Optimized).  <br /></td></tr>
 <tr class="separator:a25414ba9a167a367adf1eab651d0f57c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a876b57104ffd09196f3547cd415bf2ff" id="r_a876b57104ffd09196f3547cd415bf2ff"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a876b57104ffd09196f3547cd415bf2ff">rvv_pcl::ransac_plane_sc</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *cloud, std::size_t n, float dist_thresh, int max_iters, float *model, float collinear_thresh=1e-6f)</td></tr>
+<tr class="memdesc:a876b57104ffd09196f3547cd415bf2ff"><td class="mdescLeft">&#160;</td><td class="mdescRight">RANSAC Plane Fitting (Scalar Reference).  <br /></td></tr>
 <tr class="separator:a876b57104ffd09196f3547cd415bf2ff"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa2192abcea5e3f0fe02a0c20b6c7a1d6" id="r_aa2192abcea5e3f0fe02a0c20b6c7a1d6"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#aa2192abcea5e3f0fe02a0c20b6c7a1d6">rvv_pcl::ransac_plane_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, float dist_thresh, int max_iters, float *model, float collinear_thresh=1e-6f)</td></tr>
+<tr class="memdesc:aa2192abcea5e3f0fe02a0c20b6c7a1d6"><td class="mdescLeft">&#160;</td><td class="mdescRight">RANSAC Plane Fitting (RVV Optimized).  <br /></td></tr>
 <tr class="separator:aa2192abcea5e3f0fe02a0c20b6c7a1d6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a80ffb008f094db91c598400b03d6e648" id="r_a80ffb008f094db91c598400b03d6e648"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a80ffb008f094db91c598400b03d6e648">rvv_pcl::get_dist_sq_rvv</a> (const float *x, const float *y, const float *z, float qx, float qy, float qz, float *out_d2, std::size_t n)</td></tr>
+<tr class="memdesc:a80ffb008f094db91c598400b03d6e648"><td class="mdescLeft">&#160;</td><td class="mdescRight">Helper: Squared Euclidean Distance Kernel (RVV).  <br /></td></tr>
 <tr class="separator:a80ffb008f094db91c598400b03d6e648"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a08de5ef838225752d79c35712b328489" id="r_a08de5ef838225752d79c35712b328489"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a08de5ef838225752d79c35712b328489">rvv_pcl::get_inds_in_radius_rvv</a> (const float *x, const float *y, const float *z, const int *subset_indices, std::size_t n, float qx, float qy, float qz, float r2, std::vector&lt; int &gt; &amp;out_indices, std::vector&lt; float &gt; &amp;out_dists)</td></tr>
+<tr class="memdesc:a08de5ef838225752d79c35712b328489"><td class="mdescLeft">&#160;</td><td class="mdescRight">Fused Gather-Filter Kernel (RVV).  <br /></td></tr>
 <tr class="separator:a08de5ef838225752d79c35712b328489"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
