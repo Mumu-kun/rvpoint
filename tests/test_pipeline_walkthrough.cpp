@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
     std::cout << "\n[Step 2] Voxel Grid Downsampling (Leaf=0.01)..." << std::endl;
     std::vector<PointXYZ> filtered_points(n); // Alloc max
     // Leaf 0.01 is fine for bunny (size ~0.15)
-    size_t n_filtered = voxel_grid_downsamp_rvv(cloud_soa, filtered_points.data(), 0.01f);
+    size_t n_filtered = voxel_grid_downsamp_rvv_v2(cloud_soa, filtered_points.data(), 0.01f);
     std::cout << "Filtered count: " << n_filtered << " (Original: " << n << ")" << std::endl;
 
     // Save Voxelized Cloud

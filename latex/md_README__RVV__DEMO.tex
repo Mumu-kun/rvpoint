@@ -1,0 +1,90 @@
+\chapter{RVV Point Cloud Pipeline Demo (Branch\+: arian\+\_\+exps)}
+\hypertarget{md_README__RVV__DEMO}{}\label{md_README__RVV__DEMO}\index{RVV Point Cloud Pipeline Demo (Branch: arian\_exps)@{RVV Point Cloud Pipeline Demo (Branch: arian\_exps)}}
+\label{md_README__RVV__DEMO_autotoc_md24}%
+\Hypertarget{md_README__RVV__DEMO_autotoc_md24}%
+ This branch contains the optimized RISC-\/V Vector (RVV 1.\+0) implementation of the PCL pipeline.\hypertarget{md_README__RVV__DEMO_autotoc_md25}{}\doxysection{\texorpdfstring{Key Optimizations}{Key Optimizations}}\label{md_README__RVV__DEMO_autotoc_md25}
+
+\begin{DoxyEnumerate}
+\item {\bfseries{Octree-\/based Spatial Search}}\+: Reduced neighbor search complexity from O(N²) to O(\+N log N).
+\item {\bfseries{Fused RVV Gather-\/\+Filter Kernel}}\+: High-\/performance {\ttfamily vluxei32} implementation with byte-\/offset correction.
+\item {\bfseries{Explicit Pipeline Steps}}\+: Clear separation of Octree Build → Normal Estimation → Verification.
+\end{DoxyEnumerate}\hypertarget{md_README__RVV__DEMO_autotoc_md26}{}\doxysection{\texorpdfstring{Project Structure}{Project Structure}}\label{md_README__RVV__DEMO_autotoc_md26}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{.}
+\DoxyCodeLine{├──\ bin/\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \#\ Compiled\ executables\ (gitignored)}
+\DoxyCodeLine{├──\ build\_cmake/\ \ \ \ \ \ \ \ \ \ \ \ \#\ CMake\ build\ directory\ (gitignored)}
+\DoxyCodeLine{├──\ data/\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \#\ Input\ datasets}
+\DoxyCodeLine{│\ \ \ ├──\ bunny.pcd\ \ \ \ \ \ \ \ \ \ \ \#\ Small\ test\ dataset\ (397\ points)}
+\DoxyCodeLine{│\ \ \ └──\ table\_scene\_lms400.pcd\ \ \#\ Large\ dataset\ (460k\ points)}
+\DoxyCodeLine{├──\ results/\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \#\ Timestamped\ output\ files}
+\DoxyCodeLine{│\ \ \ └──\ bunny\_YYYYMMDD\_HHMMSS\_voxelized.pcd/.png}
+\DoxyCodeLine{├──\ scripts/}
+\DoxyCodeLine{│\ \ \ └──\ visualize\_result.py\ \#\ Visualization\ script}
+\DoxyCodeLine{├──\ src/}
+\DoxyCodeLine{│\ \ \ ├──\ include/rvv\_pcl.h\ \ \ \#\ Public\ API}
+\DoxyCodeLine{│\ \ \ ├──\ rvv\_common.cpp\ \ \ \ \ \ \#\ Fused\ gather-\/filter\ kernel}
+\DoxyCodeLine{│\ \ \ ├──\ octree.cpp\ \ \ \ \ \ \ \ \ \ \#\ Octree\ implementation}
+\DoxyCodeLine{│\ \ \ ├──\ spatial\_hashing.cpp\ \#\ Spatial\ Hash\ implementation}
+\DoxyCodeLine{│\ \ \ └──\ normal\_estimation.cpp\ \ \#\ Step-\/by-\/step\ normal\ estimation}
+\DoxyCodeLine{└──\ tests/}
+\DoxyCodeLine{\ \ \ \ └──\ test\_pipeline\_walkthrough.cpp\ \ \#\ Main\ test\ harness}
+
+\end{DoxyCode}
+\hypertarget{md_README__RVV__DEMO_autotoc_md27}{}\doxysection{\texorpdfstring{Prerequisites}{Prerequisites}}\label{md_README__RVV__DEMO_autotoc_md27}
+
+\begin{DoxyItemize}
+\item {\bfseries{GCC 14}} RISC-\/V Toolchain ({\ttfamily /opt/riscv/bin/riscv64-\/unknown-\/linux-\/gnu-\/g++})
+\item {\bfseries{QEMU}} with RVV support ({\ttfamily qemu-\/riscv64 -\/cpu rv64,v=true})
+\item {\bfseries{Python 3}} + Matplotlib (for visualization)
+\end{DoxyItemize}\hypertarget{md_README__RVV__DEMO_autotoc_md28}{}\doxysection{\texorpdfstring{Quick Start}{Quick Start}}\label{md_README__RVV__DEMO_autotoc_md28}
+\hypertarget{md_README__RVV__DEMO_autotoc_md29}{}\doxysubsection{\texorpdfstring{1. Build}{1. Build}}\label{md_README__RVV__DEMO_autotoc_md29}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{mkdir\ -\/p\ build\_cmake\ \&\&\ cd\ build\_cmake}
+\DoxyCodeLine{cmake\ -\/DCMAKE\_C\_COMPILER=/opt/riscv/bin/riscv64-\/unknown-\/linux-\/gnu-\/gcc\ \(\backslash\)}
+\DoxyCodeLine{\ \ \ \ \ \ -\/DCMAKE\_CXX\_COMPILER=/opt/riscv/bin/riscv64-\/unknown-\/linux-\/gnu-\/g++\ ..}
+\DoxyCodeLine{make\ test\_pipeline\_walkthrough}
+
+\end{DoxyCode}
+\hypertarget{md_README__RVV__DEMO_autotoc_md30}{}\doxysubsection{\texorpdfstring{2. Run Pipeline}{2. Run Pipeline}}\label{md_README__RVV__DEMO_autotoc_md30}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{cd\ bin}
+\DoxyCodeLine{/usr/bin/qemu-\/riscv64\ -\/L\ /opt/riscv/sysroot\ -\/cpu\ rv64,v=true\ ./test\_pipeline\_walkthrough\ bunny.pcd}
+\DoxyCodeLine{}
+\DoxyCodeLine{\#\ For\ large-\/scale\ data\ (460k\ points):}
+\DoxyCodeLine{/usr/bin/qemu-\/riscv64\ -\/L\ /opt/riscv/sysroot\ -\/cpu\ rv64,v=true\ ./test\_pipeline\_walkthrough\ table\_scene\_lms400.pcd}
+
+\end{DoxyCode}
+\hypertarget{md_README__RVV__DEMO_autotoc_md31}{}\doxysubsection{\texorpdfstring{3. Expected Output}{3. Expected Output}}\label{md_README__RVV__DEMO_autotoc_md31}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{[Step\ 1]\ Loading\ bunny.pcd...\ Loaded\ 397\ points.}
+\DoxyCodeLine{[Step\ 2]\ Voxel\ Grid\ Downsampling...\ Filtered:\ 294\ points.}
+\DoxyCodeLine{[Step\ 3]\ Building\ Octree...\ Success.}
+\DoxyCodeLine{[Step\ 4]\ Estimating\ Normals...\ [PASS]}
+\DoxyCodeLine{[Step\ 5]\ Radius\ Search\ Verification...\ [PASS]}
+\DoxyCodeLine{[SUCCESS]\ Visualization\ saved\ to\ results/bunny\_YYYYMMDD\_HHMMSS\_voxelized.png}
+
+\end{DoxyCode}
+
+
+Results are saved to {\ttfamily results/} with timestamps for serialization.\hypertarget{md_README__RVV__DEMO_autotoc_md32}{}\doxysection{\texorpdfstring{Key Files}{Key Files}}\label{md_README__RVV__DEMO_autotoc_md32}
+\tabulinesep=1mm
+\begin{longtabu}spread 0pt [c]{*{2}{|X[-1]}|}
+\hline
+\PBS\centering \cellcolor{\tableheadbgcolor}\textbf{ File   }&\PBS\centering \cellcolor{\tableheadbgcolor}\textbf{ Description    }\\\cline{1-2}
+\endfirsthead
+\hline
+\endfoot
+\hline
+\PBS\centering \cellcolor{\tableheadbgcolor}\textbf{ File   }&\PBS\centering \cellcolor{\tableheadbgcolor}\textbf{ Description    }\\\cline{1-2}
+\endhead
+{\ttfamily src/rvv\+\_\+common.\+cpp}   &Fused {\ttfamily get\+\_\+inds\+\_\+in\+\_\+radius\+\_\+rvv} kernel    \\\cline{1-2}
+{\ttfamily src/octree.\+cpp}   &Octree spatial index    \\\cline{1-2}
+{\ttfamily src/spatial\+\_\+hashing.\+cpp}   &Spatial Hash Grid implementation    \\\cline{1-2}
+{\ttfamily src/normal\+\_\+estimation.\+cpp}   &Octree-\/based normal estimation    \\\cline{1-2}
+{\ttfamily tests/test\+\_\+pipeline\+\_\+walkthrough.\+cpp}   &Main pipeline test    \\\cline{1-2}
+{\ttfamily tests/test\+\_\+spatial\+\_\+hash\+\_\+comparison.\+cpp}   &Benchmark\+: Octree vs Spatial Hash   \\\cline{1-2}
+\end{longtabu}

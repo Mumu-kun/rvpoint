@@ -67,8 +67,28 @@ BenchmarkData bench_voxel() {
     t.reset();
     voxel_grid_downsamp_rvv(soa, out.data(), leaf);
     uint64_t rvv = t.elapsed();
-    
+
     return {"VoxelGrid", sc, rvv};
+}
+
+BenchmarkData bench_voxel_v2() {
+    std::vector<float> x, y, z;
+    std::vector<PointXYZ> aos;
+    PointCloudSoA soa;
+    generate_data(N, x, y, z, aos, soa);
+    std::vector<PointXYZ> out(N);
+    float leaf = 0.5f;
+
+    Timer t;
+    t.reset();
+    voxel_grid_downsamp_sc(aos.data(), N, out.data(), leaf);
+    uint64_t sc = t.elapsed();
+
+    t.reset();
+    voxel_grid_downsamp_rvv_v2(soa, out.data(), leaf);
+    uint64_t rvv = t.elapsed();
+
+    return {"VoxelGrid_v2", sc, rvv};
 }
 
 BenchmarkData bench_sor() {
@@ -212,6 +232,7 @@ int main(int argc, char** argv) {
     // std::cout << "Running benchmarks (N=" << N << ")..." << std::endl;
     
     results.push_back(bench_voxel());
+    results.push_back(bench_voxel_v2());
     results.push_back(bench_sor());
     results.push_back(bench_normal());
     results.push_back(bench_radius());
@@ -230,6 +251,7 @@ int main(int argc, char** argv) {
         std::string name_lower = r.name;
         // Manual mapping for exact match
         if (name_lower == "VoxelGrid") name_lower = "voxel";
+        else if (name_lower == "VoxelGrid_v2") name_lower = "voxel_v2";
         else if (name_lower == "SOR") name_lower = "sor";
         else if (name_lower == "NormalEst") name_lower = "normal";
         else if (name_lower == "Radius") name_lower = "radius";
