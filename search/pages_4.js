@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['library_0',['RVPoint: RISC-V Vector Optimized Point Cloud Library',['../index.html',1,'']]]
+  ['methodology_0',['Instruction Counting Methodology',['../md_tests_2INSTRUCTION__COUNTING.html',1,'']]]
 ];

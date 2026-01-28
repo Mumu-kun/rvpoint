@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['y_0',['y',['../structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb',1,'rvv_pcl::PointXYZ::y'],['../structrvv__pcl_1_1PointCloudSoA.html#a2c71e51b506ad673d2cd43578507b0f0',1,'rvv_pcl::PointCloudSoA::y']]]
+  ['z_0',['z',['../structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5',1,'rvv_pcl::PointXYZ::z'],['../structrvv__pcl_1_1PointCloudSoA.html#aad49db8a838cdb53faf195caded1c011',1,'rvv_pcl::PointCloudSoA::z']]]
 ];

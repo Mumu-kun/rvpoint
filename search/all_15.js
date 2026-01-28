@@ -29,7 +29,7 @@ var searchData=
   ['problem_26',['problem',['../vector_theory.html#the-problem',1,'The Problem'],['../md_tests_2INSTRUCTION__COUNTING.html#the-problem-1',1,'The Problem']]],
   ['program_20start_27',['Program Start',['../instruction_manual.html#program-start',1,'']]],
   ['programming_20concepts_28',['RVV Programming Concepts',['../instruction_manual.html#rvv-programming-concepts',1,'']]],
-  ['project_20navigation_29',['project navigation',['../vector_theory.html#️-project-navigation-1',1,'🗺️ Project Navigation'],['../md_results_2benchmark__summary__report.html#️-project-navigation-2',1,'🗺️ Project Navigation'],['../md_tests_2INSTRUCTION__COUNTING.html#️-project-navigation-3',1,'🗺️ Project Navigation'],['../instruction_manual.html#️-project-navigation',1,'🗺️ Project Navigation']]],
+  ['project_20navigation_29',['project navigation',['../vector_theory.html#️-project-navigation-1',1,'🗺️ Project Navigation'],['../md_tests_2INSTRUCTION__COUNTING.html#️-project-navigation-2',1,'🗺️ Project Navigation'],['../instruction_manual.html#️-project-navigation',1,'🗺️ Project Navigation']]],
   ['project_20structure_30',['project structure',['../index.html#autotoc_md-project-structure',1,'📂 Project Structure'],['../pipeline_demo.html#project-structure',1,'Project Structure']]],
   ['proves_20rvv_20efficiency_31',['Why This Proves RVV Efficiency',['../md_tests_2INSTRUCTION__COUNTING.html#why-this-proves-rvv-efficiency',1,'']]]
 ];

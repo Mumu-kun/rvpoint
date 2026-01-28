@@ -23,7 +23,7 @@ var searchData=
   ['reserve_5ffactor_5f_20',['reserve_factor_',['../classrvv__pcl_1_1SpatialHash.html#a78c3475b8ede584848f0c4e8f468bdb9',1,'rvv_pcl::SpatialHash']]],
   ['reset_21',['reset',['../structTimer.html#a9020542d73357a4eef512eefaf57524b',1,'Timer']]],
   ['resources_22',['Documentation &amp; Resources',['../index.html#documentation--resources',1,'']]],
-  ['results_23',['results',['../instruction_manual.html#autotoc_md3-serialization--results',1,'3. Serialization &amp; Results'],['../index.html#expected-results',1,'Expected Results'],['../md_results_2benchmark__summary__report.html#results',1,'Results']]],
+  ['results_23',['results',['../instruction_manual.html#autotoc_md3-serialization--results',1,'3. Serialization &amp; Results'],['../index.html#expected-results',1,'Expected Results']]],
   ['risc_20v_20vector_20optimized_20point_20cloud_20library_24',['RVPoint: RISC-V Vector Optimized Point Cloud Library',['../index.html',1,'']]],
   ['risc_20v_20vector_20rvv_20implementation_20guide_25',['RISC-V Vector (RVV) Implementation Guide',['../vector_theory.html#risc-v-vector-rvv-implementation-guide',1,'']]],
   ['riscv64_20linux_20gnu_20g_20tt_20the_20linux_20cross_20compiler_26',['1. &lt;tt&gt;riscv64-linux-gnu-g++&lt;/tt&gt; - The Linux Cross-Compiler',['../instruction_manual.html#autotoc_md1-riscv64-linux-gnu-g---the-linux-cross-compiler',1,'']]],

@@ -4,7 +4,7 @@ var searchData=
   ['name_1',['name',['../structBenchmarkData.html#a8916f4b094ed48f9bd892011b049b0ee',1,'BenchmarkData']]],
   ['naming_20convention_2',['3. Intrinsics Naming Convention',['../vector_theory.html#autotoc_md3-intrinsics-naming-convention',1,'']]],
   ['naming_20guide_3',['3. Vector Intrinsics Naming Guide',['../instruction_manual.html#autotoc_md3-vector-intrinsics-naming-guide',1,'']]],
-  ['navigation_4',['navigation',['../instruction_manual.html#️-project-navigation',1,'🗺️ Project Navigation'],['../vector_theory.html#️-project-navigation-1',1,'🗺️ Project Navigation'],['../md_results_2benchmark__summary__report.html#️-project-navigation-2',1,'🗺️ Project Navigation'],['../md_tests_2INSTRUCTION__COUNTING.html#️-project-navigation-3',1,'🗺️ Project Navigation']]],
+  ['navigation_4',['navigation',['../instruction_manual.html#️-project-navigation',1,'🗺️ Project Navigation'],['../vector_theory.html#️-project-navigation-1',1,'🗺️ Project Navigation'],['../md_tests_2INSTRUCTION__COUNTING.html#️-project-navigation-2',1,'🗺️ Project Navigation']]],
   ['new_20algorithm_20strong_5',['&lt;strong&gt;Adding a New Algorithm&lt;/strong&gt;',['../instruction_manual.html#adding-a-new-algorithm',1,'']]],
   ['new_20features_20enabled_6',['New Features Enabled',['../index.html#new-features-enabled',1,'']]],
   ['nochain_20tt_7',['2. Trace Logging (&lt;tt&gt;-d exec,nochain&lt;/tt&gt;)',['../md_tests_2INSTRUCTION__COUNTING.html#autotoc_md2-trace-logging--d-execnochain',1,'']]],
