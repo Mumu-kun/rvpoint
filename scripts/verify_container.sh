@@ -1,6 +1,20 @@
 #!/bin/bash
 set -e
 
+# --- Auto-launch in Docker if not inside a container ---
+SCRIPT_DIR_EARLY="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT_EARLY="$(cd "$SCRIPT_DIR_EARLY/.." && pwd)"
+if [ ! -f /.dockerenv ] && [ -z "$IN_RVPOINT_CONTAINER" ]; then
+    IMAGE="${RVPOINT_IMAGE:-rvpoint}"
+    if ! docker image inspect "$IMAGE" &> /dev/null; then
+        echo "Docker image '$IMAGE' not found. Building from .devcontainer/Dockerfile..."
+        docker build -f "$PROJECT_ROOT_EARLY/.devcontainer/Dockerfile" -t "$IMAGE" "$PROJECT_ROOT_EARLY"
+    fi
+    exec docker run --rm -e TERM="$TERM" -e IN_RVPOINT_CONTAINER=1 \
+        -v "$PROJECT_ROOT_EARLY:/workspace" -w /workspace \
+        "$IMAGE" bash scripts/verify_container.sh "$@"
+fi
+
 # ==============================================================================
 # Styling Constants
 # ==============================================================================
@@ -58,48 +72,26 @@ print_banner() {
 print_banner
 log_header "Starting Verification Suite"
 
-# 0. Workflow Checks
-log_step "0. Running Workflow Checks"
-if [ -f scripts/check_format.sh ]; then
-    bash scripts/check_format.sh || { log_error "Format check failed"; exit 1; }
-    log_success "Formatting OK"
-else
-    log_info "Skipping format check (script not found)"
-fi
-
-if [ -f scripts/lint.sh ]; then
-    bash scripts/lint.sh || { log_error "Lint check failed"; exit 1; }
-    log_success "Linting OK"
-else
-    log_info "Skipping lint check (script not found)"
-fi
-
-# 1. Configuration
-log_step "1. Configuring CMake"
-rm -rf build_cmake
-mkdir -p build_cmake
-cd build_cmake || exit 1
-cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/riscv.cmake > /dev/null
-log_success "CMake Configured"
-
-# 2. Building
-log_step "2. Building Project"
-make -j$(nproc) > /dev/null
+# 1. Build
+log_step "1. Building Project"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPT_DIR/build.sh" --clean --toolchain linux > /dev/null
 log_success "Build Complete"
-cd .. || exit 1
 
 # Helper: Find QEMU
-if [ -f "${RISCV_PATH:-/opt/riscv}/bin/qemu-riscv64" ]; then
-    QEMU_BIN="${RISCV_PATH:-/opt/riscv}/bin/qemu-riscv64"
-else
+if command -v qemu-riscv64 &> /dev/null; then
     QEMU_BIN="qemu-riscv64"
+elif [ -f "/opt/qemu/bin/qemu-riscv64" ]; then
+    QEMU_BIN="/opt/qemu/bin/qemu-riscv64"
+else
+    log_error "qemu-riscv64 not found"
+    exit 1
 fi
 
-# CPU Flags (Use specific config instead of 'max' for better compatibility with older QEMU)
-QEMU_FLAGS="-cpu rv64,v=true,vlen=128"
+QEMU_FLAGS="-L ${RISCV_PATH:-/opt/riscv}/sysroot -cpu rv64,v=true,vlen=128"
 
-# 3. Scalar Test
-log_step "3. Running Scalar Test"
+# 2. Scalar Test
+log_step "2. Running Scalar Test"
 if "$QEMU_BIN" $QEMU_FLAGS bin/test_scalar | grep -q "verification"; then
     log_success "Scalar Test Passed"
 else
@@ -107,8 +99,8 @@ else
     exit 1
 fi
 
-# 4. Vector Test
-log_step "4. Running Vector Test"
+# 3. Vector Test
+log_step "3. Running Vector Test"
 if "$QEMU_BIN" $QEMU_FLAGS bin/test_vector | grep -q "verification"; then
     log_success "Vector Test Passed"
 else
@@ -116,8 +108,8 @@ else
     exit 1
 fi
 
-# 5. Voxel Grid
-log_step "5. Verifying Voxel Grid"
+# 4. Voxel Grid
+log_step "4. Verifying Voxel Grid"
 OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_voxel_grid)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
@@ -127,8 +119,8 @@ else
     exit 1
 fi
 
-# 6. SOR
-log_step "6. Verifying SOR"
+# 5. SOR
+log_step "5. Verifying SOR"
 OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_sor)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
@@ -138,8 +130,8 @@ else
     exit 1
 fi
 
-# 7. Normal Estimation
-log_step "7. Verifying Normal Estimation"
+# 6. Normal Estimation
+log_step "6. Verifying Normal Estimation"
 OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_normal)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
@@ -149,8 +141,8 @@ else
     exit 1
 fi
 
-# 8. Radius Search
-log_step "8. Verifying Radius Search"
+# 7. Radius Search
+log_step "7. Verifying Radius Search"
 OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_radius)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
@@ -160,8 +152,8 @@ else
     exit 1
 fi
 
-# 9. RANSAC
-log_step "9. Verifying RANSAC"
+# 8. RANSAC
+log_step "8. Verifying RANSAC"
 OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_ransac)
 echo "$OUT"
 if echo "$OUT" | grep -q "PASS"; then
@@ -171,15 +163,6 @@ else
     exit 1
 fi
 
-log_header "All Verification Steps Passed! 🚀"
-
-# 10. Linux Toolchain Verification (Optional)
-if [ -f "scripts/verify_linux.sh" ] && [ -f "${RISCV_PATH:-/opt/riscv}/bin/riscv64-unknown-linux-gnu-gcc" ]; then
-    log_header "10. Linux Toolchain Detected - Verifying..."
-    bash scripts/verify_linux.sh || { log_error "Linux Verification Failed"; exit 1; }
-    log_success "Linux Toolchain Verified"
-else
-    log_info "Skipping Linux Toolchain verification (toolchain or script not found)"
-fi
+log_header "All Verification Steps Passed!"
 
 exit 0
