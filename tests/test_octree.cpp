@@ -1,95 +1,58 @@
 #include "../src/include/rvv_pcl.h"
-#include <vector>
+
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <random>
-#include <algorithm>
-#include <chrono>
+#include <vector>
 
 using namespace rvv_pcl;
 
 int main() {
-    std::cout << "[TEST] Starting Octree Verification..." << std::endl;
+  constexpr std::size_t N = 5000;
+  std::mt19937 gen(1234);
+  std::uniform_real_distribution<float> dist(0.0f, 100.0f);
 
-    // 1. Generate Synthetic Cloud
-    size_t N = 10000;
-    std::vector<float> x(N), y(N), z(N);
-    
-    std::mt19937 gen(1234);
-    std::uniform_real_distribution<float> dist(0.0f, 100.0f);
+  PointCloudSoA cloud;
+  cloud.reserve(N);
+  for (std::size_t i = 0; i < N; ++i) {
+    cloud.push_back({dist(gen), dist(gen), dist(gen)});
+  }
 
-    for(size_t i=0; i<N; ++i) {
-        x[i] = dist(gen);
-        y[i] = dist(gen);
-        z[i] = dist(gen);
-    }
-    
-    PointCloudSoA cloud = {x.data(), y.data(), z.data(), N};
+  OctreeNeighborSearch octree;
+  octree.setInputCloud(cloud);
+  octree.setSearchRadius(5.0f);
+  octree.buildTree();
 
-    // 2. Build Octree
-    std::cout << "Building Octree..." << std::endl;
-    Octree octree;
-    octree.setInputCloud(cloud);
-    
-    auto start = std::chrono::high_resolution_clock::now();
-    octree.build();
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = end - start;
-    std::cout << "Octree Build Time: " << diff.count() << " s" << std::endl;
+  int mismatches = 0;
+  for (int query_index = 0; query_index < 100; ++query_index) {
+    std::vector<int> oct_indices;
+    octree.radiusSearch(query_index, oct_indices, nullptr, 0);
 
-    // 3. Verify Radius Search vs Brute Force
-    int num_queries = 100;
-    std::uniform_real_distribution<float> query_dist(0.0f, 100.0f);
-    float radius = 5.0f;
-    float r2 = radius * radius;
-    int mismatches = 0;
-
-    std::cout << "Verifying " << num_queries << " random queries (Radius=" << radius << ")..." << std::endl;
-
-    for (int q=0; q<num_queries; ++q) {
-        PointXYZ query = {query_dist(gen), query_dist(gen), query_dist(gen)};
-
-        // B) Octree Search
-        std::vector<int> idx_oct;
-        std::vector<float> dist_oct;
-        
-        // Timer for Octree
-        // auto t1 = std::chrono::high_resolution_clock::now();
-        octree.radiusSearch(query, radius, idx_oct, dist_oct);
-        // auto t2 = std::chrono::high_resolution_clock::now();
-
-        // A) Brute Force Ground Truth
-        std::vector<int> idx_bf;
-        for (size_t i=0; i<N; ++i) {
-            float dx = x[i] - query.x;
-            float dy = y[i] - query.y;
-            float dz = z[i] - query.z;
-            float d2 = dx*dx + dy*dy + dz*dz;
-            if (d2 <= r2) idx_bf.push_back(i);
-        }
-
-        // Compare
-        std::sort(idx_oct.begin(), idx_oct.end());
-        std::sort(idx_bf.begin(), idx_bf.end());
-
-        if (idx_oct.size() != idx_bf.size()) {
-            std::cerr << "Mismatch size! Quad " << q << ": Oct=" << idx_oct.size() << " BF=" << idx_bf.size() << std::endl;
-            mismatches++;
-        } else {
-            for(size_t k=0; k<idx_oct.size(); ++k) {
-                if (idx_oct[k] != idx_bf[k]) {
-                    std::cerr << "Mismatch Content!" << std::endl;
-                    mismatches++;
-                    break;
-                }
-            }
-        }
+    std::vector<int> brute_force;
+    const PointXYZ query = cloud.point(static_cast<std::size_t>(query_index));
+    for (std::size_t i = 0; i < cloud.size(); ++i) {
+      const PointXYZ point = cloud.point(i);
+      const float dx = point.x - query.x;
+      const float dy = point.y - query.y;
+      const float dz = point.z - query.z;
+      if (dx * dx + dy * dy + dz * dz <= 25.0f) {
+        brute_force.push_back(static_cast<int>(i));
+      }
     }
 
-    if (mismatches == 0) {
-        std::cout << "[PASS] Octree Radius Search Verified." << std::endl;
-        return 0;
-    } else {
-        std::cerr << "[FAIL] Found " << mismatches << " mismatches." << std::endl;
-        return 1;
+    std::sort(oct_indices.begin(), oct_indices.end());
+    std::sort(brute_force.begin(), brute_force.end());
+    if (oct_indices != brute_force) {
+      ++mismatches;
     }
+  }
+
+  if (mismatches != 0) {
+    std::cerr << "[FAIL] Octree search mismatches: " << mismatches << std::endl;
+    return 1;
+  }
+
+  std::cout << "[PASS] OctreeNeighborSearch matches brute force." << std::endl;
+  return 0;
 }

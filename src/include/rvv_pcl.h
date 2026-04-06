@@ -1,466 +1,310 @@
 #pragma once
-#include <cmath>
+
+#include <array>
 #include <cstddef>
+#include <cstdint>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
-#ifndef __riscv_vector
-#error "RISC-V Vector (RVV) support is mandatory. Compile with -march=rv64gcv"
+#if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
+#include <riscv_vector.h>
 #endif
 
-#include <riscv_vector.h>
-
-/**
- * @namespace rvv_pcl
- * @brief Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud
- * Library.
- */
 namespace rvv_pcl {
 
-/**
- * @brief Standard 3D Point structure.
- *
- * Simple structure representing a point in 3D space with float coordinates.
- */
 struct PointXYZ {
-  float x, y, z;
+  float x = 0.0f;
+  float y = 0.0f;
+  float z = 0.0f;
 };
 
-/**
- * @brief Point Cloud stored in Structure of Arrays (SoA) layout.
- *
- * This layout is critical for RISC-V Vector (RVV) performance as it allows
- * for unit-stride loads/stores (vle32.v / vse32.v), which are significantly
- * faster than strided gather/scatter operations required for Array of
- * Structures (AoS).
- */
-struct PointCloudSoA {
-  float *x;      /**< Pointer to array of X coordinates */
-  float *y;      /**< Pointer to array of Y coordinates */
-  float *z;      /**< Pointer to array of Z coordinates */
-  std::size_t n; /**< Number of points in the cloud */
-};
-
-class Octree; // Forward declaration
-
-// ============================================================================
-// 1) Voxel Grid Downsampling
-// ============================================================================
-
-/**
- * @brief Voxel Grid Downsampling (Scalar Reference).
- *
- * Reduces the number of points by creating a 3D voxel grid over the input point
- * cloud. All points within each voxel are approximated by their centroid.
- *
- * @param in Pointer to input array of PointXYZ (AoS).
- * @param n Number of points in the input.
- * @param out Pointer to output array of PointXYZ (must be pre-allocated).
- * @param leaf_size Dimension of the voxel (leaf) along each axis.
- * @return std::size_t Number of points in the output cloud.
- */
-std::size_t voxel_grid_downsamp_sc(const PointXYZ *in, std::size_t n,
-                                   PointXYZ *out, float leaf_size);
-
-/**
- * @brief Voxel Grid Downsampling (RVV Optimized).
- *
- * Vectorized implementation of voxel grid downsampling.
- * Uses RVV instructions for coordinate scaling, min/max finding, and
- * projection.
- *
- * @param in Input point cloud in SoA format.
- * @param out Pointer to output array of PointXYZ (AoS format for
- * compatibility).
- * @param leaf_size Dimension of the voxel (leaf) along each axis.
- * @return std::size_t Number of points in the output cloud.
- */
-std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA &in, PointXYZ *out,
-                                    float leaf_size);
-
-/**
- * @brief Voxel Grid Downsampling (Fully Vectorized RVV, Sort-Based).
- *
- * Eliminates std::map by using a sort-based grouping approach:
- *  1. Vectorized bounding box computation (vfmin/vfmax + reductions)
- *  2. Vectorized voxel key computation (vfsub + vfmul + vfcvt_rtz + vmul/vadd)
- *  3. Sort indices by linear voxel key (groups same-voxel points contiguously)
- *  4. Vectorized centroid reduction per group (vluxei32 gather + vfredusum)
- *
- * @param in Input point cloud in SoA format.
- * @param out Pointer to output array of PointXYZ (must be pre-allocated).
- * @param leaf_size Dimension of the voxel (leaf) along each axis.
- * @return std::size_t Number of points in the output cloud.
- */
-std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA &in, PointXYZ *out,
-                                        float leaf_size);
-
-// ============================================================================
-// 2) Statistical Outlier Removal
-// ============================================================================
-
-/**
- * @brief Statistical Outlier Removal (Scalar Reference).
- *
- * Removes points that are further away from their neighbors compared to the
- * average.
- *
- * @param in Pointer to input array of PointXYZ (AoS).
- * @param n Number of points in the input.
- * @param out Pointer to output array of PointXYZ (AoS).
- * @param k Number of nearest neighbors to use for mean distance estimation.
- * @param alpha Standard deviation multiplier threshold.
- * @return std::size_t Number of inlier points remaining.
- */
-std::size_t sor_sc(const PointXYZ *in, std::size_t n, PointXYZ *out, int k,
-                   float alpha);
-
-/**
- * @brief Statistical Outlier Removal (RVV Optimized).
- *
- * Vectorized implementation of SOR filter.
- * Accelerates K-NN distance calculation using `get_dist_sq_rvv` kernel and
- * uses vector reductions for mean and variance computation.
- *
- * @param in Input point cloud in SoA format.
- * @param out Pointer to output array of PointXYZ (AoS).
- * @param k Number of nearest neighbors to use.
- * @param alpha Standard deviation multiplier threshold.
- * @return std::size_t Number of inlier points remaining.
- */
-std::size_t sor_rvv(const PointCloudSoA &in, PointXYZ *out, int k, float alpha);
-
-// ============================================================================
-// 3) Normal Estimation
-// ============================================================================
-
-/**
- * @brief Normal Estimation (Scalar Reference).
- *
- * Estimates surface normals for each point by analyzing the covariance matrix
- * of its nearest neighbors. Supports consistent viewpoint usage.
- *
- * @param in Pointer to input array of PointXYZ.
- * @param n Number of points.
- * @param nx Output array for Normal X component.
- * @param ny Output array for Normal Y component.
- * @param nz Output array for Normal Z component.
- * @param k Number of neighbors to use for estimation.
- * @param radius Radius for neighbor search (if k is not used).
- * @param vp_x Viewpoint X coordinate (default 0).
- * @param vp_y Viewpoint Y coordinate (default 0).
- * @param vp_z Viewpoint Z coordinate (default 0).
- * @param eigen_iters Number of iterations for eigenvalue solver (default 4).
- */
-void normal_estimation_sc(const PointXYZ *in, std::size_t n, float *nx,
-                          float *ny, float *nz, int k, float radius,
-                          float vp_x = 0, float vp_y = 0, float vp_z = 0,
-                          int eigen_iters = 4);
-
-/**
- * @brief Normal Estimation (RVV Optimized).
- *
- * Vectorized implementation of Normal Estimation.
- * Uses an Octree for efficient neighbor search and vectorized kernels for
- * Covariance Matrix accumulation.
- *
- * @param in Input point cloud in SoA format.
- * @param octree Pre-built Octree structure for the input cloud.
- * @param nx Output array for Normal X component.
- * @param ny Output array for Normal Y component.
- * @param nz Output array for Normal Z component.
- * @param k Number of neighbors to use.
- * @param radius Search radius.
- * @param vp_x Viewpoint X coordinate.
- * @param vp_y Viewpoint Y coordinate.
- * @param vp_z Viewpoint Z coordinate.
- * @param eigen_iters Number of iterations for eigenvalue solver.
- */
-void normal_estimation_rvv(const PointCloudSoA &in, const Octree &octree,
-                           float *nx, float *ny, float *nz, int k, float radius,
-                           float vp_x = 0, float vp_y = 0, float vp_z = 0,
-                           int eigen_iters = 4);
-
-// ============================================================================
-// 4) Radius Search
-// ============================================================================
-
-/**
- * @brief Radius Search (Scalar Reference).
- *
- * Finds all points within a specified radius of a query point.
- *
- * @param cloud Pointer to input cloud (AoS).
- * @param n Number of points.
- * @param query The query point coordinates.
- * @param radius Search radius.
- * @param indices Output array to store indices of neighbors.
- * @param dists Output array to store squared distances to neighbors.
- * @param max_nn Maximum number of neighbors to return.
- * @return std::size_t Number of neighbors found.
- */
-std::size_t radius_search_sc(const PointXYZ *cloud, std::size_t n,
-                             PointXYZ query, float radius, int *indices,
-                             float *dists, int max_nn);
-
-/**
- * @brief Radius Search (RVV Optimized).
- *
- * Vectorized Global Radius Search.
- * Scans the entire cloud using vector instructions to compute distances
- * and filter points making use of `vmfle` (vector float less-equal) and `vcpop`
- * masks.
- *
- * @param cloud Input cloud in SoA format.
- * @param query The query point coordinates.
- * @param radius Search radius.
- * @param indices Output array for neighbor indices.
- * @param dists Output array for neighbor squared distances.
- * @param max_nn Maximum number of neighbors to return.
- * @return std::size_t Number of neighbors found.
- */
-std::size_t radius_search_rvv(const PointCloudSoA &cloud, PointXYZ query,
-                              float radius, int *indices, float *dists,
-                              int max_nn);
-
-// ============================================================================
-// 5) RANSAC Plane Fitting
-// ============================================================================
-
-/**
- * @brief RANSAC Plane Fitting (Scalar Reference).
- *
- * Fits a plane model ax + by + cz + d = 0 to the point cloud.
- *
- * @param cloud Pointer to input cloud (AoS).
- * @param n Number of points.
- * @param dist_thresh Distance threshold to consider a point an inlier.
- * @param max_iters Maximum number of RANSAC iterations.
- * @param model Output array of size 4 to store plane coefficients [a, b, c, d].
- * @param collinear_thresh Threshold to check if points are collinear
- * (degenerate case).
- * @return int Number of inliers found for the best model.
- */
-int ransac_plane_sc(const PointXYZ *cloud, std::size_t n, float dist_thresh,
-                    int max_iters, float *model,
-                    float collinear_thresh = 1e-6f);
-
-/**
- * @brief RANSAC Plane Fitting (RVV Optimized).
- *
- * Vectorized RANSAC implementation.
- * Calculates distances for a batch of points against the plane model in
- * parallel and counts inliers using high-throughput vector population count
- * instructions.
- *
- * @param cloud Input cloud in SoA format.
- * @param dist_thresh Distance threshold for inliers.
- * @param max_iters Maximum number of RANSAC iterations.
- * @param model Output array of size 4 for plane coefficients.
- * @param collinear_thresh Threshold for collinearity check.
- * @return int Number of inliers found for the best model.
- */
-int ransac_plane_rvv(const PointCloudSoA &cloud, float dist_thresh,
-                     int max_iters, float *model,
-                     float collinear_thresh = 1e-6f);
-
-// ============================================================================
-// Octree for Efficient Spatial Search
-// ============================================================================
-
-/**
- * @brief Node structure for the Octree.
- */
-struct OctreeNode {
-  float min_x, min_y, min_z;           /**< Minimum bounding box coordinates */
-  float max_x, max_y, max_z;           /**< Maximum bounding box coordinates */
-  OctreeNode *children[8] = {nullptr}; /**< Pointers to 8 child nodes */
-  std::vector<int>
-      indices;         /**< Point indices contained in this node (if leaf) */
-  bool is_leaf = true; /**< True if this is a leaf node */
-
-  ~OctreeNode();
-};
-
-/**
- * @brief Octree Data Structure for Spatial Indexing.
- *
- * Provides efficient spatial partitioning to accelerate neighbor search
- * operations.
- */
-class Octree {
+class PointCloudSoA {
 public:
-  Octree();
-  ~Octree();
+  void reserve(std::size_t capacity);
+  void clear();
+  void resize(std::size_t new_size);
+  bool loadFromPCD(const std::string &filename);
 
-  /**
-   * @brief Set the Input Cloud for the Octree.
-   * @param cloud The point cloud (SoA) to index.
-   */
-  void setInputCloud(const PointCloudSoA &cloud);
+  std::size_t size() const { return pointCount_; }
+  bool empty() const { return pointCount_ == 0; }
 
-  /**
-   * @brief Build the Octree structure.
-   * Recursively subdivides the bounding box until termination criteria are met.
-   */
-  void build();
+  void push_back(const PointXYZ &point, float intensity = 0.0f);
+  PointXYZ point(std::size_t index) const;
+  void setPoint(std::size_t index, const PointXYZ &point);
+  std::vector<PointXYZ> toAoS() const;
+  void assign(const std::vector<PointXYZ> &points);
 
-  /**
-   * @brief Perform a Radius Search on the Octree.
-   *
-   * @param query Query point.
-   * @param radius Search radius.
-   * @param indices Output vector for found point indices.
-   * @param dists Output vector for found squared distances.
-   * @param max_nn Maximum number of neighbors (0 for unlimited).
-   * @return std::size_t Number of neighbors found.
-   */
-  std::size_t radiusSearch(const PointXYZ &query, float radius,
-                           std::vector<int> &indices, std::vector<float> &dists,
-                           int max_nn = 0) const;
+  const float *xData() const { return xCoords_.data(); }
+  const float *yData() const { return yCoords_.data(); }
+  const float *zData() const { return zCoords_.data(); }
+  float *xData() { return xCoords_.data(); }
+  float *yData() { return yCoords_.data(); }
+  float *zData() { return zCoords_.data(); }
 
-  /** @brief Set max points allowed per leaf node before subdivision. */
-  void setMaxPointsPerLeaf(int n) { max_points_per_leaf_ = n; }
-  /** @brief Set maximum depth of the tree. */
-  void setMaxDepth(int d) { max_depth_ = d; }
-  /** @brief Set epsilon value to prevent zero-size nodes. */
-  void setBuildEpsilon(float eps) { build_epsilon_ = eps; }
+  const std::vector<float> &xCoords() const { return xCoords_; }
+  const std::vector<float> &yCoords() const { return yCoords_; }
+  const std::vector<float> &zCoords() const { return zCoords_; }
+  const std::vector<float> &intensities() const { return intensities_; }
+  std::vector<float> &xCoords() { return xCoords_; }
+  std::vector<float> &yCoords() { return yCoords_; }
+  std::vector<float> &zCoords() { return zCoords_; }
+  std::vector<float> &intensities() { return intensities_; }
 
 private:
-  PointCloudSoA cloud_;
-  OctreeNode *root_ = nullptr;
-  int max_points_per_leaf_ = 64;
-  int max_depth_ = 8;
-  float build_epsilon_ = 1e-4f;
+  std::vector<float> xCoords_;
+  std::vector<float> yCoords_;
+  std::vector<float> zCoords_;
+  std::vector<float> intensities_;
+  std::size_t pointCount_ = 0;
+};
 
-  void buildParams(OctreeNode *node, const std::vector<int> &indices,
-                   int depth);
-  void recursiveSearch(OctreeNode *node, const PointXYZ &query, float radius_sq,
+class FeatureCloud {
+public:
+  virtual ~FeatureCloud() = default;
+  virtual void resize(std::size_t n) = 0;
+  std::size_t size() const { return pointCount_; }
+
+protected:
+  std::size_t pointCount_ = 0;
+};
+
+class NormalCloud : public FeatureCloud {
+public:
+  void resize(std::size_t n) override;
+  PointXYZ normal(std::size_t index) const;
+  void setNormal(std::size_t index, float nx, float ny, float nz);
+
+  const std::vector<float> &nx() const { return nx_; }
+  const std::vector<float> &ny() const { return ny_; }
+  const std::vector<float> &nz() const { return nz_; }
+  std::vector<float> &nx() { return nx_; }
+  std::vector<float> &ny() { return ny_; }
+  std::vector<float> &nz() { return nz_; }
+
+private:
+  std::vector<float> nx_;
+  std::vector<float> ny_;
+  std::vector<float> nz_;
+};
+
+class RVVHelper {
+public:
+  static void vadd(const float *a, const float *b, float *result, std::size_t n);
+  static void vsub(const float *a, const float *b, float *result, std::size_t n);
+  static void vmul(const float *a, const float *b, float *result, std::size_t n);
+  static void vdiv(const float *a, const float *b, float *result, std::size_t n);
+  static void vfmadd(const float *a, const float *b, const float *c, float *result,
+                     std::size_t n);
+  static void vsqrt(const float *a, float *result, std::size_t n);
+  static void vrsqrt(const float *a, float *result, std::size_t n);
+  static float vsum(const float *a, std::size_t n);
+  static float vmax(const float *a, std::size_t n);
+  static float vmin(const float *a, std::size_t n);
+  static float vdot(const float *a, const float *b, std::size_t n);
+
+  static void distanceSquared(const PointCloudSoA &cloud, float qx, float qy, float qz,
+                              float *out_d2);
+  static void gatherIndicesInRadius(const PointCloudSoA &cloud,
+                                    const int *subset_indices, std::size_t n, float qx,
+                                    float qy, float qz, float r2,
+                                    std::vector<int> &out_indices,
+                                    std::vector<float> &out_dists);
+  static void computeBoundingBox(const PointCloudSoA &cloud, float &min_x, float &min_y,
+                                 float &min_z, float &max_x, float &max_y,
+                                 float &max_z);
+  static int countPlaneInliers(const PointCloudSoA &cloud,
+                               const std::array<float, 4> &coefficients,
+                               float distance_threshold);
+};
+
+class Filter {
+public:
+  virtual ~Filter() = default;
+  virtual void setInput(const PointCloudSoA &input);
+  virtual void filter(PointCloudSoA &output) const = 0;
+
+protected:
+  const PointCloudSoA *input_ = nullptr;
+};
+
+class NeighborSearch {
+public:
+  virtual ~NeighborSearch() = default;
+  virtual void setInputCloud(const PointCloudSoA &cloud);
+  virtual void setSearchRadius(float radius);
+  virtual void buildIndex() = 0;
+  virtual std::size_t radiusSearch(int queryPointIndex, std::vector<int> &resultIndices,
+                                   std::vector<float> *resultDistances = nullptr,
+                                   int maxResults = 0) const = 0;
+  virtual int nearestNeighborSearch(int queryPointIndex) const;
+
+protected:
+  PointXYZ queryPoint(int queryPointIndex) const;
+
+  const PointCloudSoA *pointCloud_ = nullptr;
+  float searchRadius_ = 0.0f;
+};
+
+class VoxelGridFilter : public Filter {
+public:
+  void setLeafSize(float size);
+  float leafSize() const { return leafSize_; }
+  void filter(PointCloudSoA &output) const override;
+
+private:
+  std::int64_t hashPointToVoxel(float x, float y, float z) const;
+  PointXYZ computeVoxelAverage(const std::vector<int> &indices) const;
+
+  float leafSize_ = 0.1f;
+};
+
+class OctreeNeighborSearch : public NeighborSearch {
+public:
+  OctreeNeighborSearch();
+  ~OctreeNeighborSearch() override;
+
+  void setMaxDepth(int depth);
+  void setLeafCapacity(int capacity);
+  void buildTree();
+  void buildIndex() override;
+  std::size_t radiusSearch(int queryPointIndex, std::vector<int> &resultIndices,
+                           std::vector<float> *resultDistances = nullptr,
+                           int maxResults = 0) const override;
+
+private:
+  struct Node {
+    float min_x = 0.0f;
+    float min_y = 0.0f;
+    float min_z = 0.0f;
+    float max_x = 0.0f;
+    float max_y = 0.0f;
+    float max_z = 0.0f;
+    bool is_leaf = true;
+    std::vector<int> indices;
+    Node *children[8] = {nullptr, nullptr, nullptr, nullptr,
+                         nullptr, nullptr, nullptr, nullptr};
+
+    ~Node();
+  };
+
+  void insertPoint(Node *node, int pointIndex, int depth);
+  void subdivide(Node *node, int depth);
+  void recursiveSearch(Node *node, const PointXYZ &query, float radius_sq,
                        std::vector<int> &indices,
-                       std::vector<float> &dists) const;
+                       std::vector<float> *dists) const;
+  static bool boxOverlapsSphere(const Node *node, const PointXYZ &center, float r2);
+
+  Node *root_ = nullptr;
+  int maxDepth_ = 8;
+  int leafCapacity_ = 16;
+  float buildEpsilon_ = 1e-4f;
 };
 
-// ============================================================================
-// Helper Kernels
-// ============================================================================
-
-/**
- * @brief Helper: Squared Euclidean Distance Kernel (RVV).
- *
- * Computes d^2 = (x-qx)^2 + (y-qy)^2 + (z-qz)^2 for 'n' points using vector
- * instructions.
- *
- * @param x Pointer to X coordinates array.
- * @param y Pointer to Y coordinates array.
- * @param z Pointer to Z coordinates array.
- * @param qx Query point X.
- * @param qy Query point Y.
- * @param qz Query point Z.
- * @param out_d2 Output array for squared distances.
- * @param n Number of elements to process.
- */
-void get_dist_sq_rvv(const float *x, const float *y, const float *z, float qx,
-                     float qy, float qz, float *out_d2, std::size_t n);
-
-/**
- * @brief Fused Gather-Filter Kernel (RVV).
- *
- * Reads x,y,z at specified 'indices' (indirect addressing), computes distance
- * to query, and seamlessly stores matching indices/distances.
- *
- * @param x Pointer to global X coordinates.
- * @param y Pointer to global Y coordinates.
- * @param z Pointer to global Z coordinates.
- * @param subset_indices Array of indices to check (e.g., from an Octree/Grid
- * cell).
- * @param n Number of indices to check.
- * @param qx Query point X.
- * @param qy Query point Y.
- * @param qz Query point Z.
- * @param r2 Squared radius threshold.
- * @param out_indices Vector to append matching indices to.
- * @param out_dists Vector to append matching distances to.
- */
-void get_inds_in_radius_rvv(const float *x, const float *y, const float *z,
-                            const int *subset_indices, std::size_t n, float qx,
-                            float qy, float qz, float r2,
-                            std::vector<int> &out_indices,
-                            std::vector<float> &out_dists);
-
-// ============================================================================
-// Spatial Hash Grid for Fast Neighbor Search (Alternative to Octree)
-// ============================================================================
-
-/**
- * @brief Spatial Hash Grid for Fast Neighbor Search.
- *
- * Alternative to Octree. Values are hashed into a grid for O(1) average lookup
- * time. Particularly effective for fixed-radius searches.
- */
-class SpatialHash {
+class SpatialHashNeighborSearch : public NeighborSearch {
 public:
-  SpatialHash();
-  ~SpatialHash();
-
-  /**
-   * @brief Set the Input Cloud and Cell Size.
-   * @param cloud Input cloud (SoA).
-   * @param cell_size Size of the hash grid cell. Expected to be roughly equal
-   * to search radius.
-   */
-  void setInputCloud(const PointCloudSoA &cloud, float cell_size);
-
-  /** @brief Build the Hash Grid. */
-  void build();
-
-  /**
-   * @brief Perform Radius Search using Spatial Hashing.
-   *
-   * @param query Query point.
-   * @param radius Search radius.
-   * @param indices Output vector for found indices.
-   * @param dists Output vector for found squared distances.
-   * @param max_nn Maximum neighbors to return.
-   * @return std::size_t Number of neighbors found.
-   */
-  std::size_t radiusSearch(const PointXYZ &query, float radius,
-                           std::vector<int> &indices, std::vector<float> &dists,
-                           int max_nn = 0) const;
-
-  /** @brief Set custom hash primes (for tuning). */
-  void setHashPrimes(int64_t p1, int64_t p2) {
-    p1_ = p1;
-    p2_ = p2;
-  }
+  void setCellSize(float size);
+  void buildHashTable();
+  void buildIndex() override;
+  std::size_t radiusSearch(int queryPointIndex, std::vector<int> &resultIndices,
+                           std::vector<float> *resultDistances = nullptr,
+                           int maxResults = 0) const override;
 
 private:
-  PointCloudSoA cloud_;
-  float cell_size_;
-  float eps_scale_ = 0.01f;
-  float reserve_factor_ = 0.25f;
-  int64_t p1_ = 73856093LL;
-  int64_t p2_ = 19349663LL;
+  std::int64_t computeHashKey(int ix, int iy, int iz) const;
+  void getCellIndices(float x, float y, float z, int &ix, int &iy, int &iz) const;
+  void getCellNeighborPoints(std::int64_t cellKey, std::vector<int> &resultIndices) const;
 
-  // Hash table: key = cell hash, value = point indices in that cell
-  std::unordered_map<int64_t, std::vector<int>> grid_;
+  float cellSize_ = 0.1f;
+  int tableSize_ = 0;
+  float min_x_ = 0.0f;
+  float min_y_ = 0.0f;
+  float min_z_ = 0.0f;
+  std::int64_t p1_ = 73856093LL;
+  std::int64_t p2_ = 19349663LL;
+  std::unordered_map<std::int64_t, std::vector<int>> grid_;
+};
 
-  // Bounding box
-  float min_x_, min_y_, min_z_;
-  float max_x_, max_y_, max_z_;
-  int grid_size_x_, grid_size_y_, grid_size_z_;
+class SORFilter : public Filter {
+public:
+  void setMeanK(int k);
+  void setStdThreshold(float threshold);
+  void setNeighborSearch(NeighborSearch *search);
+  void filter(PointCloudSoA &output) const override;
 
-  // Hash function: (ix, iy, iz) -> unique key
-  inline int64_t hashCell(int ix, int iy, int iz) const {
-    return (int64_t)ix + (int64_t)iy * p1_ + (int64_t)iz * p2_;
-  }
+private:
+  float computeMeanDistanceToNeighbors(int pointIndex,
+                                       const std::vector<int> &neighborIndices) const;
+  void computeGlobalStatistics(const std::vector<float> &meanDistances, float &meanDist,
+                               float &stddev) const;
 
-  // Get cell indices for a point
-  inline void getCellIndices(float x, float y, float z, int &ix, int &iy,
-                             int &iz) const {
-    ix = (int)std::floor((x - min_x_) / cell_size_);
-    iy = (int)std::floor((y - min_y_) / cell_size_);
-    iz = (int)std::floor((z - min_z_) / cell_size_);
-  }
+  int meanK_ = 20;
+  float stdThreshold_ = 1.0f;
+  NeighborSearch *searcher_ = nullptr;
+};
+
+class FeatureEstimator {
+public:
+  virtual ~FeatureEstimator() = default;
+  virtual void setInputCloud(const PointCloudSoA &cloud);
+  virtual void setK(int k);
+  virtual void setNeighborSearch(NeighborSearch *search);
+  virtual void estimate(FeatureCloud &featureCloud) const;
+
+protected:
+  virtual bool validateInputs() const;
+  virtual void computeFeature(int index, const std::vector<int> &neighborIndices,
+                              FeatureCloud &featureCloud) const = 0;
+
+  const PointCloudSoA *input_ = nullptr;
+  int k_ = 10;
+  NeighborSearch *searcher_ = nullptr;
+};
+
+class NormalEstimation : public FeatureEstimator {
+protected:
+  void computeFeature(int index, const std::vector<int> &neighborIndices,
+                      FeatureCloud &featureCloud) const override;
+};
+
+class ModelFitter {
+public:
+  virtual ~ModelFitter() = default;
+  virtual void setInputCloud(const PointCloudSoA &cloud);
+  virtual bool fit(std::array<float, 4> &coefficients, std::vector<int> &inlierIndices,
+                   int maxInliers = 0) const = 0;
+
+protected:
+  const PointCloudSoA *input_ = nullptr;
+};
+
+class PlaneModel {
+public:
+  static int minSamples();
+  static bool computeModel(const PointCloudSoA &points, const std::vector<int> &samples,
+                           std::array<float, 4> &coeffs);
+  static float evaluatePoint(const PointCloudSoA &points, int pointIdx,
+                             const std::array<float, 4> &coeffs);
+  static int evaluateAll(const PointCloudSoA &points, const std::array<float, 4> &coeffs,
+                         std::vector<int> &inliers, int maxInliers, float threshold);
+};
+
+class RANSACFitter : public ModelFitter {
+public:
+  void setDistanceThreshold(float threshold);
+  void setMaxIterations(int iter);
+  void setProbability(float prob);
+  bool fit(std::array<float, 4> &coefficients, std::vector<int> &inlierIndices,
+           int maxInliers = 0) const override;
+
+private:
+  int evaluateModel(const std::array<float, 4> &coeffs, std::vector<int> &inliers,
+                    int maxInliers) const;
+  void sampleRandomIndices(std::vector<int> &sample) const;
+
+  float distanceThreshold_ = 0.05f;
+  int maxIterations_ = 1000;
+  float probability_ = 0.99f;
 };
 
 } // namespace rvv_pcl

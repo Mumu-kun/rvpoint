@@ -1,0 +1,238 @@
+@startuml rvpointClassDiagram
+
+!theme cerulean-outline
+
+skinparam backgroundColor #FEFEFE
+skinparam linetype ortho
+skinparam shadowing false
+' skinparam classAttributeIconSize 0
+' skinparam padding 10
+skinparam nodesep 120
+skinparam ranksep 40
+skinparam arrowThickness 1.5
+skinparam class {
+  BackgroundColor White
+  BorderColor #37474F
+  ArrowColor #546E7A
+  FontColor #263238
+}
+skinparam packageStyle rectangle
+
+' ============================================================
+' DATA STRUCTURES
+' ============================================================
+
+package "Data Structures" {
+  class PointCloudSoA {
+    # xCoords: float[]
+    # yCoords: float[]
+    # zCoords: float[]
+    # intensities: float[]
+    # pointCount: int
+    --
+    + reserve(capacity)
+    + clear()
+    + resize(newSize: int)
+    + loadFromPCD(filename: char[])
+  }
+
+  abstract class FeatureCloud <<abstract>> {
+    # pointCount: int
+    --
+    + resize(n: int): void
+  }
+
+  class NormalCloud {
+    - nx: float[]
+    - ny: float[]
+    - nz: float[]
+    --
+    + resize(n: int): void
+  }
+}
+
+' ============================================================
+' FILTERING
+' ============================================================
+
+package "Filtering" {
+  abstract class Filter <<abstract>> {
+    # input: PointCloudSoA
+    --
+    + setInput(input: PointCloudSoA): void
+    + filter(output: PointCloudSoA): void
+  }
+
+  class VoxelGridFilter {
+    - leafSize: float = 0.1
+    --
+    + setLeafSize(size: float): void
+    --
+    - hashPointToVoxel(x, y, z): long
+    - computeVoxelAverage(indices, count): void
+  }
+
+  class SORFilter {
+    - meanK: int = 20
+    - stdThreshold: float = 1.0
+    - searcher: NeighborSearch*
+    --
+    + setMeanK(k: int): void
+    + setStdThreshold(threshold: float): void
+    + setNeighborSearch(search: NeighborSearch*): void
+    --
+    - computeMeanDistanceToNeighbors(pointIndex, neighborIndices, count): float
+    - computeGlobalStatistics(meanDist, std): void
+  }
+}
+
+' ============================================================
+' NEIGHBOR SEARCH
+' ============================================================
+
+package "Neighbor Search" {
+  abstract class NeighborSearch <<abstract>> {
+    # pointCloud: PointCloudSoA
+    # searchRadius: float
+    --
+    + setInputCloud(cloud: PointCloudSoA): void
+    + setSearchRadius(radius: float): void
+    + radiusSearch(queryPointIndex, resultIndices, maxResults): int
+    + nearestNeighborSearch(queryPointIndex): int
+  }
+
+  class OctreeNeighborSearch {
+    - maxDepth: int = 8
+    - leafCapacity: int = 16
+    --
+    + setMaxDepth(depth: int): void
+    + buildTree(): void
+    --
+    - insertPoint(pointIndex): void
+  }
+
+  class SpatialHashNeighborSearch {
+    - cellSize: float
+    - tableSize: int
+    --
+    + setCellSize(size: float): void
+    + buildHashTable(): void
+    --
+    - computeHashKey(x, y, z): long
+    - getCellNeighborPoints(cellKey, resultIndices, resultCount): void
+  }
+}
+
+' ============================================================
+' FEATURE ESTIMATION
+' ============================================================
+
+package "Feature Estimation" {
+  abstract class FeatureEstimator <<abstract>> {
+    # input: PointCloudSoA
+    # k: int = 10
+    # searcher: NeighborSearch*
+    --
+    + setInputCloud(cloud: PointCloudSoA): void
+    + setK(k: int): void
+    + setNeighborSearch(search: NeighborSearch*): void
+    + estimate(featureCloud: FeatureCloud): void
+    # validateInputs(): bool
+    # computeFeature(index, neighborIndices, count, featureCloud): void
+  }
+
+  class NormalEstimation {
+    --
+    - computeFeature(index, neighborIndices, count, featureCloud): void
+  }
+}
+
+' ============================================================
+' MODEL FITTING
+' ============================================================
+
+package "Model Fitting" {
+  abstract class ModelFitter <<abstract>> {
+    # input: PointCloudSoA
+    --
+    + setInputCloud(cloud: PointCloudSoA): void
+    + fit(coefficients, inlierIndices, maxInliers): bool
+  }
+
+  class RANSACFitter <<template>> {
+    - distanceThreshold: float = 0.05
+    - maxIterations: int = 1000
+    - probability: float = 0.99
+    --
+    + setDistanceThreshold(threshold: float): void
+    + setMaxIterations(iter: int): void
+    + setProbability(prob: float): void
+    + fit(coefficients, inlierIndices, maxInliers): bool
+    --
+    - evaluateModel(coeffs, inliers): int
+    - sampleRandomIndices(sample): void
+  }
+
+  class PlaneModel {
+    + {static} minSamples(): int
+    + {static} computeModel(points, samples, coeffs): bool
+    + {static} evaluatePoint(pointIdx, coeffs): float
+    + {static} evaluateAll(coeffs, inliers, maxInliers, threshold): int <<vectorized>>
+  }
+}
+
+' ============================================================
+' UTILITIES
+' ============================================================
+
+package "Utilities" {
+  class RVVHelper <<static>> {
+    + vadd(a, b, result, n): void
+    + vsub(a, b, result, n): void
+    + vmul(a, b, result, n): void
+    + vdiv(a, b, result, n): void
+    + vfmadd(a, b, c, result, n): void
+    + vsqrt(a, result, n): void
+    + vrsqrt(a, result, n): void
+    + vsum(a, n): float
+    + vmax(a, n): float
+    + vmin(a, n): float
+    + vdot(a, b, n): float
+  }
+}
+
+' ============================================================
+' VERTICAL SPACING
+' ============================================================
+
+' PointCloudSoA -[hidden]-- FeatureEstimator
+NeighborSearch -[hidden]-- OctreeNeighborSearch
+NeighborSearch -[hidden]-- SpatialHashNeighborSearch
+
+' ============================================================
+' INHERITANCE RELATIONSHIPS
+' ============================================================
+
+FeatureCloud <|-- NormalCloud : extends
+Filter <|-- VoxelGridFilter : extends
+Filter <|-- SORFilter : extends
+NeighborSearch <|-- OctreeNeighborSearch : extends
+NeighborSearch <|-- SpatialHashNeighborSearch : extends
+FeatureEstimator <|-- NormalEstimation : extends
+ModelFitter <|-- RANSACFitter : extends
+
+' ============================================================
+' DEPENDENCY RELATIONSHIPS
+' ============================================================
+
+PointCloudSoA <.. Filter : uses
+PointCloudSoA <.. NeighborSearch : uses
+PointCloudSoA <.. FeatureEstimator : uses
+PointCloudSoA <.. ModelFitter : uses
+FeatureCloud <.. PointCloudSoA : contains
+SORFilter <.. NeighborSearch : uses
+FeatureEstimator <.. NeighborSearch : uses
+NormalCloud <.. NormalEstimation : produces
+PlaneModel <.. RANSACFitter : <<bind>>
+
+@enduml

@@ -10,8 +10,15 @@ endif()
 set(CMAKE_C_COMPILER "${RISCV_PATH}/bin/riscv64-unknown-elf-gcc")
 set(CMAKE_CXX_COMPILER "${RISCV_PATH}/bin/riscv64-unknown-elf-g++")
 
-set(CMAKE_C_FLAGS "-march=rv64gcv -mabi=lp64d" CACHE STRING "" FORCE)
-set(CMAKE_CXX_FLAGS "-march=rv64gcv -mabi=lp64d" CACHE STRING "" FORCE)
+if(NOT DEFINED RISCV_ARCH)
+    set(RISCV_ARCH "rv64gcv")
+endif()
+if(NOT DEFINED RISCV_ABI)
+    set(RISCV_ABI "lp64d")
+endif()
+
+set(CMAKE_C_FLAGS "-march=${RISCV_ARCH} -mabi=${RISCV_ABI}" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS "-march=${RISCV_ARCH} -mabi=${RISCV_ABI}" CACHE STRING "" FORCE)
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)

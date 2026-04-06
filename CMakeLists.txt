@@ -9,25 +9,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
-# RISC-V Specific Flags
-# These are critical for RVV support
-set(RISCV_FLAGS "-march=rv64gcv -mabi=lp64d")
-# Ensure we use the correct toolchain paths if not set externally
-# We will just print them to be sure.
-message(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
+# Static linking for QEMU compatibility
+set(CMAKE_EXE_LINKER_FLAGS "-static")
+option(RVV_PCL_USE_RVV "Enable RVV helper backend" ON)
+set(RISCV_ARCH "rv64gcv" CACHE STRING "RISC-V ISA string, e.g. rv64gc or rv64gcv")
+set(RISCV_ABI "lp64d" CACHE STRING "RISC-V ABI")
 
-# Ensure we use the correct toolchain paths if not set externally
-# But usually best to let the environment (CC/CXX vars) handle it.
-# We will just print them to be sure.
+# RISC-V Specific Flags
+set(RISCV_FLAGS "-march=${RISCV_ARCH} -mabi=${RISCV_ABI}")
+set(RVV_PCL_ENABLE_RVV OFF)
+if(RVV_PCL_USE_RVV AND RISCV_ARCH MATCHES ".*v.*")
+    set(RVV_PCL_ENABLE_RVV ON)
+elseif(RVV_PCL_USE_RVV)
+    message(WARNING "RVV requested, but RISCV_ARCH='${RISCV_ARCH}' has no vector extension. Building scalar fallback.")
+endif()
 message(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
+message(STATUS "RISC-V ISA: ${RISCV_ARCH}")
+message(STATUS "RISC-V ABI: ${RISCV_ABI}")
+message(STATUS "RVV backend enabled: ${RVV_PCL_ENABLE_RVV}")
 
 # 1. The Library (rvvpcl)
 list(APPEND SOURCES 
+    "src/point_cloud.cpp"
     "src/voxel_grid_downsamp.cpp"
     "src/rvv_common.cpp"
     "src/statistical_outlier_removal.cpp"
     "src/normal_estimation.cpp"
-    "src/radius_search.cpp"
     "src/ransac_plane.cpp"
     "src/octree.cpp"
     "src/spatial_hashing.cpp"
@@ -35,7 +42,10 @@ list(APPEND SOURCES
 # Note: placeholder.c removed, real source used.
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC src/include)
-target_compile_options(rvvpcl PUBLIC "-march=rv64gcv" "-mabi=lp64d")
+target_compile_options(rvvpcl PUBLIC "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
+if(RVV_PCL_ENABLE_RVV)
+    target_compile_definitions(rvvpcl PUBLIC RVV_PCL_USE_RVV=1)
+endif()
 
 
 # 2. Test Executables
@@ -43,14 +53,15 @@ target_compile_options(rvvpcl PUBLIC "-march=rv64gcv" "-mabi=lp64d")
 add_executable(test_scalar tests/test_scalar.c)
 target_link_libraries(test_scalar PRIVATE rvvpcl)
 
-# Vector Test
-add_executable(test_vector tests/test_vector.c)
-target_link_libraries(test_vector PRIVATE rvvpcl)
+# Vector-specific tests
+if(RVV_PCL_ENABLE_RVV)
+    add_executable(test_vector tests/test_vector.c)
+    target_link_libraries(test_vector PRIVATE rvvpcl)
 
-# Rvv Test (Main test file)
-if(EXISTS "${CMAKE_SOURCE_DIR}/tests/rvv_test.c")
-    add_executable(rvv_test tests/rvv_test.c)
-    target_link_libraries(rvv_test PRIVATE rvvpcl)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/rvv_test.c")
+        add_executable(rvv_test tests/rvv_test.c)
+        target_link_libraries(rvv_test PRIVATE rvvpcl)
+    endif()
 endif()
 
 # Voxel Grid Test
@@ -88,3 +99,7 @@ target_link_libraries(test_ransac PRIVATE rvvpcl)
 # Benchmark Suite
 add_executable(benchmark tests/benchmark.cpp)
 target_link_libraries(benchmark PRIVATE rvvpcl)
+
+# Pipeline Export Utility
+add_executable(pipeline_export tools/pipeline_export.cpp)
+target_link_libraries(pipeline_export PRIVATE rvvpcl)
