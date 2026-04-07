@@ -1,126 +1,93 @@
-#include "../src/include/rvv_pcl.h"
+#include "../src/include/benchmark_kernels.h"
 
-#include <chrono>
-#include <cstdlib>
-#include <fstream>
-#include <iomanip>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <ctime>
-#include <vector>
-
-using namespace rvv_pcl;
 
 namespace {
 
-struct Timer {
-  std::chrono::high_resolution_clock::time_point start;
+volatile std::uint64_t benchmark_sink = 0;
 
-  void reset() { start = std::chrono::high_resolution_clock::now(); }
-
-  double elapsedMs() const {
-    const auto end = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration<double, std::milli>(end - start).count();
+bool parseSize(const std::string &token, std::size_t &size) {
+  try {
+    std::size_t consumed = 0;
+    const unsigned long long parsed = std::stoull(token, &consumed, 10);
+    if (consumed == token.size()) {
+      size = static_cast<std::size_t>(parsed);
+      return true;
+    }
+    if (consumed + 1 == token.size() && (token.back() == 'k' || token.back() == 'K')) {
+      size = static_cast<std::size_t>(parsed) * 1000u;
+      return true;
+    }
+  } catch (const std::exception &) {
+    return false;
   }
-};
+  return false;
+}
 
-PointCloudSoA generateCloud(std::size_t n) {
-  PointCloudSoA cloud;
-  cloud.reserve(n);
-  std::srand(42);
-  for (std::size_t i = 0; i < n; ++i) {
-    cloud.push_back({static_cast<float>(std::rand() % 1000) / 10.0f,
-                     static_cast<float>(std::rand() % 1000) / 10.0f,
-                     static_cast<float>(std::rand() % 1000) / 10.0f});
-  }
-  return cloud;
+void printUsage() {
+  std::cerr << "Usage: benchmark <mode> <kernel> <size>\n"
+            << "  mode   : scalar|rvv\n"
+            << "  kernel : l2|reduction|filter|radius|normal\n"
+            << "  size   : integer or k-suffixed value such as 1k, 10k, 100k\n";
 }
 
 } // namespace
 
-int main() {
-  constexpr std::size_t N = 1024;
-  PointCloudSoA cloud = generateCloud(N);
-  std::system("mkdir -p results");
-  std::stringstream filename;
-  filename << "results/benchmark_report_" << std::time(nullptr) << ".txt";
-  std::ofstream out(filename.str());
-  if (!out.is_open()) {
-    std::cerr << "Failed to open benchmark output file." << std::endl;
+int main(int argc, char **argv) {
+  if (argc != 4) {
+    printUsage();
     return 1;
   }
 
-  struct Result {
-    std::string name;
-    double ms;
-  };
-  std::vector<Result> results;
-  Timer timer;
+  const std::string requested_mode = argv[1];
+  const std::string kernel_token = argv[2];
+  const std::string size_token = argv[3];
 
-  VoxelGridFilter voxel;
-  voxel.setInput(cloud);
-  voxel.setLeafSize(0.5f);
-  PointCloudSoA voxel_output;
-  timer.reset();
-  voxel.filter(voxel_output);
-  results.push_back({"voxel", timer.elapsedMs()});
-
-  OctreeNeighborSearch octree;
-  octree.setInputCloud(cloud);
-  octree.setSearchRadius(2.0f);
-  timer.reset();
-  octree.buildTree();
-  results.push_back({"octree_build", timer.elapsedMs()});
-
-  SORFilter sor;
-  sor.setInput(cloud);
-  sor.setNeighborSearch(&octree);
-  sor.setMeanK(10);
-  PointCloudSoA sor_output;
-  timer.reset();
-  sor.filter(sor_output);
-  results.push_back({"sor", timer.elapsedMs()});
-
-  NormalEstimation normals;
-  normals.setInputCloud(cloud);
-  normals.setNeighborSearch(&octree);
-  normals.setK(10);
-  NormalCloud normal_output;
-  timer.reset();
-  normals.estimate(normal_output);
-  results.push_back({"normal", timer.elapsedMs()});
-
-  std::vector<int> radius_indices;
-  timer.reset();
-  octree.radiusSearch(0, radius_indices, nullptr, 100);
-  results.push_back({"radius", timer.elapsedMs()});
-
-  RANSACFitter fitter;
-  fitter.setInputCloud(cloud);
-  fitter.setDistanceThreshold(0.1f);
-  fitter.setMaxIterations(500);
-  std::array<float, 4> coeffs;
-  std::vector<int> inliers;
-  timer.reset();
-  fitter.fit(coeffs, inliers, 0);
-  results.push_back({"ransac", timer.elapsedMs()});
-
-  out << "Backend: "
-#if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
-      << "RVV"
-#else
-      << "Scalar fallback"
-#endif
-      << "\n";
-  out << "Algorithm | Time(ms)\n";
-  out << "--------------------\n";
-  for (const Result &result : results) {
-    out << std::left << std::setw(10) << result.name << " | " << std::fixed
-        << std::setprecision(4) << result.ms << "\n";
-    std::cout << result.name << ": " << std::fixed << std::setprecision(4) << result.ms
-              << " ms" << std::endl;
+  if (requested_mode != rvv_pcl::bench::modeName()) {
+    std::cerr << "benchmark built for mode '" << rvv_pcl::bench::modeName()
+              << "' but requested '" << requested_mode << "'\n";
+    return 1;
   }
 
+  rvv_pcl::bench::Kernel kernel;
+  if (!rvv_pcl::bench::parseKernel(kernel_token, kernel)) {
+    std::cerr << "unknown kernel: " << kernel_token << "\n";
+    printUsage();
+    return 1;
+  }
+
+  std::size_t size = 0;
+  if (!parseSize(size_token, size) || size == 0) {
+    std::cerr << "invalid size: " << size_token << "\n";
+    printUsage();
+    return 1;
+  }
+
+  const rvv_pcl::PointCloudSoA cloud = rvv_pcl::bench::makeDeterministicCloud(size);
+
+  std::uint64_t checksum = 0;
+  switch (kernel) {
+  case rvv_pcl::bench::Kernel::L2:
+    checksum = rvv_pcl::bench::runL2Distance(cloud);
+    break;
+  case rvv_pcl::bench::Kernel::Reduction:
+    checksum = rvv_pcl::bench::runReduction(cloud);
+    break;
+  case rvv_pcl::bench::Kernel::Filter:
+    checksum = rvv_pcl::bench::runMaskedFilter(cloud);
+    break;
+  case rvv_pcl::bench::Kernel::Radius:
+    checksum = rvv_pcl::bench::runRadiusSearch(cloud);
+    break;
+  case rvv_pcl::bench::Kernel::Normal:
+    checksum = rvv_pcl::bench::runNormalEstimation(cloud);
+    break;
+  }
+
+  benchmark_sink ^= checksum;
   return 0;
 }

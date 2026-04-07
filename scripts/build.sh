@@ -103,6 +103,7 @@ if [ -f "$CACHE_FILE" ]; then
     CXX_COMPILER="$(sed -n 's/^CMAKE_CXX_COMPILER:FILEPATH=//p' "$CACHE_FILE" | head -n 1)"
     CACHE_ARCH="$(sed -n 's/^RISCV_ARCH:STRING=//p' "$CACHE_FILE" | head -n 1)"
     CACHE_RVV="$(sed -n 's/^RVV_PCL_USE_RVV:BOOL=//p' "$CACHE_FILE" | head -n 1)"
+    CACHE_BUILD_TYPE="$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' "$CACHE_FILE" | head -n 1)"
     if [ -n "$CXX_COMPILER" ] && [[ "$CXX_COMPILER" != *riscv64* ]]; then
         echo "Detected stale host compiler in CMake cache ($CXX_COMPILER), reconfiguring..."
         rm -rf "$BUILD_DIR"
@@ -112,6 +113,9 @@ if [ -f "$CACHE_FILE" ]; then
     elif [ -n "$CACHE_RVV" ] && [ "$CACHE_RVV" != "$RVV_CMAKE" ]; then
         echo "Detected stale RVV setting in CMake cache ($CACHE_RVV -> $RVV_CMAKE), reconfiguring..."
         rm -rf "$BUILD_DIR"
+    elif [ -z "$CACHE_BUILD_TYPE" ] || [ "$CACHE_BUILD_TYPE" != "Release" ]; then
+        echo "Detected non-Release build type in CMake cache ($CACHE_BUILD_TYPE), reconfiguring..."
+        rm -rf "$BUILD_DIR"
     fi
 fi
 
@@ -120,6 +124,7 @@ if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
     echo "Configuring CMake (toolchain: $TOOLCHAIN, backend: $BACKEND)..."
     cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" \
         -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
+        -DCMAKE_BUILD_TYPE=Release \
         -DRISCV_ARCH="$RISCV_ARCH" \
         -DRISCV_ABI="lp64d" \
         -DRVV_PCL_USE_RVV="$RVV_CMAKE"

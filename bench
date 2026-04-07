@@ -1,0 +1,51 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ ! -f /.dockerenv ] && [ -z "${IN_RVPOINT_CONTAINER:-}" ]; then
+  IMAGE="${RVPOINT_IMAGE:-rvpoint}"
+  if ! docker image inspect "$IMAGE" &> /dev/null; then
+    echo "Docker image '$IMAGE' not found. Building from .devcontainer/Dockerfile..." >&2
+    docker build -f "$SCRIPT_DIR/.devcontainer/Dockerfile" -t "$IMAGE" "$SCRIPT_DIR"
+  fi
+  exec docker run --rm -e TERM="$TERM" -e IN_RVPOINT_CONTAINER=1 \
+    -e GEM5_BIN -e GEM5_CONFIG \
+    -v "$SCRIPT_DIR:/workspace" -w /workspace \
+    "$IMAGE" bash ./bench "$@"
+fi
+
+if [[ $# -ne 3 ]]; then
+  echo "Usage: ./bench <mode> <kernel> <size>" >&2
+  echo "  mode   : scalar|rvv" >&2
+  echo "  kernel : l2|reduction|filter|radius|normal" >&2
+  echo "  size   : 1k|10k|100k or a raw point count" >&2
+  exit 1
+fi
+
+MODE="$1"
+KERNEL="$2"
+SIZE="$3"
+
+case "$MODE" in
+  scalar|rvv)
+    ;;
+  *)
+    echo "Invalid mode: $MODE" >&2
+    exit 1
+    ;;
+esac
+
+case "$KERNEL" in
+  l2|reduction|filter|radius|normal)
+    ;;
+  *)
+    echo "Invalid kernel: $KERNEL" >&2
+    exit 1
+    ;;
+esac
+
+echo "Building benchmark for $MODE..." >&2
+"$SCRIPT_DIR/scripts/build.sh" --toolchain linux --backend "$MODE" --target benchmark >&2
+
+"$SCRIPT_DIR/scripts/run_gem5_benchmark.sh" "$MODE" "$KERNEL" "$SIZE"

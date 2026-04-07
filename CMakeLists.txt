@@ -42,7 +42,7 @@ list(APPEND SOURCES
 # Note: placeholder.c removed, real source used.
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC src/include)
-target_compile_options(rvvpcl PUBLIC "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
+target_compile_options(rvvpcl PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
 if(RVV_PCL_ENABLE_RVV)
     target_compile_definitions(rvvpcl PUBLIC RVV_PCL_USE_RVV=1)
 endif()
@@ -98,7 +98,9 @@ target_link_libraries(test_ransac PRIVATE rvvpcl)
 
 # Benchmark Suite
 add_executable(benchmark tests/benchmark.cpp)
+target_compile_options(benchmark PRIVATE "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
 target_link_libraries(benchmark PRIVATE rvvpcl)
+target_sources(benchmark PRIVATE "${CMAKE_SOURCE_DIR}/src/benchmark_kernels.cpp")
 
 # Pipeline Export Utility
 add_executable(pipeline_export tools/pipeline_export.cpp)

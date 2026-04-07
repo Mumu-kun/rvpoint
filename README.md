@@ -136,22 +136,30 @@ This repository is protected by a robust CI/CD pipeline:
 
 ## 📊 Benchmarking
 
-We support instruction-level benchmarking using QEMU's tracing feature. This allows for accurate "architectural instruction count" comparison between Scalar and RVV implementations, independent of emulation speed.
+We now provide a gem5-based cycle benchmark for scalar-versus-RVV comparison. The benchmark keeps the implementation mode fixed at build time, runs one kernel per invocation, and reports cycle counts from gem5 stats.
 
 ### Running the Benchmark
-To generate the instruction count report:
+Run one benchmark case with:
 ```bash
-scripts/run_trace_benchmark.sh
+./bench <mode> <kernel> <size>
 ```
-This will:
-1.  Build the benchmark executable.
-2.  Run each algorithm in initialization-only (`setup`), Scalar (`sc`), and RVV (`rvv`) modes.
-3.  Use QEMU trace logs to count executed Translation Blocks (TBs).
-4.  Subtract baseline overhead to report accurate kernel instruction counts.
-5.  Output results to `results/report_sc_rvv_qemu.txt`.
+Where:
+- `mode` is `scalar` or `rvv`
+- `kernel` is `l2`, `reduction`, `filter`, `radius`, or `normal`
+- `size` is one of `1k`, `10k`, `100k`, or a raw point count
 
-### Expected Results
-You should see significant instruction reduction for compute-bound kernels (e.g., Normal Estimation ~5x reduction).
+The wrapper rebuilds the correct backend, runs the benchmark under gem5, parses the cycle stat, and prints:
+
+```text
+<mode> <kernel> <size> <cycles>
+```
+
+### Notes
+- The benchmark uses SoA layouts only: `x[]`, `y[]`, `z[]`.
+- Scalar builds use `-O3` with `rv64gc`.
+- RVV builds use `-O3 -march=rv64gcv` and vector-length-agnostic loops.
+- The gem5 launcher expects `GEM5_CONFIG` to point at your SE config script.
+- The older QEMU trace benchmark remains available as a legacy workflow in `scripts/run_trace_benchmark.sh`.
 
 ### Verify without CMake (Manual Compilation)
 You can manually compile and verify each function against its scalar counterpart using the provided script or manual commands.

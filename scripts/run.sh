@@ -45,7 +45,7 @@ Usage: run.sh [options] <mode> [targets...]
 
 Modes:
   test   [names...]    Run tests. No names = all tests.
-  bench                Run rdinstret-based benchmark (all algorithms).
+    bench                Run legacy rdinstret benchmark (all algorithms).
 
 Options:
   --toolchain <elf|linux>   Toolchain for build (default: linux)
@@ -55,7 +55,7 @@ Options:
 Examples:
   ./run.sh test                        # all tests
   ./run.sh test voxel_grid sor         # only voxel_grid and sor
-  ./run.sh bench                       # full benchmark (all algos, rdinstret)
+    ./run.sh bench                       # legacy benchmark (use ./bench for gem5)
   ./run.sh --toolchain linux test      # build with linux toolchain, run tests
 EOF
     exit 0
@@ -67,7 +67,7 @@ list_targets() {
         echo "  $t"
     done
     echo ""
-    echo "Benchmark: runs all algorithms (voxel, voxel_v2, sor, normal, radius, ransac)"
+    echo "Benchmark: legacy rdinstret runner; use ./bench <mode> <kernel> <size> for gem5"
     exit 0
 }
 

@@ -2,7 +2,9 @@
 #include "../src/include/simple_pcd_loader.h"
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -13,9 +15,15 @@ namespace {
 
 constexpr int kStageCount = 8;
 
+struct StageTiming {
+  int index;
+  const char *label;
+  double ms;
+};
+
 struct PipelineConfig {
   // Voxel grid downsampling
-  float voxel_leaf_size = 0.1f; // Smaller leaf size keeps more points.
+  float voxel_leaf_size = 0.01f; // Smaller leaf size keeps more points.
 
   // Neighbor search
   float search_radius = 0.03f; // Larger radius finds more neighbors.
@@ -92,22 +100,46 @@ void beginStage(int index, const char *label, bool enabled) {
             << std::endl;
 }
 
-void endStage(int index, const char *label,
-              const std::chrono::high_resolution_clock::time_point &start, bool enabled) {
-  if (!enabled) {
-    return;
-  }
-
+double endStage(int index, const char *label,
+                const std::chrono::high_resolution_clock::time_point &start, bool enabled) {
   const auto end = std::chrono::high_resolution_clock::now();
   const double ms = std::chrono::duration<double, std::milli>(end - start).count();
-  std::cout << "[progress] [" << index << "/" << kStageCount << "] " << label
-            << " complete in " << ms << " ms" << std::endl;
+  if (enabled) {
+    std::cout << "[progress] [" << index << "/" << kStageCount << "] " << label
+              << " complete in " << ms << " ms" << std::endl;
+  }
+  return ms;
+}
+
+void printFinalBreakdown(const std::vector<StageTiming> &stages, double total_ms) {
+  std::cout << "[progress] Final timing breakdown:" << std::endl;
+  double stages_sum_ms = 0.0;
+  for (const StageTiming &stage : stages) {
+    stages_sum_ms += stage.ms;
+    const double pct = total_ms > 0.0 ? (stage.ms * 100.0 / total_ms) : 0.0;
+    std::cout << "[progress] [" << stage.index << "/" << kStageCount << "] " << stage.label
+              << ": " << std::fixed << std::setprecision(3) << stage.ms << " ms ("
+              << std::setprecision(2) << pct << "%)" << std::endl;
+  }
+
+  const double overhead_ms = total_ms - stages_sum_ms;
+  if (std::abs(overhead_ms) > 0.01) {
+    const double overhead_pct = total_ms > 0.0 ? (overhead_ms * 100.0 / total_ms) : 0.0;
+    std::cout << "[progress] [--] Outside timed stages: " << std::fixed
+              << std::setprecision(3) << overhead_ms << " ms (" << std::setprecision(2)
+              << overhead_pct << "%)" << std::endl;
+  }
+
+  std::cout << "[progress] [--] Total: " << std::fixed << std::setprecision(3) << total_ms
+            << " ms (100.00%)" << std::endl;
 }
 
 } // namespace
 
 int main(int argc, char **argv) {
   bool progress_enabled = false;
+  std::vector<StageTiming> stage_timings;
+  stage_timings.reserve(kStageCount);
   std::vector<std::string> positional_args;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
@@ -148,14 +180,16 @@ int main(int argc, char **argv) {
     std::cerr << "Failed to load input cloud: " << positional_args[0] << std::endl;
     return 1;
   }
-  endStage(1, "Load input cloud", stage_start, progress_enabled);
+  stage_timings.push_back(
+      {1, "Load input cloud", endStage(1, "Load input cloud", stage_start, progress_enabled)});
 
   PointCloudSoA input_cloud;
   beginStage(2, "Write input stage", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   input_cloud.assign(loaded_points);
   saveStage(output_dir / "00_input.pcd", input_cloud, "Input");
-  endStage(2, "Write input stage", stage_start, progress_enabled);
+  stage_timings.push_back(
+      {2, "Write input stage", endStage(2, "Write input stage", stage_start, progress_enabled)});
 
   VoxelGridFilter voxel;
   voxel.setInput(input_cloud);
@@ -165,7 +199,8 @@ int main(int argc, char **argv) {
   stage_start = std::chrono::high_resolution_clock::now();
   voxel.filter(downsampled_cloud);
   saveStage(output_dir / "01_downsampled.pcd", downsampled_cloud, "Downsampled");
-  endStage(3, "Downsampling", stage_start, progress_enabled);
+  stage_timings.push_back(
+      {3, "Downsampling", endStage(3, "Downsampling", stage_start, progress_enabled)});
 
   OctreeNeighborSearch search;
   search.setInputCloud(downsampled_cloud);
@@ -173,7 +208,9 @@ int main(int argc, char **argv) {
   beginStage(4, "Build search index for downsampled cloud", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   search.buildTree();
-  endStage(4, "Build search index for downsampled cloud", stage_start, progress_enabled);
+  stage_timings.push_back({4, "Build search index for downsampled cloud",
+                           endStage(4, "Build search index for downsampled cloud", stage_start,
+                                    progress_enabled)});
 
   SORFilter sor;
   sor.setInput(downsampled_cloud);
@@ -185,13 +222,17 @@ int main(int argc, char **argv) {
   stage_start = std::chrono::high_resolution_clock::now();
   sor.filter(sor_cloud);
   saveStage(output_dir / "02_sor_filtered.pcd", sor_cloud, "SOR");
-  endStage(5, "Statistical outlier removal", stage_start, progress_enabled);
+  stage_timings.push_back({5, "Statistical outlier removal",
+                           endStage(5, "Statistical outlier removal", stage_start,
+                                    progress_enabled)});
 
   search.setInputCloud(sor_cloud);
   beginStage(6, "Rebuild search index for filtered cloud", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   search.buildTree();
-  endStage(6, "Rebuild search index for filtered cloud", stage_start, progress_enabled);
+  stage_timings.push_back({6, "Rebuild search index for filtered cloud",
+                           endStage(6, "Rebuild search index for filtered cloud", stage_start,
+                                    progress_enabled)});
 
   NormalEstimation normals;
   normals.setInputCloud(sor_cloud);
@@ -201,7 +242,8 @@ int main(int argc, char **argv) {
   beginStage(7, "Normal estimation", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   normals.estimate(normal_cloud);
-  endStage(7, "Normal estimation", stage_start, progress_enabled);
+  stage_timings.push_back(
+      {7, "Normal estimation", endStage(7, "Normal estimation", stage_start, progress_enabled)});
 
   RANSACFitter fitter;
   fitter.setInputCloud(sor_cloud);
@@ -224,7 +266,9 @@ int main(int argc, char **argv) {
   PointCloudSoA plane_removed_cloud = complementCloud(sor_cloud, inliers);
   saveStage(output_dir / "05_ground_plane_removed.pcd", plane_removed_cloud,
             "Dominant plane removed");
-  endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled);
+  stage_timings.push_back({8, "RANSAC primitive fitting",
+                           endStage(8, "RANSAC primitive fitting", stage_start,
+                                    progress_enabled)});
 
   std::cout << "Final plane coefficients: [" << coefficients[0] << ", " << coefficients[1]
             << ", " << coefficients[2] << ", " << coefficients[3] << "]" << std::endl;
@@ -232,6 +276,7 @@ int main(int argc, char **argv) {
     const auto overall_end = std::chrono::high_resolution_clock::now();
     const double total_ms =
         std::chrono::duration<double, std::milli>(overall_end - overall_start).count();
+    printFinalBreakdown(stage_timings, total_ms);
     std::cout << "[progress] Pipeline complete in " << total_ms << " ms" << std::endl;
   }
   return 0;
