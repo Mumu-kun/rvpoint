@@ -1,5 +1,26 @@
 var searchData=
 [
-  ['y_0',['y',['../structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb',1,'rvv_pcl::PointXYZ::y'],['../structrvv__pcl_1_1PointCloudSoA.html#a2c71e51b506ad673d2cd43578507b0f0',1,'rvv_pcl::PointCloudSoA::y']]],
-  ['you_20run_20the_20command_1',['Complete Example: What Happens When You Run the Command',['../instruction_manual.html#complete-example-what-happens-when-you-run-the-command',1,'']]]
+  ['walkthrough_20with_20real_20data_0',['Task 5: Pipeline Walkthrough with Real Data',['../md_guides_2AGENT.html#task-5-pipeline-walkthrough-with-real-data',1,'']]],
+  ['wall_20clock_20time_1',['Why Not Wall-Clock Time?',['../md_guides_2AGENT.html#why-not-wall-clock-time',1,'']]],
+  ['what_20happens_20when_20you_20run_20the_20command_2',['Complete Example: What Happens When You Run the Command',['../instruction_manual.html#complete-example-what-happens-when-you-run-the-command',1,'']]],
+  ['what_20it_20does_3',['What it does',['../md_guides_2AGENT.html#what-it-does',1,'']]],
+  ['what_20qemu_20does_20internally_20complete_20flow_4',['What QEMU Does Internally (Complete Flow)',['../instruction_manual.html#what-qemu-does-internally-complete-flow',1,'']]],
+  ['what_20s_20done_20as_20of_202026_2004_2007_5',['What&apos;s Done (as of 2026-04-07)',['../md_guides_2AGENT.html#whats-done-as-of-2026-04-07',1,'']]],
+  ['what_20s_20next_20priority_20order_6',['What&apos;s Next (priority order)',['../md_guides_2AGENT.html#whats-next-priority-order',1,'']]],
+  ['what_20the_20benchmarks_20measure_7',['What the Benchmarks Measure',['../md_guides_2AGENT.html#what-the-benchmarks-measure',1,'']]],
+  ['when_20dockerfile_20changes_8',['Building Docker Image (only when Dockerfile changes)',['../md_guides_2AGENT.html#building-docker-image-only-when-dockerfile-changes',1,'']]],
+  ['when_20starting_20work_9',['First Steps When Starting Work',['../md_guides_2AGENT.html#first-steps-when-starting-work',1,'']]],
+  ['when_20you_20run_20the_20command_10',['Complete Example: What Happens When You Run the Command',['../instruction_manual.html#complete-example-what-happens-when-you-run-the-command',1,'']]],
+  ['why_20not_20wall_20clock_20time_11',['Why Not Wall-Clock Time?',['../md_guides_2AGENT.html#why-not-wall-clock-time',1,'']]],
+  ['why_20this_20board_12',['Why this board?',['../instruction_manual.html#why-this-board',1,'']]],
+  ['why_20this_20is_20better_13',['Why this is better',['../vector_theory.html#why-this-is-better',1,'']]],
+  ['why_20this_20proves_20rvv_20efficiency_14',['Why This Proves RVV Efficiency',['../md_tests_2INSTRUCTION__COUNTING.html#why-this-proves-rvv-efficiency',1,'']]],
+  ['with_20high_20parallelism_15',['gem5 linker OOM-killed with high parallelism',['../md_guides_2session__2026-04-07.html#gem5-linker-oom-killed-with-high-parallelism',1,'']]],
+  ['with_20moderate_20parallelism_16',['gem5 &lt;tt&gt;inst-constrs.cc&lt;/tt&gt; compilation OOM-killed even with moderate parallelism',['../md_guides_2session__2026-04-07.html#gem5-inst-constrscc-compilation-oom-killed-even-with-moderate-parallelism',1,'']]],
+  ['with_20real_20data_17',['Task 5: Pipeline Walkthrough with Real Data',['../md_guides_2AGENT.html#task-5-pipeline-walkthrough-with-real-data',1,'']]],
+  ['with_20system_20libraries_20strong_18',['&lt;strong&gt;B. Running with System Libraries&lt;/strong&gt;',['../instruction_manual.html#b-running-with-system-libraries',1,'']]],
+  ['work_19',['First Steps When Starting Work',['../md_guides_2AGENT.html#first-steps-when-starting-work',1,'']]],
+  ['work_20done_20this_20session_20',['Work Done This Session',['../md_guides_2session__2026-04-07.html#work-done-this-session',1,'']]],
+  ['workflow_21',['1. Standardized Development Workflow',['../instruction_manual.html#autotoc_md1-standardized-development-workflow',1,'']]],
+  ['workload_22',['workload',['../namespacegem5__se.html#a7c6d2f91df06e83537fbd783bf3920f2',1,'gem5_se']]]
 ];

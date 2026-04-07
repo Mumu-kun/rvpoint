@@ -6,5 +6,6 @@ var searchData=
   ['ransac_5fplane_5frvv_3',['ransac_plane_rvv',['../namespacervv__pcl.html#aa2192abcea5e3f0fe02a0c20b6c7a1d6',1,'rvv_pcl']]],
   ['ransac_5fplane_5fsc_4',['ransac_plane_sc',['../namespacervv__pcl.html#a876b57104ffd09196f3547cd415bf2ff',1,'rvv_pcl']]],
   ['recursivesearch_5',['recursiveSearch',['../classrvv__pcl_1_1Octree.html#a1129dfe61f40e154f0ed2cc72982d48c',1,'rvv_pcl::Octree']]],
-  ['reset_6',['reset',['../structTimer.html#a9020542d73357a4eef512eefaf57524b',1,'Timer']]]
+  ['reset_6',['reset',['../structTimer.html#a9020542d73357a4eef512eefaf57524b',1,'Timer::reset()'],['../structTimer.html#a9020542d73357a4eef512eefaf57524b',1,'Timer::reset()']]],
+  ['run_5fpipeline_7',['run_pipeline',['../benchmark__pipeline_8cpp.html#af2d70e1a3201cc69e1ca86f9a63c1955',1,'benchmark_pipeline.cpp']]]
 ];

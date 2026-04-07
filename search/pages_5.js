@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['optimized_20point_20cloud_20library_0',['RVPoint: RISC-V Vector Optimized Point Cloud Library',['../index.html',1,'']]]
+  ['guide_3a_20rvpoint_0',['AI Agent Guide: RVPoint',['../md_guides_2AGENT.html',1,'']]]
 ];

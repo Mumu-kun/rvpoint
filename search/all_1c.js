@@ -1,13 +1,8 @@
 var searchData=
 [
-  ['what_20happens_20when_20you_20run_20the_20command_0',['Complete Example: What Happens When You Run the Command',['../instruction_manual.html#complete-example-what-happens-when-you-run-the-command',1,'']]],
-  ['what_20qemu_20does_20internally_20complete_20flow_1',['What QEMU Does Internally (Complete Flow)',['../instruction_manual.html#what-qemu-does-internally-complete-flow',1,'']]],
-  ['when_20you_20run_20the_20command_2',['Complete Example: What Happens When You Run the Command',['../instruction_manual.html#complete-example-what-happens-when-you-run-the-command',1,'']]],
-  ['why_20this_20board_3',['Why this board?',['../instruction_manual.html#why-this-board',1,'']]],
-  ['why_20this_20is_20better_4',['Why this is better',['../vector_theory.html#why-this-is-better',1,'']]],
-  ['why_20this_20proves_20rvv_20efficiency_5',['Why This Proves RVV Efficiency',['../md_tests_2INSTRUCTION__COUNTING.html#why-this-proves-rvv-efficiency',1,'']]],
-  ['with_20docker_20manual_6',['Running with Docker (Manual)',['../index.html#running-with-docker-manual',1,'']]],
-  ['with_20system_20libraries_20strong_7',['&lt;strong&gt;B. Running with System Libraries&lt;/strong&gt;',['../instruction_manual.html#b-running-with-system-libraries',1,'']]],
-  ['without_20cmake_20manual_20compilation_8',['Verify without CMake (Manual Compilation)',['../index.html#verify-without-cmake-manual-compilation',1,'']]],
-  ['workflow_9',['1. Standardized Development Workflow',['../instruction_manual.html#autotoc_md1-standardized-development-workflow',1,'']]]
+  ['ubuntu_2022_2004_0',['&lt;tt&gt;mkswap -q&lt;/tt&gt; flag does not exist on Ubuntu 22.04',['../md_guides_2session__2026-04-07.html#mkswap--q-flag-does-not-exist-on-ubuntu-2204',1,'']]],
+  ['usage_20guide_1',['Team Integration &amp; Usage Guide',['../instruction_manual.html#team-integration--usage-guide',1,'']]],
+  ['use_20v2_2',['Voxel Grid: Always Use v2',['../md_guides_2AGENT.html#voxel-grid-always-use-v2',1,'']]],
+  ['uses_20a_20qemu_20vm_20—_20limits_20container_20ram_20to_205_206_20gb_3',['Docker Desktop for Linux uses a QEMU VM — limits container RAM to ~5.6 GB',['../md_guides_2session__2026-04-07.html#docker-desktop-for-linux-uses-a-qemu-vm--limits-container-ram-to-56-gb',1,'']]],
+  ['utilities_4',['Utilities',['../instruction_manual.html#utilities',1,'']]]
 ];

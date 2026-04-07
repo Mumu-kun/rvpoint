@@ -10,8 +10,8 @@ var searchData=
   ['1_20tt_20vsetvl_20tt_20vector_20set_20vector_20length_7',['1. &lt;tt&gt;vsetvl&lt;/tt&gt; (Vector Set Vector Length)',['../vector_theory.html#autotoc_md1-vsetvl-vector-set-vector-length',1,'']]],
   ['128_20tt_20cpu_20configuration_8',['2️⃣ &lt;tt&gt;-cpu rv64,v=true,vlen=128&lt;/tt&gt; - CPU Configuration',['../instruction_manual.html#autotoc_md2️⃣--cpu-rv64vtruevlen128---cpu-configuration',1,'']]],
   ['14_20strong_9',['&lt;strong&gt;A. Clean Build (Targeting GCC 14)&lt;/strong&gt;',['../instruction_manual.html#a-clean-build-targeting-gcc-14',1,'']]],
-  ['14_20upgrade_20linux_20toolchain_10',['⚡ GCC 14 Upgrade &amp; Linux Toolchain',['../index.html#autotoc_md-gcc-14-upgrade--linux-toolchain',1,'']]],
-  ['1_3a_20illegal_20instruction_11',['Error 1: &quot;Illegal instruction&quot;',['../instruction_manual.html#error-1-illegal-instruction',1,'']]],
-  ['1_3a_20initialization_20strong_12',['&lt;strong&gt;Phase 1: Initialization&lt;/strong&gt;',['../instruction_manual.html#phase-1-initialization',1,'']]],
-  ['1_3a_20preprocessing_13',['Stage 1: Preprocessing',['../instruction_manual.html#stage-1-preprocessing',1,'']]]
+  ['1_3a_20illegal_20instruction_10',['Error 1: &quot;Illegal instruction&quot;',['../instruction_manual.html#error-1-illegal-instruction',1,'']]],
+  ['1_3a_20initialization_20strong_11',['&lt;strong&gt;Phase 1: Initialization&lt;/strong&gt;',['../instruction_manual.html#phase-1-initialization',1,'']]],
+  ['1_3a_20preprocessing_12',['Stage 1: Preprocessing',['../instruction_manual.html#stage-1-preprocessing',1,'']]],
+  ['1_3a_20running_20the_20full_20test_20suite_13',['Task 1: Running the Full Test Suite',['../md_guides_2AGENT.html#task-1-running-the-full-test-suite',1,'']]]
 ];

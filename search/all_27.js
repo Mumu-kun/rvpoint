@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['🚀_20key_20features_0',['🚀 Key Features',['../index.html#autotoc_md-key-features',1,'']]]
+  ['🗺️_20project_20navigation_0',['🗺️ project navigation',['../instruction_manual.html#️-project-navigation',1,'🗺️ Project Navigation'],['../vector_theory.html#️-project-navigation-1',1,'🗺️ Project Navigation'],['../md_tests_2INSTRUCTION__COUNTING.html#️-project-navigation-2',1,'🗺️ Project Navigation']]]
 ];

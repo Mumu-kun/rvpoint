@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['📄_20license_0',['📄 License',['../index.html#autotoc_md-license',1,'']]]
+  ['⚡_0',['RVV Vector Execution ⚡',['../instruction_manual.html#rvv-vector-execution-',1,'']]]
 ];

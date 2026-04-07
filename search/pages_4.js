@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['methodology_0',['Instruction Counting Methodology',['../md_tests_2INSTRUCTION__COUNTING.html',1,'']]]
+  ['demo_0',['Pipeline Demo */',['../pipeline_demo.html',1,'']]],
+  ['deprecated_20list_1',['Deprecated List',['../deprecated.html',1,'']]]
 ];

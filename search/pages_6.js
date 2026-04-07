@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['pipeline_20demo_0',['Pipeline Demo */',['../pipeline_demo.html',1,'']]],
-  ['point_20cloud_20library_1',['RVPoint: RISC-V Vector Optimized Point Cloud Library',['../index.html',1,'']]]
+  ['instruction_20counting_20methodology_0',['Instruction Counting Methodology',['../md_tests_2INSTRUCTION__COUNTING.html',1,'']]],
+  ['instruction_5fmanual_1',['INSTRUCTION_MANUAL',['../instruction_manual.html',1,'']]]
 ];

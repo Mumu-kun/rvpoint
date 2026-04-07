@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['theory_0',['Vector Theory */',['../vector_theory.html',1,'']]]
+  ['methodology_0',['Instruction Counting Methodology',['../md_tests_2INSTRUCTION__COUNTING.html',1,'']]]
 ];
