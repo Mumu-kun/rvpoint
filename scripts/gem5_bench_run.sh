@@ -191,11 +191,12 @@ extract_insts() {
 
 # ── Run one gem5 simulation ───────────────────────────────────────────────────
 run_gem5_once() {
-    local bin="$1" algo_arg="$2" n="$3" outdir="$4" pcd="${5:-}"
+    local bin="$1" algo_arg="$2" n="$3" outdir="$4" pcd="${5:-}" save_dir="${6:-}"
     mkdir -p "$outdir"
 
     local options="${algo_arg} ${n}"
-    [ -n "$pcd" ] && options="${algo_arg} ${n} ${pcd}"
+    [ -n "$pcd" ]      && options="${options} ${pcd}"
+    [ -n "$save_dir" ] && options="${options} --save-dir ${save_dir}"
 
     "$GEM5_BIN" \
         --outdir="$outdir" \
@@ -223,6 +224,18 @@ append_csv_row() {
           cycles="$6" ns="$7" insts="$8"
     echo "$(date -Iseconds),${algo},${mode},${dataset},${n},${CPU_MODEL},${cycles},${ns},${insts}" \
         >> "$csv"
+}
+
+# Parse GEM5_STAGE lines from gem5_stdout.txt → stage_stats.csv
+# Format:  GEM5_STAGE <algo> <mode> <stage> <n_in> <n_out> <sim_insts>
+write_stage_csv() {
+    local stdout_file="$1" stage_csv="$2"
+    echo "timestamp,algo,mode,stage,n_in,n_out,sim_insts" > "$stage_csv"
+    local ts
+    ts=$(date -Iseconds)
+    grep "^GEM5_STAGE " "$stdout_file" 2>/dev/null | while read -r _ algo mode stage n_in n_out insts; do
+        echo "${ts},${algo},${mode},${stage},${n_in},${n_out},${insts}" >> "$stage_csv"
+    done
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -269,9 +282,20 @@ for mode in "${MODES[@]}"; do
     fi
 
     outdir="${RUN_DIR}/${algo_arg}"
+
+    # For real PCD pipeline runs: pre-create stage dirs and pass --save-dir
+    save_dir_arg=""
+    if [ -n "$PCD_FILE" ]; then
+        mkdir -p "${outdir}/01_voxel_${mode}"
+        mkdir -p "${outdir}/02_ransac_extract_${mode}"
+        mkdir -p "${outdir}/03_sor_${mode}"
+        mkdir -p "${outdir}/04_normals_${mode}"
+        save_dir_arg="$outdir"
+    fi
+
     info "Running ${algo_arg}  (N=${N_PTS}, cpu=${CPU_MODEL})..."
 
-    run_gem5_once "$bin" "$algo_arg" "$N_PTS" "$outdir" "$pcd_arg"
+    run_gem5_once "$bin" "$algo_arg" "$N_PTS" "$outdir" "$pcd_arg" "$save_dir_arg"
 
     cycles=$(extract_cycles "$outdir")
     ns=$(extract_ns "$outdir")
@@ -284,6 +308,24 @@ for mode in "${MODES[@]}"; do
     [ "$mode" = "rvv" ] && RVV_CYCLES="$cycles"
 
     success "${algo_arg}: ${cycles} cycles  |  ${ns} ns  |  ${insts} sim_insts"
+
+    # Parse per-stage instruction counts (real PCD runs only)
+    if [ -n "$PCD_FILE" ]; then
+        stage_csv="${outdir}/stage_stats.csv"
+        write_stage_csv "${outdir}/gem5_stdout.txt" "$stage_csv"
+        n_stages=$(grep -c "^GEM5_STAGE" "${outdir}/gem5_stdout.txt" 2>/dev/null || echo 0)
+        if [ "$n_stages" -gt 0 ]; then
+            info "  Per-stage stats (${n_stages} stages): ${stage_csv}"
+            grep "^GEM5_STAGE" "${outdir}/gem5_stdout.txt" \
+                | awk '{printf "    %-14s n_in=%-6s n_out=%-6s insts=%s\n", $4, $5, $6, $7}'
+        fi
+        # List saved PCD files
+        pcds=$(find "$outdir" -name "output.pcd" 2>/dev/null | sort)
+        if [ -n "$pcds" ]; then
+            info "  Stage PCD files:"
+            echo "$pcds" | sed 's/^/    /'
+        fi
+    fi
 done
 
 # Compute speedup if both modes ran

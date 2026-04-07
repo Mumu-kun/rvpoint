@@ -199,28 +199,81 @@ struct PipelineParams {
 static constexpr PipelineParams P_LIDAR  = {0.05f,  0.05f,  0.10f,  10, 200};
 static constexpr PipelineParams P_BUNNY  = {0.005f, 0.003f, 0.015f, 10, 200};
 
-static void run_pipeline_pcd_sc(CloudData& c, const PipelineParams& p) {
+// ─── Stage helpers ────────────────────────────────────────────────────────────
+
+// Read retired instruction counter (CSR 0xC02).
+// gem5 SE mode maps rdinstret to its sim_insts counter.
+static inline uint64_t read_instret() {
+    uint64_t v = 0;
+    __asm__ volatile("rdinstret %0" : "=r"(v));
+    return v;
+}
+
+// Save stage PCD.  Directories are pre-created by the shell script before
+// gem5 starts, so no mkdir() syscall is needed — just open() + write().
+static void save_stage(const std::string& save_dir, const char* stage_name,
+                       const PointXYZ* pts, size_t n) {
+    if (save_dir.empty() || n == 0) return;
+    std::string path = save_dir + "/" + stage_name + "/output.pcd";
+    savePCD(path, std::vector<PointXYZ>(pts, pts + n));
+}
+
+// Print a machine-readable stage stats line to stdout.
+// Parsed by gem5_bench_run.sh into stage_stats.csv.
+//   GEM5_STAGE <algo> <mode> <stage> <n_in> <n_out> <delta_instret>
+static void print_stage(const char* algo, const char* mode, const char* stage,
+                        size_t n_in, size_t n_out, uint64_t delta) {
+    std::cout << "GEM5_STAGE " << algo << " " << mode << " " << stage
+              << " " << n_in << " " << n_out << " " << delta << "\n";
+    std::cout.flush();
+}
+
+static void run_pipeline_pcd_sc(CloudData& c, const PipelineParams& p,
+                                 const std::string& save_dir = "") {
     size_t N = c.x.size();
     std::vector<PointXYZ> vox(N), obj(N), sor_buf(N);
     std::vector<float> nx(N), ny(N), nz(N);
     float model[4];
+    uint64_t t0, t1;
 
+    t0 = read_instret();
     size_t n_vox = voxel_grid_downsamp_sc(c.aos.data(), N, vox.data(), p.leaf);
-    ransac_plane_sc(vox.data(), n_vox, p.ransac_thresh, p.ransac_iters, model);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "sc", "VoxelGrid", N, n_vox, t1 - t0);
+    save_stage(save_dir, "01_voxel_sc", vox.data(), n_vox);
 
+    t0 = read_instret();
+    ransac_plane_sc(vox.data(), n_vox, p.ransac_thresh, p.ransac_iters, model);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "sc", "RANSAC", n_vox, n_vox, t1 - t0);
+
+    t0 = read_instret();
     size_t n_obj = 0;
     for (size_t j = 0; j < n_vox; ++j) {
         float d = model[0]*vox[j].x + model[1]*vox[j].y
                 + model[2]*vox[j].z + model[3];
         if (d < -p.ransac_thresh || d > p.ransac_thresh) obj[n_obj++] = vox[j];
     }
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "sc", "ExtractPlane", n_vox, n_obj, t1 - t0);
+    save_stage(save_dir, "02_ransac_extract_sc", obj.data(), n_obj);
 
+    t0 = read_instret();
     size_t n_sor = sor_sc(obj.data(), n_obj, sor_buf.data(), p.k, 1.f);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "sc", "SOR", n_obj, n_sor, t1 - t0);
+    save_stage(save_dir, "03_sor_sc", sor_buf.data(), n_sor);
+
+    t0 = read_instret();
     normal_estimation_sc(sor_buf.data(), n_sor,
                          nx.data(), ny.data(), nz.data(), p.k, p.norm_r);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "sc", "NormalEst", n_sor, n_sor, t1 - t0);
+    save_stage(save_dir, "04_normals_sc", sor_buf.data(), n_sor);
 }
 
-static void run_pipeline_pcd_rvv(CloudData& c, const PipelineParams& p) {
+static void run_pipeline_pcd_rvv(CloudData& c, const PipelineParams& p,
+                                  const std::string& save_dir = "") {
     size_t N = c.x.size();
     std::vector<PointXYZ> vox(N), obj(N), sor_buf(N);
     std::vector<float> vx(N), vy(N), vz(N);
@@ -228,29 +281,51 @@ static void run_pipeline_pcd_rvv(CloudData& c, const PipelineParams& p) {
     std::vector<float> sx(N), sy(N), sz(N);
     std::vector<float> nx(N), ny(N), nz(N);
     float model[4];
+    uint64_t t0, t1;
 
+    t0 = read_instret();
     size_t n_vox = voxel_grid_downsamp_rvv_v2(c.soa, vox.data(), p.leaf);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "rvv", "VoxelGrid", N, n_vox, t1 - t0);
+    save_stage(save_dir, "01_voxel_rvv", vox.data(), n_vox);
+
     for (size_t j = 0; j < n_vox; ++j) {
         vx[j]=vox[j].x; vy[j]=vox[j].y; vz[j]=vox[j].z;
     }
     PointCloudSoA vox_soa = {vx.data(), vy.data(), vz.data(), n_vox};
 
+    t0 = read_instret();
     ransac_plane_rvv(vox_soa, p.ransac_thresh, p.ransac_iters, model);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "rvv", "RANSAC", n_vox, n_vox, t1 - t0);
 
+    t0 = read_instret();
     size_t n_obj = extract_plane_outliers_rvv(vox_soa, model, p.ransac_thresh, obj.data());
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "rvv", "ExtractPlane", n_vox, n_obj, t1 - t0);
+    save_stage(save_dir, "02_ransac_extract_rvv", obj.data(), n_obj);
+
     for (size_t j = 0; j < n_obj; ++j) {
         ox[j]=obj[j].x; oy[j]=obj[j].y; oz[j]=obj[j].z;
     }
     PointCloudSoA obj_soa = {ox.data(), oy.data(), oz.data(), n_obj};
 
+    t0 = read_instret();
     size_t n_sor = sor_rvv(obj_soa, sor_buf.data(), p.k, 1.f);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "rvv", "SOR", n_obj, n_sor, t1 - t0);
+    save_stage(save_dir, "03_sor_rvv", sor_buf.data(), n_sor);
+
     for (size_t j = 0; j < n_sor; ++j) {
         sx[j]=sor_buf[j].x; sy[j]=sor_buf[j].y; sz[j]=sor_buf[j].z;
     }
     PointCloudSoA sor_soa = {sx.data(), sy.data(), sz.data(), n_sor};
 
-    // Octree build + normal estimation (both counted — real pipeline cost)
+    t0 = read_instret();
     normal_estimation_rvv(sor_soa, nx.data(), ny.data(), nz.data(), p.k, p.norm_r);
+    t1 = read_instret();
+    print_stage("pipeline_pcd", "rvv", "NormalEst", n_sor, n_sor, t1 - t0);
+    save_stage(save_dir, "04_normals_rvv", sor_buf.data(), n_sor);
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -266,6 +341,15 @@ int main(int argc, char** argv) {
     std::string algo(argv[1]);
     // N=0 means "load full PCD without subsampling" (only valid for pcd algos)
     size_t N = (size_t)std::atoi(argv[2]);
+
+    // Optional: --save-dir <path>  (pre-scan, directories created by shell before gem5)
+    std::string save_dir;
+    for (int i = 1; i < argc - 1; ++i) {
+        if (std::string(argv[i]) == "--save-dir") {
+            save_dir = argv[i + 1];
+            break;
+        }
+    }
 
     if (N > 1000000) {
         std::cerr << "N must be <= 1000000 (use 0 for full PCD, no subsampling)\n";
@@ -289,9 +373,9 @@ int main(int argc, char** argv) {
         bool is_bunny = (algo == "pipeline_pcd_bunny_sc" || algo == "pipeline_pcd_bunny_rvv");
         const PipelineParams& params = is_bunny ? P_BUNNY : P_LIDAR;
         if (algo == "pipeline_pcd_sc" || algo == "pipeline_pcd_bunny_sc")
-            run_pipeline_pcd_sc(cloud, params);
+            run_pipeline_pcd_sc(cloud, params, save_dir);
         else
-            run_pipeline_pcd_rvv(cloud, params);
+            run_pipeline_pcd_rvv(cloud, params, save_dir);
     }
     // ── Synthetic algorithms ──────────────────────────────────────────────────
     else {
