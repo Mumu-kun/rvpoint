@@ -27,7 +27,7 @@ static bool compute_plane_coefficients(float x1, float y1, float z1,
     float a = v1y*v2z - v1z*v2y;
     float b = v1z*v2x - v1x*v2z;
     float c = v1x*v2y - v1y*v2x;
-    
+    //
     // Normalize
     float norm = std::sqrt(a*a + b*b + c*c);
     if (norm < collinear_thresh) return false; // Collinear
