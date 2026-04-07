@@ -3,27 +3,10 @@ build/
 
 # Binaries
 bin/
-*.o
-*.a
-*.so
 
-# Test binaries (root level)
-test_*_linux
-
-# Output results
-results/
-*.pcd
-*.png
 
 # Doxygen generated docs
 html/
 latex/
-docs/doxygen/
-
-# Editors
-.vscode/
-.idea/
-
-# Exceptions (keep data if needed, but usually large files ignored)
-!data/*.pcd
-!doc/*.png
+docs/
+notes.md

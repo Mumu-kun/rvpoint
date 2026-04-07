@@ -1,0 +1,18 @@
+============================================================
+  RVPoint Benchmark (Instruction Counts) - QEMU Trace       
+  *Measured by counting QEMU TB executions (-one-insn-per-tb)*
+============================================================
+Algorithm            | Scalar(ins)  | RVV(ins)     | Ratio
+------------------------------------------------------------
+voxel                | 1044418272   | 1103767808   | 0.95x
+sor                  | 11623726816  | 9670427200   | 1.20x
+normal               | 16746253792  | 1211918976   | 13.82x
+radius               | 3604576      | 5569376      | 0.65x
+ransac               | 1270742016   | 649040704    | 1.96x
+============================================================
+
+## Notes
+- **Methodology**: QEMU `rdinstret` with `-singlestep` enabled.
+- **Normal Estimation**: 13.82x speedup demonstrates the efficiency of the Octree + Vectorized search.
+- **RANSAC / SOR**: Partial speedups (1.2x - 2.0x).
+- **Voxel**: Parity (0.95x). likely dominated by memory access patterns or insufficient work per point for vectorization overhead.

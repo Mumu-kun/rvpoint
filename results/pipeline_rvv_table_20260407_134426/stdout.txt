@@ -1,0 +1,45 @@
+Saving report to: results/benchmark_pipeline_20260407_134426.txt
+
+============================================================
+  RVPoint End-to-End Pipeline Benchmark (rdinstret)
+  Mode: real LiDAR data from PCD file
+  File: /workspace/data/table_scene_lms400.pcd
+  Pipeline mode: rvv
+  Params: leaf=0.01m  ransac_thresh=0.02m  norm_r=0.05m
+  Scalar: brute-force NN search
+  RVV:    vectorized kernels + Octree (build cost included)
+  Note: AoS<->SoA conversions between stages are NOT timed.
+============================================================
+Loaded 460400 points (Binary Compressed).
+
+Loaded 460400 points from /workspace/data/table_scene_lms400.pcd
+
+Running real-data pipeline (rvv)...Saved 41049 points to /workspace/results/pipeline_rvv_table_20260407_134426/01_voxel_rvv/output.pcd
+Saved 20301 points to /workspace/results/pipeline_rvv_table_20260407_134426/02_ransac_extract_rvv/output.pcd
+Saved 19101 points to /workspace/results/pipeline_rvv_table_20260407_134426/03_sor_rvv/output.pcd
+Saved 19101 points to /workspace/results/pipeline_rvv_table_20260407_134426/04_normals_rvv/output.pcd
+ done.
+
+--- Real LiDAR (N = 460400) ---
+  After Voxel:   sc=0  rv=41049
+  After Extract: sc=0  rv=20301
+  After SOR:     sc=0  rv=19101
+
+Stage                | Scalar(ins)  | RVV(ins)     | Ratio
+------------------------------------------------------------
+VoxelGrid            | ---          | 559401504    | ---
+RANSAC               | ---          | 2004712352   | ---
+ExtractPlane         | ---          | 6990976      | ---
+SOR                  | ---          | 44708366688  | ---
+OctreeBuild          | ---          | 35722528     | ---
+NormalEst            | ---          | 5998234240   | ---
+------------------------------------------------------------
+TOTAL (pipeline)     | ---          | 53313428288  | ---
+============================================================
+BENCH_STAGE pipeline rvv VoxelGrid 460400 41049 559401504
+BENCH_STAGE pipeline rvv RANSAC 460400 41049 2004712352
+BENCH_STAGE pipeline rvv ExtractPlane 460400 20301 6990976
+BENCH_STAGE pipeline rvv SOR 460400 19101 44708366688
+BENCH_STAGE pipeline rvv OctreeBuild 460400 19101 35722528
+BENCH_STAGE pipeline rvv NormalEst 460400 19101 5998234240
+BENCH_TOTAL pipeline rvv TOTAL 460400 19101 53313428288

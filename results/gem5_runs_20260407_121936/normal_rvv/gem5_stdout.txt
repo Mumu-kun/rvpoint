@@ -1,0 +1,62 @@
+warn: Base 10 memory/cache size 1GB will be cast to base 2 size 1GiB.
+warn: Base 10 memory/cache size 32kB will be cast to base 2 size 32KiB.
+warn: Base 10 memory/cache size 32kB will be cast to base 2 size 32KiB.
+warn: Base 10 memory/cache size 256kB will be cast to base 2 size 256KiB.
+Global frequency set at 1000000000000 ticks per second
+src/mem/dram_interface.cc:690: warn: DRAM device capacity (16384 Mbytes) does not match the address range assigned (1024 Mbytes)
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/arch/riscv/linux/se_workload.cc:73: warn: Unknown operating system; assuming Linux.
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+system.remote_gdb: Listening for connections on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.0
+gem5 compiled Apr  7 2026 12:10:46
+gem5 started Apr  7 2026 12:20:48
+gem5 executing on 50a2f5090c11, pid 39966
+command line: /opt/gem5-25/build/RISCV/gem5.opt --outdir=/workspace/results/gem5_runs_20260407_121936/normal_rvv /workspace/scripts/gem5_se.py --cmd=/workspace/bin/benchmark_gem5_static '--options=normal_rvv 512' --cpu=o3
+
+[gem5_se.py] Simulating: /workspace/bin/benchmark_gem5_static normal_rvv 512
+[gem5_se.py] CPU model:  O3  |  Clock: 1 GHz  |  L1: 32KB  |  L2: 256KB  |  Mem: DDR4-2400
+src/sim/faults.cc:103: panic: panic condition !handled && !tc->getSystemPtr()->trapToGdb(GDBSignal::SEGV, tc->contextId()) occurred: Page table fault when accessing virtual address 0xfe4c33f4
+Memory Usage: 1205184 KBytes
+Program aborted at tick 884842000
+--- BEGIN LIBC BACKTRACE ---
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem515print_backtraceEv+0x30)[0x5d0da2be5b10]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem512abortHandlerEi+0x4c)[0x5d0da2c0d6ec]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x70a8b799e520]
+/lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c)[0x70a8b79f29fc]
+/lib/x86_64-linux-gnu/libc.so.6(raise+0x16)[0x70a8b799e476]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0xd3)[0x70a8b79847f3]
+/opt/gem5-25/build/RISCV/gem5.opt(+0xfa2805)[0x5d0da2aa1805]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem521GenericPageTableFault6invokeEPNS_13ThreadContextERKNS_14RefCountingPtrINS_10StaticInstEEE+0xe5)[0x5d0da2c980c5]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit10commitHeadERKNS_14RefCountingPtrINS0_7DynInstEEEj+0x5f2)[0x5d0da3d64a02]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit11commitInstsEv+0x459)[0x5d0da3d65ab9]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit6commitEv+0x800)[0x5d0da3d670d0]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit4tickEv+0xcf)[0x5d0da3d675ef]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o33CPU4tickEv+0x16d)[0x5d0da3d7026d]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem510EventQueue10serviceOneEv+0xc2)[0x5d0da2bfbe42]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem59doSimLoopEPNS_10EventQueueE+0x68)[0x5d0da2c34d18]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem58simulateEm+0x26e)[0x5d0da2c3531e]
+/opt/gem5-25/build/RISCV/gem5.opt(+0x2a6af32)[0x5d0da4569f32]
+/opt/gem5-25/build/RISCV/gem5.opt(+0xf860f0)[0x5d0da2a850f0]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x128033)[0x70a8b849c033]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyObject_Call+0x5c)[0x70a8b8455ffc]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x4b16)[0x70a8b83ea776]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x70a8b85364df]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x9d68)[0x70a8b83ef9c8]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x70a8b85364df]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(PyEval_EvalCode+0xbe)[0x70a8b853150e]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1bda9d)[0x70a8b8531a9d]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1287c3)[0x70a8b849c7c3]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x69de)[0x70a8b83ec63e]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x70a8b85364df]
+/opt/gem5-25/build/RISCV/gem5.opt(+0x1114078)[0x5d0da2c13078]
+/opt/gem5-25/build/RISCV/gem5.opt(main+0x21a)[0x5d0da27c832a]
+/lib/x86_64-linux-gnu/libc.so.6(+0x29d90)[0x70a8b7985d90]
+--- END LIBC BACKTRACE ---
+For more info on how to address this issue, please visit https://www.gem5.org/documentation/general_docs/common-errors/ 
+

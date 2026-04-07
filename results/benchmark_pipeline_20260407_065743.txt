@@ -1,0 +1,100 @@
+Saving report to: results/benchmark_pipeline_20260407_065743.txt
+
+============================================================
+  RVPoint End-to-End Pipeline Benchmark (rdinstret)
+  Synthetic cloud: 80% object (z>1) + 20% ground plane (z=0)
+  Scalar: brute-force NN search
+  RVV:    vectorized kernels + Octree (build cost included)
+  Note: AoS<->SoA conversions between stages are NOT timed.
+============================================================
+
+Running N=1024 ... done.
+
+--- N = 1024 ---
+  Input:        1024 pts   (obj: 819, ground: 205)
+  After Voxel:  sc=1023  rv=1023
+  After Extract:sc=819  rv=819
+  After SOR:    sc=705  rv=705
+
+Stage                | Scalar(ins)  | RVV(ins)     | Ratio
+------------------------------------------------------------
+VoxelGrid            | 105640736    | 42392000     | 2.49x
+RANSAC               | 82850875     | 148027516    | 0.56x
+ExtractPlane         | 880544       | 4962528      | 0.18x
+SOR                  | 966551661    | 1021377230   | 0.95x
+OctreeBuild          | ---          | 22140730     | ---
+NormalEst            | 967466951    | 87757477     | 11.02x
+------------------------------------------------------------
+TOTAL (pipeline)     | 2123390767   | 1326657481   | 1.60x
+============================================================
+
+Running N=4096 ... done.
+
+--- N = 4096 ---
+  Input:        4096 pts   (obj: 3276, ground: 820)
+  After Voxel:  sc=4053  rv=4053
+  After Extract:sc=3273  rv=3273
+  After SOR:    sc=2797  rv=2797
+
+Stage                | Scalar(ins)  | RVV(ins)     | Ratio
+------------------------------------------------------------
+VoxelGrid            | 468061074    | 95958816     | 4.88x
+RANSAC               | 310457651    | 557602260    | 0.56x
+ExtractPlane         | 2070848      | 1866720      | 1.11x
+SOR                  | 11400769898  | 12351322022  | 0.92x
+OctreeBuild          | ---          | 9428672      | ---
+NormalEst            | 10974407445  | 426094772    | 25.76x
+------------------------------------------------------------
+TOTAL (pipeline)     | 23155766916  | 13442273262  | 1.72x
+============================================================
+
+Running N=16384 ... done.
+
+--- N = 16384 ---
+  Input:        16384 pts   (obj: 13107, ground: 3277)
+  After Voxel:  sc=15824  rv=15824
+  After Extract:sc=13025  rv=13025
+  After SOR:    sc=11147  rv=11147
+
+Stage                | Scalar(ins)  | RVV(ins)     | Ratio
+------------------------------------------------------------
+VoxelGrid            | 2217387214   | 410705277    | 5.40x
+RANSAC               | 1211802108   | 2184298861   | 0.55x
+ExtractPlane         | 8284320      | 5747648      | 1.44x
+SOR                  | 150351827662 | 168510547282 | 0.89x
+OctreeBuild          | ---          | 50936034     | ---
+NormalEst            | 147742958905 | 2032631480   | 72.69x
+------------------------------------------------------------
+TOTAL (pipeline)     | 301532260209 | 173194866582 | 1.74x
+============================================================
+
+
+============================================================
+  Spatial Index Comparison: Octree vs SpatialHash
+  Stage 5+6 only (build + normal estimation)
+  Clean object cloud, no ground plane, seed=99
+  cell_size = search_radius (2) for SpatialHash
+============================================================
+
+N      | Phase         | Octree(ins)  | SpatialHash(ins) | Winner
+-----------------------------------------------------------------------
+Running spatial index bench N=1024 ... done.
+1024   | Build         | 5299136      | 34442304         | Octree
+1024   | Normals       | 143237632    | 609613228        | Octree
+1024   | TOTAL         | 148536768    | 644055532        | Octree
+-----------------------------------------------------------------------
+Running spatial index bench N=4096 ... done.
+4096   | Build         | 20650080     | 79052192         | Octree
+4096   | Normals       | 1008302926   | 3439262223       | Octree
+4096   | TOTAL         | 1028953006   | 3518314415       | Octree
+-----------------------------------------------------------------------
+Running spatial index bench N=16384 ... done.
+16384  | Build         | 64558176     | 327931051        | Octree
+16384  | Normals       | 6527484389   | 25633544702      | Octree
+16384  | TOTAL         | 6592042565   | 25961475753      | Octree
+-----------------------------------------------------------------------
+
+Note: SpatialHash build is O(n); Octree build is O(n log n).
+      SpatialHash query is O(1) avg; Octree query is O(log n + k).
+      SpatialHash wins at uniform distributions and fixed-radius queries.
+      Octree wins when point density varies significantly across the cloud.

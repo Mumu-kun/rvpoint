@@ -1,0 +1,37 @@
+Saving report to: /workspace/results/gem5_report_20260407_122605.txt
+
+========================================================================
+  RVPoint gem5 Cycle-Accurate Benchmark
+  Model: RISC-V O3CPU @ 1 GHz | L1 32KB | L2 256KB | DDR4-2400 | 1GB RAM
+  N=512  (use GEM5_N=<val> to override)
+  Note: gem5 simulates ~1-10 MIPS; each run takes 2-5 minutes.
+  RVV support: basic vector instructions (v1.0 subset in gem5 v24)
+========================================================================
+
+Algorithm    | Scalar cycles | RVV cycles   | Speedup | Scalar ns  | RVV ns
+-------------|---------------|--------------|---------|------------|----------
+voxel        | 515335        | 243393       | 2.12x   | 515000.0   | 243000.0
+ransac       | 229409        | 163090       | 1.41x   | 229000.0   | 163000.0
+sor          | 2795160       | 2692707      | 1.04x   | 2795000.0  | 2693000.0
+normal       | 5710068       | UNSUPPORTED  | N/A     | 5710000.0  | N/A
+pipeline     | 1299152       | 523958       | 2.48x   | 1299000.0  | 524000.0
+========================================================================
+
+Columns:
+  Scalar/RVV cycles : actual simulated CPU cycles (not instruction count)
+  Speedup           : scalar_cycles / rvv_cycles  (real cycle-level ratio)
+  Scalar/RVV ns     : simulated nanoseconds at 1 GHz (= cycles at 1 GHz)
+
+Cross-validation (rdinstret instruction count vs gem5 sim_insts):
+  If sim_insts ≈ rdinstret, the gem5 run executed the same code path.
+
+Detailed stats per run: /workspace/results/gem5_runs_20260407_122605/<algo>/stats.txt
+
+Algorithm      | gem5 sim_insts (sc) | gem5 sim_insts (rvv)
+---------------|---------------------|---------------------
+voxel          | 539390              | 266250
+ransac         | 386049              | 212536
+sor            | 4760021             | 4301241
+normal         | 12337131            | N/A
+pipeline       | 1905067             | 692250
+========================================================================

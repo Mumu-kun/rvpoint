@@ -1,0 +1,32 @@
+Saving report to: results/benchmark_pipeline_20260407_130448.txt
+
+============================================================
+  RVPoint End-to-End Pipeline Benchmark (rdinstret)
+  Mode: real LiDAR data from PCD file
+  File: /workspace/data/table_scene_lms400.pcd
+  Params: leaf=0.01m  ransac_thresh=0.02m  norm_r=0.05m
+  Scalar: brute-force NN search
+  RVV:    vectorized kernels + Octree (build cost included)
+  Note: AoS<->SoA conversions between stages are NOT timed.
+============================================================
+
+Loaded 460400 points from /workspace/data/table_scene_lms400.pcd
+
+Running real-data pipeline... done.
+
+--- Real LiDAR (N = 460400) ---
+  After Voxel:   sc=41049  rv=41049
+  After Extract: sc=20269  rv=20301
+  After SOR:     sc=19074  rv=19101
+
+Stage                | Scalar(ins)  | RVV(ins)     | Ratio
+------------------------------------------------------------
+VoxelGrid            | 1452235936   | 689616224    | 2.11x
+RANSAC               | 3149337856   | 1987993536   | 1.58x
+ExtractPlane         | 5231680      | 5726688      | 0.91x
+SOR                  | 68724720608  | 44690710944  | 1.54x
+OctreeBuild          | ---          | 37095040     | ---
+NormalEst            | 137608579776 | 5755773440   | 23.91x
+------------------------------------------------------------
+TOTAL (pipeline)     | 210940105856 | 53166915872  | 3.97x
+============================================================

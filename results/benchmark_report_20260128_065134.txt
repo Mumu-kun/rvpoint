@@ -1,0 +1,15 @@
+Saving report to: results/benchmark_report_20260128_065134.txt
+
+============================================================
+  RVPoint Benchmark (Instruction Counts) - QEMU Trace       
+  *Measured by counting QEMU TB executions (-one-insn-per-tb)*
+============================================================
+Algorithm            | Scalar(ins)  | RVV(ins)     | Ratio
+------------------------------------------------------------
+voxel                | 99077664     | 108804608    | 0.91x
+voxel_v2             | 95446560     | 42758592     | 2.23x
+sor                  | 848537408    | 998864576    | 0.85x
+normal               | 1275683136   | 119223328    | 10.70x
+radius               | 610464       | 2042528      | 0.30x
+ransac               | 93389088     | 145767040    | 0.64x
+============================================================

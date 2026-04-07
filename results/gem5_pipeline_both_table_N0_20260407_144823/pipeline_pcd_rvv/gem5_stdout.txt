@@ -1,0 +1,31 @@
+warn: Base 10 memory/cache size 1GB will be cast to base 2 size 1GiB.
+warn: Base 10 memory/cache size 32kB will be cast to base 2 size 32KiB.
+warn: Base 10 memory/cache size 32kB will be cast to base 2 size 32KiB.
+warn: Base 10 memory/cache size 256kB will be cast to base 2 size 256KiB.
+Global frequency set at 1000000000000 ticks per second
+src/mem/dram_interface.cc:690: warn: DRAM device capacity (16384 Mbytes) does not match the address range assigned (1024 Mbytes)
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+system.remote_gdb: Listening for connections on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.0
+gem5 compiled Apr  7 2026 12:10:46
+gem5 started Apr  7 2026 15:11:15
+gem5 executing on 50a2f5090c11, pid 42285
+command line: /opt/gem5-25/build/RISCV/gem5.opt --outdir=/workspace/results/gem5_pipeline_both_table_N0_20260407_144823/pipeline_pcd_rvv /workspace/scripts/gem5_se.py --cmd=/workspace/bin/benchmark_gem5_pcd_static '--options=pipeline_pcd_rvv 0 /workspace/data/table_scene_lms400.pcd' --cpu=o3
+
+[gem5_se.py] Simulating: /workspace/bin/benchmark_gem5_pcd_static pipeline_pcd_rvv 0 /workspace/data/table_scene_lms400.pcd
+[gem5_se.py] CPU model:  O3  |  Clock: 1 GHz  |  L1: 32KB  |  L2: 256KB  |  Mem: DDR4-2400
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/workspace/bin/benchmark_gem5_pcd_static'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+Loaded 460400 points (Binary Compressed).
+gem5_bench: pipeline_pcd_rvv N=0 result=460400
+[gem5_se.py] Exit at tick 250,840,042,000 — reason: exiting with last active thread context

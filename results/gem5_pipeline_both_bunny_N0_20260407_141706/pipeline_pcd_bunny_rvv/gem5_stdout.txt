@@ -1,0 +1,68 @@
+warn: Base 10 memory/cache size 1GB will be cast to base 2 size 1GiB.
+warn: Base 10 memory/cache size 32kB will be cast to base 2 size 32KiB.
+warn: Base 10 memory/cache size 32kB will be cast to base 2 size 32KiB.
+warn: Base 10 memory/cache size 256kB will be cast to base 2 size 256KiB.
+Global frequency set at 1000000000000 ticks per second
+src/mem/dram_interface.cc:690: warn: DRAM device capacity (16384 Mbytes) does not match the address range assigned (1024 Mbytes)
+src/arch/riscv/isa.cc:321: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:32] into equal-sized buckets. Rounding up.
+src/base/stats/storage.hh:278: warn: Bucket size (4) does not divide range [1:8] into equal-sized buckets. Rounding up.
+system.remote_gdb: Listening for connections on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 25.1.0.0
+gem5 compiled Apr  7 2026 12:10:46
+gem5 started Apr  7 2026 14:17:41
+gem5 executing on 50a2f5090c11, pid 41950
+command line: /opt/gem5-25/build/RISCV/gem5.opt --outdir=/workspace/results/gem5_pipeline_both_bunny_N0_20260407_141706/pipeline_pcd_bunny_rvv /workspace/scripts/gem5_se.py --cmd=/workspace/bin/benchmark_gem5_pcd_static '--options=pipeline_pcd_bunny_rvv 0 /workspace/data/bunny.pcd' --cpu=o3
+
+[gem5_se.py] Simulating: /workspace/bin/benchmark_gem5_pcd_static pipeline_pcd_bunny_rvv 0 /workspace/data/bunny.pcd
+[gem5_se.py] CPU model:  O3  |  Clock: 1 GHz  |  L1: 32KB  |  L2: 256KB  |  Mem: DDR4-2400
+src/sim/syscall_emul.cc:97: warn: ignoring syscall set_robust_list(...)
+      (further warnings will be suppressed)
+src/sim/syscall_emul.hh:1127: warn: readlink() called on '/proc/self/exe' may yield unexpected results in various settings.
+      Returning '/workspace/bin/benchmark_gem5_pcd_static'
+src/sim/mem_state.cc:443: info: Increasing stack size by one page.
+src/sim/syscall_emul.cc:86: warn: ignoring syscall mprotect(...)
+Loaded 397 points (ASCII).
+src/arch/riscv/faults.cc:299: panic: Illegal instruction 0x500010c64204e1a7 at pc (0x16924=>0x16928).(3=>4): LMUL value is illegal for vsseg inst
+Memory Usage: 1208148 KBytes
+Program aborted at tick 2236048000
+--- BEGIN LIBC BACKTRACE ---
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem515print_backtraceEv+0x30)[0x57877d9edb10]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem512abortHandlerEi+0x4c)[0x57877da156ec]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7522f56ba520]
+/lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c)[0x7522f570e9fc]
+/lib/x86_64-linux-gnu/libc.so.6(raise+0x16)[0x7522f56ba476]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0xd3)[0x7522f56a07f3]
+/opt/gem5-25/build/RISCV/gem5.opt(+0xfa2805)[0x57877d8a9805]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem58RiscvISA16IllegalInstFault8invokeSEEPNS_13ThreadContextERKNS_14RefCountingPtrINS_10StaticInstEEE+0xcc)[0x57877db2e0ac]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem58RiscvISA10RiscvFault6invokeEPNS_13ThreadContextERKNS_14RefCountingPtrINS_10StaticInstEEE+0x26f)[0x57877db2e40f]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit10commitHeadERKNS_14RefCountingPtrINS0_7DynInstEEEj+0x5f2)[0x57877eb6ca02]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit11commitInstsEv+0x459)[0x57877eb6dab9]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit6commitEv+0x800)[0x57877eb6f0d0]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o36Commit4tickEv+0xcf)[0x57877eb6f5ef]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem52o33CPU4tickEv+0x16d)[0x57877eb7826d]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem510EventQueue10serviceOneEv+0xc2)[0x57877da03e42]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem59doSimLoopEPNS_10EventQueueE+0x68)[0x57877da3cd18]
+/opt/gem5-25/build/RISCV/gem5.opt(_ZN4gem58simulateEm+0x26e)[0x57877da3d31e]
+/opt/gem5-25/build/RISCV/gem5.opt(+0x2a6af32)[0x57877f371f32]
+/opt/gem5-25/build/RISCV/gem5.opt(+0xf860f0)[0x57877d88d0f0]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x128033)[0x7522f61b8033]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyObject_Call+0x5c)[0x7522f6171ffc]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x4b16)[0x7522f6106776]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x7522f62524df]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x9d68)[0x7522f610b9c8]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x7522f62524df]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(PyEval_EvalCode+0xbe)[0x7522f624d50e]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1bda9d)[0x7522f624da9d]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1287c3)[0x7522f61b87c3]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x69de)[0x7522f610863e]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x7522f62524df]
+/opt/gem5-25/build/RISCV/gem5.opt(+0x1114078)[0x57877da1b078]
+/opt/gem5-25/build/RISCV/gem5.opt(main+0x21a)[0x57877d5d032a]
+--- END LIBC BACKTRACE ---
+For more info on how to address this issue, please visit https://www.gem5.org/documentation/general_docs/common-errors/ 
+

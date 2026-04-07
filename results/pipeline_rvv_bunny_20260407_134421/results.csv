@@ -1,0 +1,8 @@
+timestamp,algo,mode,stage,n_in,n_out,instructions
+2026-04-07T13:44:21+00:00,pipeline,rvv,VoxelGrid,397,294,9729248
+2026-04-07T13:44:21+00:00,pipeline,rvv,RANSAC,397,294,19239264
+2026-04-07T13:44:21+00:00,pipeline,rvv,ExtractPlane,397,54,2256032
+2026-04-07T13:44:21+00:00,pipeline,rvv,SOR,397,46,3416128
+2026-04-07T13:44:21+00:00,pipeline,rvv,OctreeBuild,397,46,1706816
+2026-04-07T13:44:21+00:00,pipeline,rvv,NormalEst,397,46,11642368
+2026-04-07T13:44:21+00:00,pipeline,rvv,TOTAL,397,46,47989856

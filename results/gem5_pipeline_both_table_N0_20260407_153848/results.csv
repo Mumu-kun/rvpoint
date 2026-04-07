@@ -1,0 +1,2 @@
+timestamp,algo,mode,dataset,n,cpu_model,gem5_cycles,gem5_ns,sim_insts
+2026-04-07T16:04:32+00:00,pipeline,sc,table,0,o3,371780947,371781000.0,540853256

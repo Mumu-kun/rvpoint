@@ -1,0 +1,35 @@
+========================================
+   RVPoint Performance Benchmark Report 
+   Timestamp: 20260126_111302
+========================================
+[RUNNING] voxel...
+vector version is not specified, use the default value v1.0
+Cycles: 14838240
+vector version is not specified, use the default value v1.0
+Cycles: 30033824
+----------------------------------------
+[RUNNING] sor...
+vector version is not specified, use the default value v1.0
+Cycles: 23831424
+vector version is not specified, use the default value v1.0
+Cycles: 39863328
+----------------------------------------
+[RUNNING] normal...
+vector version is not specified, use the default value v1.0
+Cycles: 40040288
+vector version is not specified, use the default value v1.0
+[NormalEst] Progress: 0%[NormalEst] Progress: 6%[NormalEst] Progress: 12%[NormalEst] Progress: 18%[NormalEst] Progress: 24%[NormalEst] Progress: 30%[NormalEst] Progress: 36%[NormalEst] Progress: 42%[NormalEst] Progress: 48%[NormalEst] Progress: 54%[NormalEst] Progress: 60%[NormalEst] Progress: 66%[NormalEst] Progress: 72%[NormalEst] Progress: 78%[NormalEst] Progress: 84%[NormalEst] Progress: 90%[NormalEst] Progress: 96%[NormalEst] Progress: 100%
+Cycles: 35445568
+----------------------------------------
+[RUNNING] radius...
+vector version is not specified, use the default value v1.0
+Cycles: 2092544
+vector version is not specified, use the default value v1.0
+Cycles: 4793856
+----------------------------------------
+[RUNNING] ransac...
+vector version is not specified, use the default value v1.0
+Cycles: 20985024
+vector version is not specified, use the default value v1.0
+Cycles: 72421376
+----------------------------------------

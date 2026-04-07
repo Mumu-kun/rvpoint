@@ -1,0 +1,6 @@
+Global frequency set at 1000000000000 ticks per second
+src/mem/dram_interface.cc:690: warn: DRAM device capacity (16384 Mbytes) does not match the address range assigned (256 Mbytes)
+src/arch/riscv/isa.cc:276: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/arch/riscv/linux/se_workload.cc:60: warn: Unknown operating system; assuming Linux.
+src/sim/process.cc:137: fatal: fatal condition !seWorkload occurred: Couldn't find appropriate workload object.
+Memory Usage: 388744 KBytes

@@ -1,0 +1,57 @@
+Global frequency set at 1000000000000 ticks per second
+src/mem/dram_interface.cc:690: warn: DRAM device capacity (16384 Mbytes) does not match the address range assigned (256 Mbytes)
+src/arch/riscv/isa.cc:276: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/arch/riscv/linux/se_workload.cc:60: warn: Unknown operating system; assuming Linux.
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+system.remote_gdb: Listening for connections on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 24.0.0.1
+gem5 compiled Apr  7 2026 10:52:08
+gem5 started Apr  7 2026 11:00:57
+gem5 executing on 50a2f5090c11, pid 19209
+command line: /opt/gem5/build/RISCV/gem5.opt --outdir=/workspace/results/gem5_runs_20260407_105951/normal_rvv /workspace/scripts/gem5_se.py --cmd=/workspace/bin/benchmark_gem5_static '--options=normal_rvv 512' --cpu=o3
+
+[gem5_se.py] Simulating: /workspace/bin/benchmark_gem5_static normal_rvv 512
+[gem5_se.py] CPU model:  O3  |  Clock: 1 GHz  |  L1: 32KB  |  L2: 256KB  |  Mem: DDR4-2400
+src/sim/simulate.cc:199: info: Entering event queue @ 0.  Starting simulation...
+src/arch/riscv/faults.cc:204: panic: Unknown instruction 0x400020d15e802357 at pc (0x131c8=>0x131cc).(0=>1)
+Memory Usage: 402064 KBytes
+Program aborted at tick 185150000
+--- BEGIN LIBC BACKTRACE ---
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem515print_backtraceEv+0x30)[0x56b51994a4f0]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem512abortHandlerEi+0x4c)[0x56b519971e1c]
+/lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x708d0aad2520]
+/lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c)[0x708d0ab269fc]
+/lib/x86_64-linux-gnu/libc.so.6(raise+0x16)[0x708d0aad2476]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0xd3)[0x708d0aab87f3]
+/opt/gem5/build/RISCV/gem5.opt(+0xda0c15)[0x56b51981dc15]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem58RiscvISA16IllegalInstFault8invokeSEEPNS_13ThreadContextERKNS_14RefCountingPtrINS_10StaticInstEEE+0x0)[0x56b519a6fc60]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem58RiscvISA10RiscvFault6invokeEPNS_13ThreadContextERKNS_14RefCountingPtrINS_10StaticInstEEE+0x1d7)[0x56b519a6fff7]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit10commitHeadERKNS_14RefCountingPtrINS0_7DynInstEEEj+0x752)[0x56b51a85a7d2]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit11commitInstsEv+0x340)[0x56b51a85b610]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit6commitEv+0x8d0)[0x56b51a85cd00]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem52o36Commit4tickEv+0xcf)[0x56b51a85da4f]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem52o33CPU4tickEv+0x15a)[0x56b51a869b7a]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem510EventQueue10serviceOneEv+0xc2)[0x56b519960d62]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem59doSimLoopEPNS_10EventQueueE+0x68)[0x56b519993338]
+/opt/gem5/build/RISCV/gem5.opt(_ZN4gem58simulateEm+0x283)[0x56b519993933]
+/opt/gem5/build/RISCV/gem5.opt(+0x2561fe0)[0x56b51afdefe0]
+/opt/gem5/build/RISCV/gem5.opt(+0xd89d94)[0x56b519806d94]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x128033)[0x708d0b5d0033]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyObject_Call+0x5c)[0x708d0b589ffc]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x4b16)[0x708d0b51e776]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x708d0b66a4df]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x9d68)[0x708d0b5239c8]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x708d0b66a4df]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(PyEval_EvalCode+0xbe)[0x708d0b66550e]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1bda9d)[0x708d0b665a9d]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1287c3)[0x708d0b5d07c3]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(_PyEval_EvalFrameDefault+0x69de)[0x708d0b52063e]
+/lib/x86_64-linux-gnu/libpython3.10.so.1.0(+0x1c24df)[0x708d0b66a4df]
+/opt/gem5/build/RISCV/gem5.opt(+0xef6267)[0x56b519973267]
+/opt/gem5/build/RISCV/gem5.opt(main+0x213)[0x56b5195d20b3]
+--- END LIBC BACKTRACE ---
+For more info on how to address this issue, please visit https://www.gem5.org/documentation/general_docs/common-errors/ 
+

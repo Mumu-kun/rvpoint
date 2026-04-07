@@ -1,0 +1,6 @@
+timestamp,algo,mode,stage,n_in,n_out,sim_insts
+2026-04-07T16:04:32+00:00,pipeline_pcd,sc,VoxelGrid,460400,2215,192993680
+2026-04-07T16:04:32+00:00,pipeline_pcd,sc,RANSAC,2215,2215,941977
+2026-04-07T16:04:32+00:00,pipeline_pcd,sc,ExtractPlane,2215,1331,49642
+2026-04-07T16:04:32+00:00,pipeline_pcd,sc,SOR,1331,1256,44414718
+2026-04-07T16:04:32+00:00,pipeline_pcd,sc,NormalEst,1256,1256,90026706

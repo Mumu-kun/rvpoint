@@ -1,0 +1,20 @@
+Global frequency set at 1000000000000 ticks per second
+src/mem/dram_interface.cc:690: warn: DRAM device capacity (16384 Mbytes) does not match the address range assigned (256 Mbytes)
+src/arch/riscv/isa.cc:276: info: RVV enabled, VLEN = 256 bits, ELEN = 64 bits
+src/arch/riscv/linux/se_workload.cc:60: warn: Unknown operating system; assuming Linux.
+src/base/statistics.hh:279: warn: One of the stats is a legacy stat. Legacy stat is a stat that does not belong to any statistics::Group. Legacy stat is deprecated.
+system.remote_gdb: Listening for connections on port 7000
+gem5 Simulator System.  https://www.gem5.org
+gem5 is copyrighted software; use the --copyright option for details.
+
+gem5 version 24.0.0.1
+gem5 compiled Apr  7 2026 10:52:08
+gem5 started Apr  7 2026 11:05:15
+gem5 executing on 50a2f5090c11, pid 19403
+command line: /opt/gem5/build/RISCV/gem5.opt --outdir=/workspace/results/gem5_runs_20260407_110508/sor_sc /workspace/scripts/gem5_se.py --cmd=/workspace/bin/benchmark_gem5_static '--options=sor_sc 512' --cpu=o3
+
+[gem5_se.py] Simulating: /workspace/bin/benchmark_gem5_static sor_sc 512
+[gem5_se.py] CPU model:  O3  |  Clock: 1 GHz  |  L1: 32KB  |  L2: 256KB  |  Mem: DDR4-2400
+src/sim/simulate.cc:199: info: Entering event queue @ 0.  Starting simulation...
+gem5_bench: sor_sc N=512 result=443
+[gem5_se.py] Exit at tick 3,014,707,000 — reason: exiting with last active thread context
