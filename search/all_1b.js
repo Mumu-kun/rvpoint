@@ -61,7 +61,7 @@ var searchData=
   ['the_20linux_20cross_20compiler_58',['1. &lt;tt&gt;riscv64-linux-gnu-g++&lt;/tt&gt; - The Linux Cross-Compiler',['../instruction_manual.html#autotoc_md1-riscv64-linux-gnu-g---the-linux-cross-compiler',1,'']]],
   ['the_20only_20script_20you_20need_59',['The Only Script You Need',['../md_guides_2AGENT.html#the-only-script-you-need',1,'']]],
   ['the_20priority_20task_3a_20e2e_20pipeline_20benchmark_60',['The Priority Task: E2E Pipeline Benchmark',['../md_guides_2AGENT.html#the-priority-task-e2e-pipeline-benchmark',1,'']]],
-  ['the_20problem_61',['the problem',['../vector_theory.html#the-problem',1,'The Problem'],['../md_tests_2INSTRUCTION__COUNTING.html#the-problem-1',1,'The Problem']]],
+  ['the_20problem_61',['the problem',['../md_tests_2INSTRUCTION__COUNTING.html#the-problem-1',1,'The Problem'],['../vector_theory.html#the-problem',1,'The Problem']]],
   ['the_20solution_3a_20trace_20based_20counting_62',['The Solution: Trace-Based Counting',['../md_tests_2INSTRUCTION__COUNTING.html#the-solution-trace-based-counting',1,'']]],
   ['the_20solution_3a_20tt_20vluxei32_20tt_20indexed_20load_63',['The Solution: &lt;tt&gt;vluxei32&lt;/tt&gt; (Indexed Load)',['../vector_theory.html#the-solution-vluxei32-indexed-load',1,'']]],
   ['the_20system_20object_64',['gem5 v24 requires &lt;tt&gt;SEWorkload&lt;/tt&gt; set on the system object',['../md_guides_2session__2026-04-07.html#gem5-v24-requires-seworkload-set-on-the-system-object',1,'']]],
@@ -117,5 +117,6 @@ var searchData=
   ['tt_20vluxei32_20tt_20indexed_20load_114',['The Solution: &lt;tt&gt;vluxei32&lt;/tt&gt; (Indexed Load)',['../vector_theory.html#the-solution-vluxei32-indexed-load',1,'']]],
   ['tt_20vsetvl_20tt_20vector_20set_20vector_20length_115',['1. &lt;tt&gt;vsetvl&lt;/tt&gt; (Vector Set Vector Length)',['../vector_theory.html#autotoc_md1-vsetvl-vector-set-vector-length',1,'']]],
   ['tuning_116',['Performance Tuning',['../instruction_manual.html#performance-tuning',1,'']]],
-  ['txt_20addition_117',['CMakeLists.txt addition',['../md_guides_2AGENT.html#cmakeliststxt-addition',1,'']]]
+  ['txt_20addition_117',['CMakeLists.txt addition',['../md_guides_2AGENT.html#cmakeliststxt-addition',1,'']]],
+  ['types_118',['types',['../structrvv__pcl_1_1detail_1_1PCDHeader.html#a98f31d73e0e4684d7fc5b3827fde3f2c',1,'rvv_pcl::detail::PCDHeader']]]
 ];

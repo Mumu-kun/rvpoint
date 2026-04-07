@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['workload_0',['workload',['../namespacegem5__se.html#a7c6d2f91df06e83537fbd783bf3920f2',1,'gem5_se']]]
+  ['voltage_5fdomain_0',['voltage_domain',['../namespacegem5__se.html#afa457bea929f91617f46dc6931495c74',1,'gem5_se']]]
 ];

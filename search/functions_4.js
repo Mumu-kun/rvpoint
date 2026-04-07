@@ -1,5 +1,9 @@
 var searchData=
 [
-  ['flip_5fnormal_5frvv_0',['flip_normal_rvv',['../namespacervv__pcl.html#a0d9f845cd4a86248dfb6acd95f599e5b',1,'rvv_pcl']]],
-  ['flipnormaltowardsviewpoint_1',['flipNormalTowardsViewpoint',['../namespacervv__pcl.html#a662b759c3a2968ff7cf0d205dc9c72d9',1,'rvv_pcl']]]
+  ['eigen_5fdecomposition_5frvv_0',['eigen_decomposition_rvv',['../namespacervv__pcl.html#ab6bf0c81cf1a0a4c26d0cd950f5e5789',1,'rvv_pcl']]],
+  ['elapsed_1',['elapsed',['../structTimer.html#a7b0a5dca78dad1dc32bd528b8d558957',1,'Timer::elapsed()'],['../structTimer.html#a7b0a5dca78dad1dc32bd528b8d558957',1,'Timer::elapsed()']]],
+  ['elapsedms_2',['elapsedMs',['../structTimer.html#aff1a7e5d5dbcca1b9a7f679afc2f371a',1,'Timer']]],
+  ['extract_5fplane_5finliers_5foutliers_5frvv_3',['extract_plane_inliers_outliers_rvv',['../namespacervv__pcl.html#a88c2472ce35c12d47d44a38d94042bf3',1,'rvv_pcl']]],
+  ['extract_5fplane_5finliers_5frvv_4',['extract_plane_inliers_rvv',['../namespacervv__pcl.html#a7037e3ddad1e97e2ad4da67d709fa533',1,'rvv_pcl']]],
+  ['extract_5fplane_5foutliers_5frvv_5',['extract_plane_outliers_rvv',['../namespacervv__pcl.html#a270e4b7dfd954cec2f063cedc0e73bd5',1,'rvv_pcl']]]
 ];

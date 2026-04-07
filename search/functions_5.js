@@ -1,7 +1,6 @@
 var searchData=
 [
-  ['generate_5fdata_0',['generate_data',['../benchmark_8cpp.html#a4c24e185af0bc134151eb785e9f9c717',1,'benchmark.cpp']]],
-  ['get_5fdist_5fsq_5frvv_1',['get_dist_sq_rvv',['../namespacervv__pcl.html#a80ffb008f094db91c598400b03d6e648',1,'rvv_pcl']]],
-  ['get_5finds_5fin_5fradius_5frvv_2',['get_inds_in_radius_rvv',['../namespacervv__pcl.html#a08de5ef838225752d79c35712b328489',1,'rvv_pcl']]],
-  ['getcellindices_3',['getCellIndices',['../classrvv__pcl_1_1SpatialHash.html#a6f52c754df83d684c381099e4dc47b44',1,'rvv_pcl::SpatialHash']]]
+  ['findfieldindex_0',['findFieldIndex',['../namespacervv__pcl_1_1detail.html#a28b83e2af0874138ff8991d00a56109f',1,'rvv_pcl::detail']]],
+  ['flip_5fnormal_5frvv_1',['flip_normal_rvv',['../namespacervv__pcl.html#a0d9f845cd4a86248dfb6acd95f599e5b',1,'rvv_pcl']]],
+  ['flipnormaltowardsviewpoint_2',['flipNormalTowardsViewpoint',['../namespacervv__pcl.html#a662b759c3a2968ff7cf0d205dc9c72d9',1,'rvv_pcl']]]
 ];

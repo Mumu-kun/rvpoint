@@ -75,32 +75,51 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#nested-classes">Classes</a> &#124;
 <a href="#namespaces">Namespaces</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">simple_pcd_loader.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &lt;iostream&gt;</code><br />
+<div class="textblock"><code>#include &lt;algorithm&gt;</code><br />
+<code>#include &lt;cstdint&gt;</code><br />
+<code>#include &lt;cstring&gt;</code><br />
 <code>#include &lt;fstream&gt;</code><br />
+<code>#include &lt;iostream&gt;</code><br />
+<code>#include &lt;sstream&gt;</code><br />
 <code>#include &lt;string&gt;</code><br />
 <code>#include &lt;vector&gt;</code><br />
-<code>#include &lt;sstream&gt;</code><br />
 <code>#include &quot;<a class="el" href="rvv__pcl_8h_source.html">rvv_pcl.h</a>&quot;</code><br />
 </div>
 <p><a href="simple__pcd__loader_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1detail_1_1PCDHeader.html">rvv_pcl::detail::PCDHeader</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:namespacervv__pcl" id="r_namespacervv__pcl"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></td></tr>
 <tr class="memdesc:namespacervv__pcl"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library. <br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:namespacervv__pcl_1_1detail" id="r_namespacervv__pcl_1_1detail"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html">rvv_pcl::detail</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a0cb063de721d4fc29b4d8ee421bb1d92" id="r_a0cb063de721d4fc29b4d8ee421bb1d92"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a0cb063de721d4fc29b4d8ee421bb1d92">rvv_pcl::detail::decompressLZF</a> (const std::vector&lt; unsigned char &gt; &amp;input, std::vector&lt; unsigned char &gt; &amp;output)</td></tr>
+<tr class="separator:a0cb063de721d4fc29b4d8ee421bb1d92"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a430353c3bb43ef404b7825300bf45332" id="r_a430353c3bb43ef404b7825300bf45332"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a430353c3bb43ef404b7825300bf45332">rvv_pcl::detail::parsePCDHeader</a> (std::istream &amp;stream, <a class="el" href="structrvv__pcl_1_1detail_1_1PCDHeader.html">PCDHeader</a> &amp;header)</td></tr>
+<tr class="separator:a430353c3bb43ef404b7825300bf45332"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a28b83e2af0874138ff8991d00a56109f" id="r_a28b83e2af0874138ff8991d00a56109f"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a28b83e2af0874138ff8991d00a56109f">rvv_pcl::detail::findFieldIndex</a> (const <a class="el" href="structrvv__pcl_1_1detail_1_1PCDHeader.html">PCDHeader</a> &amp;header, const std::string &amp;name)</td></tr>
+<tr class="separator:a28b83e2af0874138ff8991d00a56109f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a27a390d24094ef893f20fdbee998082e" id="r_a27a390d24094ef893f20fdbee998082e"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a27a390d24094ef893f20fdbee998082e">rvv_pcl::detail::readFloat</a> (const unsigned char *src, int size, float &amp;value)</td></tr>
+<tr class="separator:a27a390d24094ef893f20fdbee998082e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad513fe0e21cc1b7ae4c1086b415473d0" id="r_ad513fe0e21cc1b7ae4c1086b415473d0"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#ad513fe0e21cc1b7ae4c1086b415473d0">rvv_pcl::loadPCD</a> (const std::string &amp;file_path, std::vector&lt; <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> &gt; &amp;points)</td></tr>
 <tr class="separator:ad513fe0e21cc1b7ae4c1086b415473d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0e10691007799037e6779e1a82615a51" id="r_a0e10691007799037e6779e1a82615a51"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a0e10691007799037e6779e1a82615a51">rvv_pcl::savePCD</a> (const std::string &amp;filename, const std::vector&lt; <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> &gt; &amp;points)</td></tr>
-<tr class="separator:a0e10691007799037e6779e1a82615a51"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8c14b4e55a663b61179a570c0ec7fcef" id="r_a8c14b4e55a663b61179a570c0ec7fcef"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a8c14b4e55a663b61179a570c0ec7fcef">rvv_pcl::savePCD</a> (const std::string &amp;filename, const std::vector&lt; <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> &gt; &amp;points, bool binary=false)</td></tr>
+<tr class="separator:a8c14b4e55a663b61179a570c0ec7fcef"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 <!-- start footer part -->

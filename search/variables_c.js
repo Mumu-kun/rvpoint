@@ -1,11 +1,24 @@
 var searchData=
 [
-  ['n_0',['n',['../structrvv__pcl_1_1PointCloudSoA.html#a7ecf4ac2c6f77461fea9136c19ab4856',1,'rvv_pcl::PointCloudSoA::n'],['../structPipelineResult.html#a7dbdb7cad92fc5a37644a0d9998dce99',1,'PipelineResult::N'],['../structSpatialIndexResult.html#aa9c99289458d323fb75590eefb04d217',1,'SpatialIndexResult::N'],['../benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94',1,'N:&#160;benchmark.cpp']]],
-  ['n_5frv_5fobj_1',['n_rv_obj',['../structPipelineResult.html#a695ce6586119f0bbe0385da49576441c',1,'PipelineResult']]],
-  ['n_5frv_5fsor_2',['n_rv_sor',['../structPipelineResult.html#aafc18f18f638c67ff798a5667bb662c8',1,'PipelineResult']]],
-  ['n_5frv_5fvox_3',['n_rv_vox',['../structPipelineResult.html#a5101405e950102236b8ead46a37ee082',1,'PipelineResult']]],
-  ['n_5fsc_5fobj_4',['n_sc_obj',['../structPipelineResult.html#a7f7b887b2de02d6e71785d2870d7ff7e',1,'PipelineResult']]],
-  ['n_5fsc_5fsor_5',['n_sc_sor',['../structPipelineResult.html#a9981c514a6c6c182560b7f4fa82807a3',1,'PipelineResult']]],
-  ['n_5fsc_5fvox_6',['n_sc_vox',['../structPipelineResult.html#ade3d86190e54e3a49c46707aeb26c9e3',1,'PipelineResult']]],
-  ['name_7',['name',['../structBenchmarkData.html#a8916f4b094ed48f9bd892011b049b0ee',1,'BenchmarkData']]]
+  ['max_5fdepth_5f_0',['max_depth_',['../classrvv__pcl_1_1Octree.html#a3b4edef583ad1ca22769b40d42019d0c',1,'rvv_pcl::Octree']]],
+  ['max_5fpoints_5fper_5fleaf_5f_1',['max_points_per_leaf_',['../classrvv__pcl_1_1Octree.html#aba626925037c91de0b1267e4efe85635',1,'rvv_pcl::Octree']]],
+  ['max_5fx_2',['max_x',['../structrvv__pcl_1_1OctreeNode.html#a4f6b8e15683a4d97850dfd686cca01a4',1,'rvv_pcl::OctreeNode']]],
+  ['max_5fx_5f_3',['max_x_',['../classrvv__pcl_1_1SpatialHash.html#a9866c03bd26ad80f2bf5c0050c36cc7a',1,'rvv_pcl::SpatialHash']]],
+  ['max_5fy_4',['max_y',['../structrvv__pcl_1_1OctreeNode.html#a076ee041ee928a2584dac70e8790a361',1,'rvv_pcl::OctreeNode']]],
+  ['max_5fy_5f_5',['max_y_',['../classrvv__pcl_1_1SpatialHash.html#a048d625617288fa908b8981b7b44f6a6',1,'rvv_pcl::SpatialHash']]],
+  ['max_5fz_6',['max_z',['../structrvv__pcl_1_1OctreeNode.html#a4654ea4704d828f9d51c828902e27d68',1,'rvv_pcl::OctreeNode']]],
+  ['max_5fz_5f_7',['max_z_',['../classrvv__pcl_1_1SpatialHash.html#acf46c700e86135bd6cb2e6a4aadfede9',1,'rvv_pcl::SpatialHash']]],
+  ['mem_5fctrl_8',['mem_ctrl',['../namespacegem5__se.html#a5fffce989abe79e6f5635c07de149d65',1,'gem5_se']]],
+  ['mem_5fmode_9',['mem_mode',['../namespacegem5__se.html#aaf10b5fc2bf82d36280a5e1b85b1a784',1,'gem5_se']]],
+  ['mem_5franges_10',['mem_ranges',['../namespacegem5__se.html#a360821055ad8fb4d97c264d04b03df86',1,'gem5_se']]],
+  ['mem_5fside_11',['mem_side',['../namespacegem5__se.html#a532909766506ca4e4e590a9e5e68b338',1,'gem5_se']]],
+  ['mem_5fside_5fports_12',['mem_side_ports',['../namespacegem5__se.html#aac3564d13b83d9841b3c4ef4dddef4e7',1,'gem5_se']]],
+  ['membus_13',['membus',['../namespacegem5__se.html#a6f33cad3fd745b29fe8ef62d8693815a',1,'gem5_se']]],
+  ['min_5fx_14',['min_x',['../structrvv__pcl_1_1OctreeNode.html#a2646ab868591cdf8a6288896bcd9e1e3',1,'rvv_pcl::OctreeNode']]],
+  ['min_5fx_5f_15',['min_x_',['../classrvv__pcl_1_1SpatialHash.html#a618a5b7ed6d887ffb6dba750a957b170',1,'rvv_pcl::SpatialHash']]],
+  ['min_5fy_16',['min_y',['../structrvv__pcl_1_1OctreeNode.html#af0cac5ea5039aee14211d8ae4d831b17',1,'rvv_pcl::OctreeNode']]],
+  ['min_5fy_5f_17',['min_y_',['../classrvv__pcl_1_1SpatialHash.html#a57f6fec32c8e11aa1a0d8dff1f81fa1a',1,'rvv_pcl::SpatialHash']]],
+  ['min_5fz_18',['min_z',['../structrvv__pcl_1_1OctreeNode.html#a6b2366096bd81ceb09e43fd00479c80f',1,'rvv_pcl::OctreeNode']]],
+  ['min_5fz_5f_19',['min_z_',['../classrvv__pcl_1_1SpatialHash.html#a656666c1aa1e67ad270f5c4faf23277a',1,'rvv_pcl::SpatialHash']]],
+  ['mshrs_20',['mshrs',['../namespacegem5__se.html#a23a075f1f88f5c7c6cf77796a8de529c',1,'gem5_se']]]
 ];

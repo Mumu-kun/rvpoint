@@ -4,8 +4,8 @@ var indexSectionsWithContent =
   1: "bcdopst",
   2: "grv",
   3: "abginorstv",
-  4: "abcefghlmnorstv~",
-  5: "_abcdefghilmnoprstvwxyz",
+  4: "abcdefghlmnoprstv~",
+  5: "_abcdefghiklmnoprstvwxyz",
   6: "02acdgilmoprstv"
 };
 
