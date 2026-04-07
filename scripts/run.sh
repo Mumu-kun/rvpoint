@@ -45,7 +45,8 @@ Usage: run.sh [options] <mode> [targets...]
 
 Modes:
   test   [names...]    Run tests. No names = all tests.
-  bench                Run rdinstret-based benchmark (all algorithms).
+  bench                Run rdinstret-based benchmark (all algorithms, N=1024).
+  bench-pipeline       Run end-to-end pipeline benchmark (N=1K/4K/16K).
 
 Options:
   --toolchain <elf|linux>   Toolchain for build (default: linux)
@@ -95,7 +96,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             usage
             ;;
-        test|bench)
+        test|bench|bench-pipeline)
             MODE="$1"
             shift
             # Remaining positional args are targets
@@ -186,20 +187,27 @@ if [ "$MODE" = "test" ]; then
     fi
 fi
 
-# --- Run benchmarks ---
+# --- Run per-algorithm benchmark ---
 if [ "$MODE" = "bench" ]; then
     mkdir -p "$PROJECT_ROOT/results"
-
     echo "==> Running rdinstret benchmark (all algorithms, N=1024)"
     echo ""
-
-    # The benchmark binary uses rdinstret to count instructions internally.
-    # It outputs a formatted table to stdout AND saves a timestamped report
-    # to results/benchmark_report_<timestamp>.txt
     pushd "$PROJECT_ROOT" > /dev/null
     "$QEMU_BIN" "${QEMU_FLAGS[@]}" "$BIN_DIR/benchmark"
     popd > /dev/null
+    echo ""
+    echo "==> Timestamped report saved to results/"
+fi
 
+# --- Run end-to-end pipeline benchmark ---
+if [ "$MODE" = "bench-pipeline" ]; then
+    mkdir -p "$PROJECT_ROOT/results"
+    echo "==> Running end-to-end pipeline benchmark (N=1K/4K/16K)"
+    echo "    Note: N=16384 scalar path is O(n^2) -- may take several minutes on QEMU."
+    echo ""
+    pushd "$PROJECT_ROOT" > /dev/null
+    "$QEMU_BIN" "${QEMU_FLAGS[@]}" "$BIN_DIR/benchmark_pipeline"
+    popd > /dev/null
     echo ""
     echo "==> Timestamped report saved to results/"
 fi

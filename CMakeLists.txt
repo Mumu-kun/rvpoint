@@ -88,3 +88,12 @@ target_link_libraries(test_ransac PRIVATE rvvpcl)
 # Benchmark Suite
 add_executable(benchmark tests/benchmark.cpp)
 target_link_libraries(benchmark PRIVATE rvvpcl)
+
+# End-to-End Pipeline Benchmark
+add_executable(benchmark_pipeline tests/benchmark_pipeline.cpp)
+target_link_libraries(benchmark_pipeline PRIVATE rvvpcl)
+
+# gem5 single-algorithm runner (built statically by gem5_bench.sh via elf toolchain)
+# Listed here for reference; cmake builds a dynamic version for correctness testing.
+add_executable(benchmark_gem5 tests/benchmark_gem5.cpp)
+target_link_libraries(benchmark_gem5 PRIVATE rvvpcl)

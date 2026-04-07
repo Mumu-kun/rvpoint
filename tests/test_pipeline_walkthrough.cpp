@@ -1,9 +1,11 @@
 #include "../src/include/rvv_pcl.h"
 #include "../src/include/simple_pcd_loader.h"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ctime>
 #include <iostream>
+#include <random>
 #include <vector>
 
 using namespace rvv_pcl;
@@ -15,7 +17,7 @@ int main(int argc, char **argv) {
   std::cout << "   RISC-V PCL Pipeline Walkthrough      " << std::endl;
   std::cout << "========================================" << std::endl;
 
-  std::string input_file = "bunny.pcd";
+  std::string input_file = "bunny.pcd";//as we will be using this frequently for testing
   if (argc > 1)
     input_file = argv[1];
 
@@ -70,6 +72,40 @@ int main(int argc, char **argv) {
     y[i] = loaded_points[i].y;
     z[i] = loaded_points[i].z;
   }
+
+  // 1.5 Add Synthetic Ground Plane
+  std::cout << "\n[Step 1.5] Adding Synthetic Ground Plane..." << std::endl;
+
+  // Find min Z of bunny to place ground plane below it
+  float min_z = *std::min_element(z.begin(), z.end());
+  float min_x = *std::min_element(x.begin(), x.end());
+  float max_x = *std::max_element(x.begin(), x.end());
+  float min_y = *std::min_element(y.begin(), y.end());
+  float max_y = *std::max_element(y.begin(), y.end());
+
+  float ground_z = min_z - 0.005f;  // Slightly below bunny
+  const size_t N_GROUND = 1000;
+
+  // Generate ground plane points within bunny's XY extent
+  std::mt19937 gen(42);
+  std::uniform_real_distribution<float> dist_x(min_x - 0.02f, max_x + 0.02f);
+  std::uniform_real_distribution<float> dist_y(min_y - 0.02f, max_y + 0.02f);
+
+  size_t original_n = n;
+  x.reserve(n + N_GROUND);
+  y.reserve(n + N_GROUND);
+  z.reserve(n + N_GROUND);
+
+  for (size_t i = 0; i < N_GROUND; ++i) {
+    x.push_back(dist_x(gen));
+    y.push_back(dist_y(gen));
+    z.push_back(ground_z);
+  }
+  n = x.size();
+
+  std::cout << "Added " << N_GROUND << " ground plane points at Z=" << ground_z << std::endl;
+  std::cout << "Total points: " << n << " (Bunny: " << original_n << " + Ground: " << N_GROUND << ")" << std::endl;
+
   PointCloudSoA cloud_soa = {x.data(), y.data(), z.data(), (size_t)n};
 
   // 2. Voxel Grid Downsampling
@@ -81,11 +117,62 @@ int main(int argc, char **argv) {
   std::cout << "Filtered count: " << n_filtered << " (Original: " << n << ")"
             << std::endl;
 
-  // Save Voxelized Cloud
+  // 2.5 RANSAC Plane Segmentation
+  std::cout << "\n[Step 2.5] RANSAC Plane Segmentation..." << std::endl;
+
+  // Convert filtered to SoA for RANSAC
+  std::vector<float> vx(n_filtered), vy(n_filtered), vz(n_filtered);
+  for (size_t i = 0; i < n_filtered; ++i) {
+    vx[i] = filtered_points[i].x;
+    vy[i] = filtered_points[i].y;
+    vz[i] = filtered_points[i].z;
+  }
+  PointCloudSoA voxel_soa = {vx.data(), vy.data(), vz.data(), n_filtered};
+
+  float plane_model[4];
+  float ransac_thresh = 0.005f;  // Distance threshold for inliers
+  int ransac_iters = 1000;
+
+  int n_plane_inliers = ransac_plane_rvv(voxel_soa, ransac_thresh, ransac_iters, plane_model);
+
+  std::cout << "RANSAC found " << n_plane_inliers << " plane inliers" << std::endl;
+  std::cout << "Plane model: " << plane_model[0] << "x + " << plane_model[1] << "y + "
+            << plane_model[2] << "z + " << plane_model[3] << " = 0" << std::endl;
+
+  // Extract inliers (ground plane) and outliers (bunny)
+  std::vector<PointXYZ> plane_pts(n_filtered);
+  std::vector<PointXYZ> object_pts(n_filtered);
+  std::size_t actual_inliers, actual_outliers;
+
+  extract_plane_inliers_outliers_rvv(voxel_soa, plane_model, ransac_thresh,
+                                      plane_pts.data(), object_pts.data(),
+                                      actual_inliers, actual_outliers);
+
+  std::cout << "Extracted: " << actual_inliers << " plane points (ground), "
+            << actual_outliers << " object points (bunny)" << std::endl;
+
+  // Save ground plane for visualization
+  std::string ground_file = output_dir + stem + "_" + timestamp + "_ground.pcd";
+  std::vector<PointXYZ> ground_vec(plane_pts.begin(), plane_pts.begin() + actual_inliers);
+  savePCD(ground_file, ground_vec);
+  std::cout << "Saved ground plane to: " << ground_file << std::endl;
+
+  // Continue processing with object points (bunny without ground)
   std::vector<PointXYZ> final_points;
-  for (size_t i = 0; i < n_filtered; ++i)
-    final_points.push_back(filtered_points[i]);
+  for (size_t i = 0; i < actual_outliers; ++i)
+    final_points.push_back(object_pts[i]);
+
+  // Save Voxelized Cloud (bunny without ground)
   savePCD(output_file, final_points);
+
+  // Update n_filtered to reflect the object (non-plane) points for subsequent steps
+  n_filtered = actual_outliers;
+  filtered_points.resize(n_filtered);
+  for (size_t i = 0; i < n_filtered; ++i) {
+    filtered_points[i] = object_pts[i];
+  }
+
+  std::cout << "Continuing pipeline with " << n_filtered << " object points (ground removed)." << std::endl;
 
   // 3. Statistical Outlier Removal (SOR)
   std::cout << "\n[Step 3] Statistical Outlier Removal (K=50, Std=1.0)..."

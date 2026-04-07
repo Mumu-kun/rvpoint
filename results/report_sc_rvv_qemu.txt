@@ -1,6 +1,0 @@
-============================================================
-  RVPoint Benchmark (Instruction Counts) - QEMU Trace       
-  *Measured by counting QEMU TB executions (-one-insn-per-tb)*
-============================================================
-Algorithm            | Scalar(ins)  | RVV(ins)     | Ratio
-------------------------------------------------------------

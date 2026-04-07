@@ -1,5 +1,4 @@
 # Build directories
-build_cmake/
 build/
 
 # Binaries

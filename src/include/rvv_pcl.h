@@ -41,7 +41,8 @@ struct PointCloudSoA {
   std::size_t n; /**< Number of points in the cloud */
 };
 
-class Octree; // Forward declaration
+class Octree;       // Forward declaration
+class SpatialHash;  // Forward declaration
 
 // ============================================================================
 // 1) Voxel Grid Downsampling
@@ -63,18 +64,15 @@ std::size_t voxel_grid_downsamp_sc(const PointXYZ *in, std::size_t n,
                                    PointXYZ *out, float leaf_size);
 
 /**
- * @brief Voxel Grid Downsampling (RVV Optimized).
+ * @brief Voxel Grid Downsampling (RVV Hybrid — DEPRECATED, use _rvv_v2).
  *
- * Vectorized implementation of voxel grid downsampling.
- * Uses RVV instructions for coordinate scaling, min/max finding, and
- * projection.
+ * Vectorizes coordinate scaling but still uses std::map for grouping.
+ * The map insertion bottleneck (O(n log n) scalar) dominates at large N.
  *
- * @param in Input point cloud in SoA format.
- * @param out Pointer to output array of PointXYZ (AoS format for
- * compatibility).
- * @param leaf_size Dimension of the voxel (leaf) along each axis.
- * @return std::size_t Number of points in the output cloud.
+ * @deprecated Use voxel_grid_downsamp_rvv_v2 which eliminates std::map
+ *             via a fully vectorized sort-based approach.
  */
+[[deprecated("Use voxel_grid_downsamp_rvv_v2 — fully vectorized, no std::map")]]
 std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA &in, PointXYZ *out,
                                     float leaf_size);
 
@@ -181,6 +179,33 @@ void normal_estimation_rvv(const PointCloudSoA &in, const Octree &octree,
                            float vp_x = 0, float vp_y = 0, float vp_z = 0,
                            int eigen_iters = 4);
 
+/**
+ * @brief Normal Estimation (RVV + SpatialHash, pre-built hash passed in).
+ *
+ * Uses SpatialHash for neighbor search instead of Octree.
+ * SpatialHash provides O(1) average-case query vs Octree's O(log n),
+ * but requires knowing the search radius at build time (set cell_size = radius).
+ *
+ * @param in   Input point cloud (SoA).
+ * @param hash Pre-built SpatialHash (call setInputCloud(soa, radius) + build()).
+ */
+void normal_estimation_rvv(const PointCloudSoA &in, const SpatialHash &hash,
+                           float *nx, float *ny, float *nz, int k, float radius,
+                           float vp_x = 0, float vp_y = 0, float vp_z = 0,
+                           int eigen_iters = 4);
+
+/**
+ * @brief Normal Estimation (RVV, self-contained — builds Octree internally).
+ *
+ * Convenience overload that does not require a pre-built Octree.
+ * The Octree build cost is included inside this call.
+ * Use the Octree-overload above when you need to measure build cost separately.
+ */
+void normal_estimation_rvv(const PointCloudSoA &in,
+                           float *nx, float *ny, float *nz, int k, float radius,
+                           float vp_x = 0, float vp_y = 0, float vp_z = 0,
+                           int eigen_iters = 4);
+
 // ============================================================================
 // 4) Radius Search
 // ============================================================================
@@ -263,6 +288,56 @@ int ransac_plane_sc(const PointXYZ *cloud, std::size_t n, float dist_thresh,
 int ransac_plane_rvv(const PointCloudSoA &cloud, float dist_thresh,
                      int max_iters, float *model,
                      float collinear_thresh = 1e-6f);
+
+/**
+ * @brief Extract Plane Inliers (RVV Optimized).
+ *
+ * Extracts points that lie within a distance threshold of the plane model.
+ *
+ * @param cloud Input cloud in SoA format.
+ * @param model Plane coefficients [a, b, c, d] where ax + by + cz + d = 0.
+ * @param dist_thresh Distance threshold to consider a point an inlier.
+ * @param inliers Output array for inlier points (must be pre-allocated to cloud.n).
+ * @return std::size_t Number of inlier points extracted.
+ */
+std::size_t extract_plane_inliers_rvv(const PointCloudSoA &cloud,
+                                       const float *model, float dist_thresh,
+                                       PointXYZ *inliers);
+
+/**
+ * @brief Extract Plane Outliers (RVV Optimized).
+ *
+ * Extracts points that lie beyond a distance threshold of the plane model.
+ *
+ * @param cloud Input cloud in SoA format.
+ * @param model Plane coefficients [a, b, c, d].
+ * @param dist_thresh Distance threshold (points > thresh are outliers).
+ * @param outliers Output array for outlier points (must be pre-allocated to cloud.n).
+ * @return std::size_t Number of outlier points extracted.
+ */
+std::size_t extract_plane_outliers_rvv(const PointCloudSoA &cloud,
+                                        const float *model, float dist_thresh,
+                                        PointXYZ *outliers);
+
+/**
+ * @brief Extract Both Inliers and Outliers in Single Pass (RVV Optimized).
+ *
+ * More efficient than calling extract_plane_inliers and extract_plane_outliers
+ * separately as it only computes distances once.
+ *
+ * @param cloud Input cloud in SoA format.
+ * @param model Plane coefficients [a, b, c, d].
+ * @param dist_thresh Distance threshold.
+ * @param inliers Output array for inliers (must be pre-allocated to cloud.n).
+ * @param outliers Output array for outliers (must be pre-allocated to cloud.n).
+ * @param n_inliers Output: number of inliers.
+ * @param n_outliers Output: number of outliers.
+ */
+void extract_plane_inliers_outliers_rvv(const PointCloudSoA &cloud,
+                                         const float *model, float dist_thresh,
+                                         PointXYZ *inliers, PointXYZ *outliers,
+                                         std::size_t &n_inliers,
+                                         std::size_t &n_outliers);
 
 // ============================================================================
 // Octree for Efficient Spatial Search

@@ -213,4 +213,51 @@ void normal_estimation_rvv(const PointCloudSoA& in,
 
 }
 
+// ============================================================================
+// RVV Normal Estimation using SpatialHash (pre-built, passed externally)
+// SpatialHash has O(1) average-case query vs Octree's O(log n).
+// Best when search radius is known ahead of time (set cell_size = radius).
+// ============================================================================
+void normal_estimation_rvv(const PointCloudSoA& in,
+                           const SpatialHash& hash,
+                           float* nx, float* ny, float* nz, int k, float radius,
+                           float vp_x, float vp_y, float vp_z, int eigen_iters) {
+    if (in.n == 0) return;
+
+    std::vector<int>   indices;
+    std::vector<float> dists;
+    indices.reserve(k * 2);
+
+    for (size_t i = 0; i < in.n; ++i) {
+        PointXYZ query = {in.x[i], in.y[i], in.z[i]};
+
+        hash.radiusSearch(query, radius, indices, dists);
+
+        if (indices.size() < 3) { nx[i] = ny[i] = nz[i] = 0; continue; }
+
+        float cov[3][3], centroid[3];
+        compute_covariance_rvv(in, indices, cov, centroid);
+
+        float n_x, n_y, n_z;
+        eigen_decomposition_rvv(cov, n_x, n_y, n_z, eigen_iters);
+        flip_normal_rvv(query, vp_x, vp_y, vp_z, n_x, n_y, n_z);
+
+        nx[i] = n_x; ny[i] = n_y; nz[i] = n_z;
+    }
+}
+
+// ============================================================================
+// Self-contained RVV Normal Estimation — Octree built internally.
+// Octree build cost is included. Use the explicit-Octree overload above
+// when measuring build and query costs separately (e.g. benchmarking).
+// ============================================================================
+void normal_estimation_rvv(const PointCloudSoA& in,
+                           float* nx, float* ny, float* nz, int k, float radius,
+                           float vp_x, float vp_y, float vp_z, int eigen_iters) {
+    Octree octree;
+    octree.setInputCloud(in);
+    octree.build();
+    normal_estimation_rvv(in, octree, nx, ny, nz, k, radius, vp_x, vp_y, vp_z, eigen_iters);
+}
+
 } // namespace rvv_pcl

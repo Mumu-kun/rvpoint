@@ -168,4 +168,77 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
     return best_inliers;
 }
 
+// ============================================================================
+// Extract plane inliers / outliers (RVV)
+// Strategy: vectorize distance computation into a temp buffer, then do a
+// single scalar pass to split into AoS output arrays.
+// The distance kernel is the expensive part for large N; the scalar split
+// is O(n) with minimal work per point.
+// ============================================================================
+
+static void compute_plane_distances_rvv(const PointCloudSoA &cloud,
+                                        float a, float b, float c, float d,
+                                        float *dists) {
+    size_t n = cloud.n;
+    size_t i = 0;
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[i], vl);
+        vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, a, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
+        dist = __riscv_vfadd_vf_f32m8(dist, d, vl);
+        __riscv_vse32_v_f32m8(&dists[i], dist, vl);
+        i += vl;
+    }
+}
+
+std::size_t extract_plane_inliers_rvv(const PointCloudSoA &cloud,
+                                       const float *model, float dist_thresh,
+                                       PointXYZ *inliers) {
+    std::vector<float> dists(cloud.n);
+    compute_plane_distances_rvv(cloud, model[0], model[1], model[2], model[3],
+                                dists.data());
+    std::size_t count = 0;
+    for (size_t j = 0; j < cloud.n; ++j) {
+        if (dists[j] >= -dist_thresh && dists[j] <= dist_thresh)
+            inliers[count++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
+    }
+    return count;
+}
+
+std::size_t extract_plane_outliers_rvv(const PointCloudSoA &cloud,
+                                        const float *model, float dist_thresh,
+                                        PointXYZ *outliers) {
+    std::vector<float> dists(cloud.n);
+    compute_plane_distances_rvv(cloud, model[0], model[1], model[2], model[3],
+                                dists.data());
+    std::size_t count = 0;
+    for (size_t j = 0; j < cloud.n; ++j) {
+        if (dists[j] < -dist_thresh || dists[j] > dist_thresh)
+            outliers[count++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
+    }
+    return count;
+}
+
+void extract_plane_inliers_outliers_rvv(const PointCloudSoA &cloud,
+                                         const float *model, float dist_thresh,
+                                         PointXYZ *inliers, PointXYZ *outliers,
+                                         std::size_t &n_inliers,
+                                         std::size_t &n_outliers) {
+    std::vector<float> dists(cloud.n);
+    compute_plane_distances_rvv(cloud, model[0], model[1], model[2], model[3],
+                                dists.data());
+    n_inliers = 0;
+    n_outliers = 0;
+    for (size_t j = 0; j < cloud.n; ++j) {
+        if (dists[j] >= -dist_thresh && dists[j] <= dist_thresh)
+            inliers[n_inliers++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
+        else
+            outliers[n_outliers++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
+    }
+}
+
 } // namespace rvv_pcl
