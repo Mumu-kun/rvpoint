@@ -24,6 +24,7 @@ GEM5_DIR="/opt/gem5"
 [ -f "/opt/gem5-25/build/RISCV/gem5.opt" ] && GEM5_DIR="/opt/gem5-25"
 GEM5_BIN="${GEM5_DIR}/build/RISCV/gem5.opt"
 STATIC_BIN="${PROJECT_ROOT}/bin/benchmark_gem5_static"
+PCD_STATIC_BIN="${PROJECT_ROOT}/bin/benchmark_gem5_pcd_static"
 RESULTS_DIR="${PROJECT_ROOT}/results"
 GEM5_CONFIG="${SCRIPT_DIR}/gem5_se.py"
 
@@ -75,6 +76,29 @@ mkdir -p "${PROJECT_ROOT}/bin"
     -o "$STATIC_BIN" \
     -lstdc++ -lm -lc
 success "Built: ${STATIC_BIN}"
+
+# ── Build PCD static binary (linux-gnu toolchain — glibc for real file I/O) ───
+# The ELF/newlib toolchain stubs out open() for bare-metal; the linux-gnu
+# toolchain uses glibc which emits real Linux ecall instructions that gem5 SE
+# intercepts, allowing std::ifstream to open PCD files inside the simulation.
+LINUX_GCC="${RISCV:-/opt/riscv}/bin/riscv64-unknown-linux-gnu-g++"
+if [ ! -x "$LINUX_GCC" ]; then
+    LINUX_GCC="$(command -v riscv64-unknown-linux-gnu-g++ 2>/dev/null || true)"
+fi
+
+if [ -x "$LINUX_GCC" ]; then
+    info "Building benchmark_gem5_pcd_static (linux-gnu toolchain, static + glibc)..."
+    "$LINUX_GCC" -march=rv64gcv -mabi=lp64d -O2 -std=c++17 -static \
+        -DGEM5_BUILD \
+        -I"${PROJECT_ROOT}/src/include" \
+        "${SRCS[@]}" \
+        -o "$PCD_STATIC_BIN"
+    success "Built: ${PCD_STATIC_BIN}"
+    HAVE_PCD_BIN=1
+else
+    warn "riscv64-unknown-linux-gnu-g++ not found — PCD benchmark will be skipped."
+    HAVE_PCD_BIN=0
+fi
 
 # ── Stat extraction helpers ────────────────────────────────────────────────────
 # gem5 stats.txt format: "stat.name    value    # description"
@@ -228,4 +252,86 @@ for algo in "${ALGOS[@]}"; do
 done
 
 tee_out "========================================================================"
+
+# ── Real LiDAR PCD benchmark ──────────────────────────────────────────────────
+# Runs the full pipeline on a real PCD file, subsampled to GEM5_PCD_N points.
+# Skip if no PCD file is configured.
+PCD_FILE="${GEM5_PCD:-${PROJECT_ROOT}/data/table_scene_lms400.pcd}"
+PCD_N="${GEM5_PCD_N:-512}"
+
+if [ "${HAVE_PCD_BIN:-0}" -eq 1 ] && [ -f "$PCD_FILE" ]; then
+    tee_out ""
+    tee_out "========================================================================"
+    tee_out "  Real LiDAR PCD Benchmark (gem5 cycle-accurate)"
+    tee_out "  File: ${PCD_FILE}"
+    tee_out "  Subsampled to N=${PCD_N} pts  (use GEM5_PCD_N=<val> to override)"
+    tee_out "  Params: leaf=0.05m  ransac_thresh=0.05m  norm_r=0.1m"
+    tee_out "========================================================================"
+    tee_out ""
+    tee_out "Mode             | Scalar cycles | RVV cycles   | Speedup"
+    tee_out "-----------------|---------------|--------------|--------"
+
+    pcd_sc_dir="${GEM5_OUTBASE}/pipeline_pcd_sc"
+    pcd_rv_dir="${GEM5_OUTBASE}/pipeline_pcd_rvv"
+
+    info "Running pipeline_pcd_sc (N=${PCD_N}, real LiDAR)..."
+    run_gem5_pcd() {
+        local mode="$1"
+        local outdir="$2"
+        mkdir -p "$outdir"
+        "$GEM5_BIN" \
+            --outdir="$outdir" \
+            "${GEM5_CONFIG}" \
+            --cmd="$PCD_STATIC_BIN" \
+            --options="${mode} ${PCD_N} ${PCD_FILE}" \
+            --cpu="$CPU_MODEL" \
+            > "${outdir}/gem5_stdout.txt" 2>&1 || true
+
+        if grep -q "IllegalInstFault\|illegal instruction\|panic:" "${outdir}/gem5_stdout.txt" 2>/dev/null; then
+            warn "  ${mode}: unsupported instruction in gem5 — result will show N/A"
+            echo "ILLEGAL_INST" > "${outdir}/.failed"
+        elif ! grep -q "gem5_bench:" "${outdir}/gem5_stdout.txt" 2>/dev/null; then
+            warn "  ${mode}: binary may not have completed — check ${outdir}/gem5_stdout.txt"
+        fi
+    }
+
+    run_gem5_pcd "pipeline_pcd_sc" "$pcd_sc_dir"
+    pcd_sc_cyc=$(extract_cycles "$pcd_sc_dir")
+    pcd_sc_sec=$(extract_seconds "$pcd_sc_dir")
+
+    info "Running pipeline_pcd_rvv (N=${PCD_N}, real LiDAR)..."
+    run_gem5_pcd "pipeline_pcd_rvv" "$pcd_rv_dir"
+    pcd_rv_cyc=$(extract_cycles "$pcd_rv_dir")
+    pcd_rv_sec=$(extract_seconds "$pcd_rv_dir")
+
+    pcd_speedup="N/A"
+    if [ "$pcd_sc_cyc" != "N/A" ] && [ "$pcd_rv_cyc" != "N/A" ] \
+       && [ "$pcd_rv_cyc" != "0" ] \
+       && [ "$pcd_sc_cyc" != "UNSUPPORTED" ] && [ "$pcd_rv_cyc" != "UNSUPPORTED" ]; then
+        pcd_speedup=$(python3 -c "print(f'{int(\"${pcd_sc_cyc}\")/int(\"${pcd_rv_cyc}\"):.2f}x')" 2>/dev/null || echo "N/A")
+    fi
+
+    printf "%-17s| %-14s| %-13s| %s\n" \
+        "pipeline_pcd" "$pcd_sc_cyc" "$pcd_rv_cyc" "$pcd_speedup" \
+        | tee -a "$REPORT"
+
+    tee_out "========================================================================"
+    tee_out ""
+    tee_out "PCD pipeline stdout (rdinstret stage breakdown):"
+    tee_out "  Scalar: ${pcd_sc_dir}/gem5_stdout.txt"
+    tee_out "  RVV:    ${pcd_rv_dir}/gem5_stdout.txt"
+    tee_out ""
+    tee_out "Note: rdinstret counts inside the binary output are also cycle-validated"
+    tee_out "      by gem5 — they show per-stage instruction counts on real LiDAR data."
+    tee_out "========================================================================"
+else
+    tee_out ""
+    if [ "${HAVE_PCD_BIN:-0}" -eq 0 ]; then
+        tee_out "Skipping PCD benchmark: linux-gnu toolchain not found (needed for file I/O)."
+    else
+        tee_out "Skipping PCD benchmark: ${PCD_FILE} not found."
+        tee_out "  Set GEM5_PCD=/path/to/cloud.pcd to enable."
+    fi
+fi
+
 success "Report saved to: ${REPORT}"

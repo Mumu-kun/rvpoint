@@ -176,6 +176,162 @@ do_bench_pipeline() {
     fi
 }
 
+do_bench_run() {
+    ensure_container
+    echo ""
+    echo -e "  ${BOLD}Configurable Benchmark Runner${RESET}"
+    echo "  Each run saves a CSV + per-stage PCD files in results/<algo>_<mode>_N<n>_<ts>/"
+    echo ""
+
+    # Algorithm selection
+    echo "  Algorithms:  voxel | ransac | sor | normal | pipeline | all"
+    read -rp "  --algo  (default: pipeline): " br_algo
+    br_algo="${br_algo:-pipeline}"
+
+    # Mode selection
+    echo "  Modes: sc | rvv | both"
+    read -rp "  --mode  (default: both): " br_mode
+    br_mode="${br_mode:-both}"
+
+    # Dataset selection
+    echo ""
+    echo "  Dataset:"
+    echo "    0) synthetic  — generated random cloud"
+    echo "    1) bunny      — data/bunny.pcd  (~35K pts)"
+    echo "    2) table      — data/table_scene_lms400.pcd  (~460K pts)"
+    echo "    3) custom     — enter a file path"
+    read -rp "  --dataset  (default: 0): " br_ds_choice
+    br_ds_choice="${br_ds_choice:-0}"
+
+    local br_dataset br_n_arg=""
+    case "$br_ds_choice" in
+        0|synthetic) br_dataset="synthetic" ;;
+        1|bunny)     br_dataset="bunny" ;;
+        2|table)     br_dataset="table" ;;
+        3|custom)
+            read -rp "  PCD file path: " br_ds_path
+            br_dataset="${br_ds_path}" ;;
+        *)
+            # Treat as literal path if it looks like one
+            br_dataset="$br_ds_choice" ;;
+    esac
+
+    # N (only relevant for synthetic)
+    if [ "$br_dataset" = "synthetic" ]; then
+        read -rp "  --n  (default: 1024): " br_n
+        br_n="${br_n:-1024}"
+        br_n_arg="--n ${br_n}"
+    fi
+
+    info "Starting bench_run: algo=${br_algo} mode=${br_mode} dataset=${br_dataset} ${br_n_arg}"
+    echo ""
+
+    # Sync scripts and source into container
+    docker cp "$PROJECT_ROOT/scripts/bench_run.sh"         "$CONTAINER_NAME:/workspace/scripts/bench_run.sh"
+    docker cp "$PROJECT_ROOT/tests/benchmark_pipeline.cpp" "$CONTAINER_NAME:/workspace/tests/benchmark_pipeline.cpp"
+    docker cp "$PROJECT_ROOT/src"                          "$CONTAINER_NAME:/workspace/"
+
+    docker exec -it "$CONTAINER_NAME" bash -c \
+        "cd /workspace && IN_RVPOINT_CONTAINER=1 bash scripts/bench_run.sh \
+         --algo ${br_algo} --mode ${br_mode} ${br_n_arg} --dataset \"${br_dataset}\""
+    echo ""
+    info "Results in: ${RESULTS_DIR}/"
+    ls -td "${RESULTS_DIR}/${br_algo}_"* 2>/dev/null | head -5 | sed 's/^/    /' || true
+}
+
+do_gem5_bench_run() {
+    ensure_container
+    # Check gem5 exists
+    if ! docker exec "$CONTAINER_NAME" bash -c \
+        "test -f /opt/gem5/build/RISCV/gem5.opt || test -f /opt/gem5-25/build/RISCV/gem5.opt" 2>/dev/null; then
+        warn "gem5 not found. Run option 7 (gem5 Setup) first."
+        return
+    fi
+
+    echo ""
+    echo -e "  ${BOLD}Configurable gem5 Benchmark${RESET}"
+    echo "  Cycle-accurate simulation — each run takes 2-10 min."
+    echo "  Results: results/gem5_<algo>_<mode>_<dataset>_N<n>_<ts>/"
+    echo ""
+
+    # Algorithm
+    echo "  Algorithms: voxel | ransac | sor | normal | pipeline"
+    read -rp "  --algo  (default: pipeline): " g_algo
+    g_algo="${g_algo:-pipeline}"
+
+    # Mode
+    echo "  Modes: sc | rvv | both"
+    read -rp "  --mode  (default: both): " g_mode
+    g_mode="${g_mode:-both}"
+
+    # Dataset
+    echo ""
+    echo "  Dataset:"
+    echo "    0) synthetic  — generated random cloud"
+    echo "    1) bunny      — data/bunny.pcd"
+    echo "    2) table      — data/table_scene_lms400.pcd  (LiDAR)"
+    echo "    3) custom     — enter a file path"
+    echo "  Note: real datasets only apply to --algo pipeline"
+    read -rp "  --dataset  (default: 0): " g_ds_choice
+    g_ds_choice="${g_ds_choice:-0}"
+
+    local g_dataset
+    case "$g_ds_choice" in
+        0|synthetic) g_dataset="synthetic" ;;
+        1|bunny)     g_dataset="bunny" ;;
+        2|table)     g_dataset="table" ;;
+        3|custom)
+            read -rp "  PCD file path: " g_ds_path
+            g_dataset="$g_ds_path" ;;
+        *)           g_dataset="$g_ds_choice" ;;
+    esac
+
+    # N — for real datasets offer "full" option (N=0 = no subsampling)
+    if [ "$g_dataset" = "synthetic" ]; then
+        read -rp "  --n  cloud size  (default: 512, keep ≤1024 for gem5): " g_n
+        g_n="${g_n:-512}"
+    else
+        echo "  Subsample size (enter a number, or 'full' to use all points):"
+        echo "    bunny=397 pts  |  table=460K pts (use ≤512 for table!)"
+        read -rp "  --n  (default: full): " g_n_raw
+        g_n_raw="${g_n_raw:-full}"
+        if [ "$g_n_raw" = "full" ] || [ "$g_n_raw" = "0" ]; then
+            g_n=0
+        else
+            g_n="$g_n_raw"
+        fi
+    fi
+
+    # CPU model
+    echo "  CPU models: o3 (out-of-order) | minor (in-order) | timing (simple)"
+    read -rp "  --cpu  (default: o3): " g_cpu
+    g_cpu="${g_cpu:-o3}"
+
+    echo ""
+    if [ "$g_n" = "0" ]; then
+        info "Starting gem5 run: algo=${g_algo} mode=${g_mode} dataset=${g_dataset} N=full cpu=${g_cpu}"
+    else
+        info "Starting gem5 run: algo=${g_algo} mode=${g_mode} dataset=${g_dataset} N=${g_n} cpu=${g_cpu}"
+    fi
+    [ "$g_dataset" = "table" ] && [ "$g_n" = "0" ] && \
+        warn "Full table dataset (460K pts) will take many hours in gem5 — consider N=512."
+    echo ""
+
+    # Sync scripts and source
+    docker cp "$PROJECT_ROOT/scripts/gem5_bench_run.sh" "$CONTAINER_NAME:/workspace/scripts/gem5_bench_run.sh"
+    docker cp "$PROJECT_ROOT/scripts/gem5_se.py"        "$CONTAINER_NAME:/workspace/scripts/gem5_se.py"
+    docker cp "$PROJECT_ROOT/tests/benchmark_gem5.cpp"  "$CONTAINER_NAME:/workspace/tests/benchmark_gem5.cpp"
+    docker cp "$PROJECT_ROOT/src"                       "$CONTAINER_NAME:/workspace/"
+
+    docker exec -it "$CONTAINER_NAME" bash -c \
+        "cd /workspace && bash scripts/gem5_bench_run.sh \
+         --algo ${g_algo} --mode ${g_mode} --dataset \"${g_dataset}\" \
+         --n ${g_n} --cpu ${g_cpu}"
+    echo ""
+    latest=$(ls -td "${RESULTS_DIR}/gem5_${g_algo}_"* 2>/dev/null | head -1)
+    [ -n "$latest" ] && success "Latest result: $latest"
+}
+
 do_gem5_setup() {
     info "Setting up gem5 inside container (30-45 min build)..."
     warn "This downloads ~1 GB and compiles ~2 GB. Only needed once."
@@ -284,15 +440,19 @@ print_menu() {
     echo "║    2)  Run All Tests                                         ║"
     echo "║    3)  Run Specific Test(s)                                  ║"
     echo "║                                                              ║"
-    echo "║  Benchmarks                                                  ║"
+    echo "║  Benchmarks (QEMU — instruction counts)                      ║"
     echo "║    4)  Per-Algorithm Benchmark  (rdinstret, N=1024)          ║"
     echo "║    5)  End-to-End Pipeline Benchmark  (all stages, multi-N)  ║"
-    echo "║    6)  gem5 Setup  (build cycle-accurate simulator, ~40 min) ║"
-    echo "║    7)  gem5 Benchmark  (hardware-accurate cycles, N=512)     ║"
+    echo "║    6)  Configurable Bench Run  (algo/mode/dataset, CSV+PCD)  ║"
+    echo "║                                                              ║"
+    echo "║  Benchmarks (gem5 — cycle-accurate)                         ║"
+    echo "║    7)  gem5 Setup  (build simulator, ~40 min, once only)     ║"
+    echo "║    8)  gem5 Full Batch  (all algos, fixed N=512)             ║"
+    echo "║    9)  gem5 Configurable Run  (algo/mode/dataset/N/cpu)      ║"
     echo "║                                                              ║"
     echo "║  Container                                                   ║"
-    echo "║    8)  Open Shell in Container                               ║"
-    echo "║    9)  Rebuild Docker Image  (slow, only if env changed)     ║"
+    echo "║   10)  Open Shell in Container                               ║"
+    echo "║   11)  Rebuild Docker Image  (slow, only if env changed)     ║"
     echo "║    0)  Clean Build Directory                                 ║"
     echo "║                                                              ║"
     echo "║    q)  Quit                                                  ║"
@@ -313,8 +473,10 @@ main() {
             test)            shift; do_run_all_tests ;;
             bench)           do_bench_per_algo ;;
             bench-pipeline)  do_bench_pipeline ;;
+            bench-run)       do_bench_run ;;
             gem5-setup)      do_gem5_setup ;;
             gem5-bench)      do_gem5_bench ;;
+            gem5-bench-run)  do_gem5_bench_run ;;
             shell)           do_shell ;;
             *)               error "Unknown command: $1"; exit 1 ;;
         esac
@@ -330,13 +492,15 @@ main() {
             1) do_build ;;
             2) do_run_all_tests ;;
             3) do_run_specific_test ;;
-            4) do_bench_per_algo ;;
-            5) do_bench_pipeline ;;
-            6) do_gem5_setup ;;
-            7) do_gem5_bench ;;
-            8) do_shell ;;
-            9) do_rebuild_image ;;
-            0) do_clean_build ;;
+            4)  do_bench_per_algo ;;
+            5)  do_bench_pipeline ;;
+            6)  do_bench_run ;;
+            7)  do_gem5_setup ;;
+            8)  do_gem5_bench ;;
+            9)  do_gem5_bench_run ;;
+            10) do_shell ;;
+            11) do_rebuild_image ;;
+            0)  do_clean_build ;;
             q|Q) info "Goodbye."; exit 0 ;;
             *) warn "Invalid option: '$choice'" ;;
         esac
