@@ -29,7 +29,7 @@ message(STATUS "RISC-V ABI: ${RISCV_ABI}")
 message(STATUS "RVV backend enabled: ${RVV_PCL_ENABLE_RVV}")
 
 # 1. The Library (rvvpcl)
-list(APPEND SOURCES 
+list(APPEND SOURCES
     "src/point_cloud.cpp"
     "src/voxel_grid_downsamp.cpp"
     "src/rvv_common.cpp"
@@ -39,7 +39,6 @@ list(APPEND SOURCES
     "src/octree.cpp"
     "src/spatial_hashing.cpp"
 )
-# Note: placeholder.c removed, real source used.
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC src/include)
 target_compile_options(rvvpcl PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
@@ -47,60 +46,58 @@ if(RVV_PCL_ENABLE_RVV)
     target_compile_definitions(rvvpcl PUBLIC RVV_PCL_USE_RVV=1)
 endif()
 
+# Helper: add a test target from a source file
+function(add_rvv_test src)
+    get_filename_component(name "${src}" NAME_WE)
+    add_executable(${name} "${src}")
+    target_link_libraries(${name} PRIVATE rvvpcl)
+endfunction()
 
 # 2. Test Executables
-# Scalar Test
-add_executable(test_scalar tests/test_scalar.c)
-target_link_libraries(test_scalar PRIVATE rvvpcl)
 
-# Vector-specific tests
+# --- Always-built tests (no RVV dependency) ---
+file(GLOB ALWAYS_TEST_SOURCES "tests/always/*.c" "tests/always/*.cpp")
+foreach(src ${ALWAYS_TEST_SOURCES})
+    add_rvv_test("${src}")
+endforeach()
+
+# --- Unit tests (algorithm layer) ---
+file(GLOB UNIT_TEST_SOURCES "tests/unit/*.cpp")
+foreach(src ${UNIT_TEST_SOURCES})
+    add_rvv_test("${src}")
+endforeach()
+
+# --- Integration tests ---
+file(GLOB INTEGRATION_TEST_SOURCES "tests/integration/*.cpp")
+foreach(src ${INTEGRATION_TEST_SOURCES})
+    add_rvv_test("${src}")
+endforeach()
+
+# --- RVV hardware verification (conditional on vector extension) ---
 if(RVV_PCL_ENABLE_RVV)
-    add_executable(test_vector tests/test_vector.c)
-    target_link_libraries(test_vector PRIVATE rvvpcl)
-
-    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/rvv_test.c")
-        add_executable(rvv_test tests/rvv_test.c)
-        target_link_libraries(rvv_test PRIVATE rvvpcl)
-    endif()
+    file(GLOB RVV_TEST_SOURCES "tests/rvv/*.c")
+    foreach(src ${RVV_TEST_SOURCES})
+        add_rvv_test("${src}")
+    endforeach()
 endif()
 
-# Voxel Grid Test
-add_executable(test_voxel_grid tests/test_voxel_grid.cpp)
-target_link_libraries(test_voxel_grid PRIVATE rvvpcl)
+# --- Support tests (I/O, data loading) ---
+file(GLOB SUPPORT_TEST_SOURCES "tests/support/*.cpp")
+foreach(src ${SUPPORT_TEST_SOURCES})
+    add_rvv_test("${src}")
+endforeach()
 
-# SOR Test
-add_executable(test_sor tests/test_sor.cpp)
-target_link_libraries(test_sor PRIVATE rvvpcl)
-
-# Normal Estimation Test
-add_executable(test_normal tests/test_normal.cpp)
-target_link_libraries(test_normal PRIVATE rvvpcl)
-
-# Radius Search Test
-add_executable(test_radius tests/test_radius.cpp)
-target_link_libraries(test_radius PRIVATE rvvpcl)
-
-# Octree Test (NEW)
-add_executable(test_octree tests/test_octree.cpp)
-target_link_libraries(test_octree PRIVATE rvvpcl)
-
-# PCL Walkthrough Test (NEW)
-add_executable(test_pipeline_walkthrough tests/test_pipeline_walkthrough.cpp)
-target_link_libraries(test_pipeline_walkthrough PRIVATE rvvpcl)
-
-# Spatial Hash Comparison Test
-add_executable(test_spatial_hash_comparison tests/test_spatial_hash_comparison.cpp)
-target_link_libraries(test_spatial_hash_comparison PRIVATE rvvpcl)
-
-# RANSAC Test
-add_executable(test_ransac tests/test_ransac.cpp)
-target_link_libraries(test_ransac PRIVATE rvvpcl)
-
-# Benchmark Suite
-add_executable(benchmark tests/benchmark.cpp)
-target_compile_options(benchmark PRIVATE "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
-target_link_libraries(benchmark PRIVATE rvvpcl)
-target_sources(benchmark PRIVATE "${CMAKE_SOURCE_DIR}/src/benchmark_kernels.cpp")
+# --- Benchmark ---
+file(GLOB BENCHMARK_SOURCES "tests/benchmark/*.cpp")
+foreach(src ${BENCHMARK_SOURCES})
+    get_filename_component(name "${src}" NAME_WE)
+    add_executable(${name} "${src}")
+    target_compile_options(${name} PRIVATE "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
+    target_link_libraries(${name} PRIVATE rvvpcl)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/src/benchmark_kernels.cpp")
+        target_sources(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/benchmark_kernels.cpp")
+    endif()
+endforeach()
 
 # Pipeline Export Utility
 add_executable(pipeline_export tools/pipeline_export.cpp)

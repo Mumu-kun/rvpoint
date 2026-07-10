@@ -18,18 +18,24 @@ if [ ! -f /.dockerenv ] && [ -z "$IN_RVPOINT_CONTAINER" ]; then
 fi
 
 # All available test binaries (order: basic -> algorithm-specific -> integration)
+# Auto-discovered from bin/ at runtime; kept here for listing and deterministic order.
 ALL_TESTS=(
     test_scalar
+    test_loader
+    test_normal
+    test_ransac
+    test_sor
+    test_octree
+    test_radius
+    test_voxel_grid
+    test_voxel_linux
+    test_pipeline_walkthrough
+    test_spatial_hash_comparison
+    # RVV-only tests (built when RVV is enabled)
     test_vector
     rvv_test
-    test_voxel_grid
-    test_sor
-    test_normal
-    test_radius
-    test_ransac
-    test_octree
-    test_spatial_hash_comparison
-    test_pipeline_walkthrough
+    test_rvv_features
+    test_tuples
 )
 
 # Defaults

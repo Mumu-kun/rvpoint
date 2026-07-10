@@ -1,6 +1,7 @@
 # Build directories
 build_cmake/
 build/
+cmake/
 
 # Binaries
 bin/
@@ -10,6 +11,9 @@ bin/
 
 # Test binaries (root level)
 test_*_linux
+
+# Test binaries (built in tests/ due to manual builds or misconfigured CMake)
+tests/test_*
 
 # Output results
 results/
