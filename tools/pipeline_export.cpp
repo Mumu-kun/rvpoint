@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 using namespace rvv_pcl;
@@ -36,7 +37,7 @@ struct PipelineConfig {
   int normal_k = 10; // Larger K smooths normals, smaller K keeps detail.
 
   // RANSAC dominant plane fitting
-  float ransac_distance_threshold = 0.02f; // Larger threshold accepts more inliers.
+  float ransac_distance_threshold = 0.2f; // Larger threshold accepts more inliers.
   int ransac_max_iterations = 1000; // More iterations improve robustness but cost time.
   float ransac_probability = 0.99f; // Higher probability increases expected iterations.
 };
@@ -138,6 +139,8 @@ void printFinalBreakdown(const std::vector<StageTiming> &stages, double total_ms
 
 int main(int argc, char **argv) {
   bool progress_enabled = false;
+  bool skip_sor = false;
+  float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
   std::vector<StageTiming> stage_timings;
   stage_timings.reserve(kStageCount);
   std::vector<std::string> positional_args;
@@ -145,13 +148,31 @@ int main(int argc, char **argv) {
     const std::string arg = argv[i];
     if (arg == "--progress" || arg == "--timings") {
       progress_enabled = true;
+    } else if (arg == "--skip-sor") {
+      skip_sor = true;
+    } else if (arg == "--leaf-size") {
+      if (i + 1 >= argc) {
+        std::cerr << "Missing value for --leaf-size" << std::endl;
+        return 1;
+      }
+      try {
+        voxel_leaf_size = std::stof(argv[++i]);
+      } catch (const std::exception &) {
+        std::cerr << "Invalid value for --leaf-size: " << argv[i] << std::endl;
+        return 1;
+      }
+      if (!std::isfinite(voxel_leaf_size) || voxel_leaf_size <= 0.0f) {
+        std::cerr << "Invalid value for --leaf-size: " << voxel_leaf_size << std::endl;
+        return 1;
+      }
     } else {
       positional_args.push_back(arg);
     }
   }
 
   if (positional_args.size() < 1 || positional_args.size() > 2) {
-    std::cerr << "Usage: " << argv[0] << " [--progress] <input.pcd> [output_dir]"
+    std::cerr << "Usage: " << argv[0]
+              << " [--progress] [--skip-sor] [--leaf-size <value>] <input.pcd> [output_dir]"
               << std::endl;
     return 1;
   }
@@ -193,7 +214,7 @@ int main(int argc, char **argv) {
 
   VoxelGridFilter voxel;
   voxel.setInput(input_cloud);
-  voxel.setLeafSize(kPipelineConfig.voxel_leaf_size);
+  voxel.setLeafSize(voxel_leaf_size);
   PointCloudSoA downsampled_cloud;
   beginStage(3, "Downsampling", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
@@ -220,7 +241,12 @@ int main(int argc, char **argv) {
   PointCloudSoA sor_cloud;
   beginStage(5, "Statistical outlier removal", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
-  sor.filter(sor_cloud);
+  if (skip_sor) {
+    sor_cloud = downsampled_cloud;
+    std::cout << "SOR bypass enabled: using downsampled cloud without filtering." << std::endl;
+  } else {
+    sor.filter(sor_cloud);
+  }
   saveStage(output_dir / "02_sor_filtered.pcd", sor_cloud, "SOR");
   stage_timings.push_back({5, "Statistical outlier removal",
                            endStage(5, "Statistical outlier removal", stage_start,

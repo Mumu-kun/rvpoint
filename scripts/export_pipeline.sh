@@ -16,7 +16,7 @@ if [ ! -f /.dockerenv ] && [ -z "$IN_RVPOINT_CONTAINER" ]; then
 fi
 
 usage() {
-    echo "Usage: $0 [--backend riscv|rvv] [--progress] <input.pcd> [output_dir]"
+    echo "Usage: $0 [--backend riscv|rvv] [--progress] [--skip-sor] [--leaf-size <value>] <input.pcd> [output_dir]"
     exit 1
 }
 
@@ -33,6 +33,8 @@ find_qemu() {
 
 BACKEND="rvv"
 PROGRESS=false
+SKIP_SOR=false
+LEAF_SIZE=""
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]; do
@@ -44,6 +46,17 @@ while [[ $# -gt 0 ]]; do
         --progress|--timings)
             PROGRESS=true
             shift
+            ;;
+        --skip-sor)
+            SKIP_SOR=true
+            shift
+            ;;
+        --leaf-size)
+            if [ $# -lt 2 ] || [[ "$2" == --* ]]; then
+                usage
+            fi
+            LEAF_SIZE="$2"
+            shift 2
             ;;
         *)
             POSITIONAL+=("$1")
@@ -69,6 +82,12 @@ fi
 PIPELINE_ARGS=()
 if [ "$PROGRESS" = true ]; then
     PIPELINE_ARGS+=(--progress)
+fi
+if [ "$SKIP_SOR" = true ]; then
+    PIPELINE_ARGS+=(--skip-sor)
+fi
+if [ -n "$LEAF_SIZE" ]; then
+    PIPELINE_ARGS+=(--leaf-size "$LEAF_SIZE")
 fi
 PIPELINE_ARGS+=("$@")
 

@@ -20,14 +20,21 @@ $SUDO apt-get install -y \
   libboost-all-dev \
   swig \
   m4 \
-  libgoogle-perftools-dev
+  libgoogle-perftools-dev \
+  ccache
+  
+# ---- ENABLE CCACHE FOR SCONS ----
+export PATH="/usr/lib/ccache:$PATH"
+export USE_CCACHE=1
+
+which g++
 
 if [ ! -d "$GEM5_DIR/.git" ]; then
   git clone "$GEM5_REPO" "$GEM5_DIR"
 fi
 
 cd "$GEM5_DIR"
-scons build/RISCV/gem5.opt -j"$(nproc)"
+scons build/RISCV/gem5.opt -j1
 
 echo "gem5 built at: $GEM5_BUILD"
 echo "Set:"
