@@ -75,27 +75,44 @@ If you installed the toolchain in a custom location, set the `RISCV_PATH` enviro
 export RISCV_PATH=/path/to/riscv
 ```
 
+### WSL2 Setup (Ubuntu 24.04)
+For native WSL2 development without Docker:
+
+```bash
+# From Git Bash (as Administrator)
+./env/setup.sh
+```
+
+This installs:
+- Ubuntu 24.04 WSL2
+- RISC-V GCC 14 toolchain (ELF + glibc)
+- QEMU 9.2 user-mode for RISC-V emulation (or system package if available)
+
+Then inside WSL2:
+```bash
+source env/activate.sh
+scripts/verify_container.sh
+```
+
 ## 🏗️ Building & Testing
 
-We provide a master script that handles linting, building, and verifying all algorithms in one go.
+We provide scripts for building and verifying all algorithms.
 
 ### Run Full Verification
 ```bash
 scripts/verify_container.sh
 ```
 This script performs:
-1.  **Code Format Check** (`clang-format`)
-2.  **Static Analysis** (`cppcheck`)
-3.  **CMake Configuration** (Targeting `rv64gcv`)
-4.  **Compilation**
-5.  **QEMU Emulation Tests** (Runs all 5 algo tests)
+1.  **CMake Configuration** (Targeting `rv64gcv`)
+2.  **Compilation**
+3.  **QEMU Emulation Tests** (Runs 7 core tests: scalar, vector, voxel_grid, sor, normal, radius, ransac)
 
 ### Manual Build
 If you want to build manually:
 ```bash
 mkdir build
 cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/riscv.cmake # (Or rely on env vars set by container)
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../src/cmake/riscv.cmake # (Or rely on env vars set by container)
 make
 ```
 
@@ -122,7 +139,15 @@ After building, you can run specific tests using QEMU:
 │   └── ransac_plane.cpp        # RANSAC Implementation
 ├── tests/                      # Unit Tests (C++)
 ├── scripts/
-│   └── verify_container.sh     # Master CI/CD script
+│   ├── bench                   # gem5 benchmark wrapper
+│   ├── build.sh                # Build wrapper
+│   ├── export_pipeline.sh      # Pipeline execution exporter
+│   ├── pipeline_render.py      # Open3D PCD renderer & viewer
+│   ├── run.sh                  # Test runner
+│   ├── setup_git_hooks.sh      # Git hook installer
+│   ├── verify_container.sh     # Master CI/CD script
+│   └── lib/
+│       └── common.sh           # Shared functions
 ├── .devcontainer/              # Docker Environment Config
 └── .github/workflows/          # GitHub Actions CI
 ```
@@ -141,7 +166,7 @@ We now provide a gem5-based cycle benchmark for scalar-versus-RVV comparison. Th
 ### Running the Benchmark
 Run one benchmark case with:
 ```bash
-./bench <mode> <kernel> <size>
+./scripts/bench <mode> <kernel> <size>
 ```
 Where:
 - `mode` is `scalar` or `rvv`
@@ -159,15 +184,9 @@ The wrapper rebuilds the correct backend, runs the benchmark under gem5, parses 
 - Scalar builds use `-O3` with `rv64gc`.
 - RVV builds use `-O3 -march=rv64gcv` and vector-length-agnostic loops.
 - The gem5 launcher expects `GEM5_CONFIG` to point at your SE config script.
-- The older QEMU trace benchmark remains available as a legacy workflow in `scripts/run_trace_benchmark.sh`.
 
 ### Verify without CMake (Manual Compilation)
-You can manually compile and verify each function against its scalar counterpart using the provided script or manual commands.
-
-**Using the script:**
-```bash
-scripts/verify_manual.sh
-```
+You can manually compile and verify each function against its scalar counterpart using individual commands.
 
 **Individual commands:**
 
@@ -219,7 +238,7 @@ To build using the Linux (glibc) toolchain, use the specialized CMake file:
 ```bash
 mkdir build_linux
 cd build_linux
-cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/riscv_linux.cmake
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../src/cmake/riscv_linux.cmake
 make
 ```
 

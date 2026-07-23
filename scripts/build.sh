@@ -1,26 +1,20 @@
 #!/bin/bash
 set -e
 
-# Resolve project root (parent of scripts/)
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="${PROJECT_ROOT}/build"
 
-# --- Auto-launch in Docker if not inside a container ---
-if [ ! -f /.dockerenv ] && [ -z "$IN_RVPOINT_CONTAINER" ]; then
-    IMAGE="${RVPOINT_IMAGE:-rvpoint}"
-    if ! docker image inspect "$IMAGE" &> /dev/null; then
-        echo "Docker image '$IMAGE' not found. Building from .devcontainer/Dockerfile..."
-        docker build -f "$PROJECT_ROOT/.devcontainer/Dockerfile" -t "$IMAGE" "$PROJECT_ROOT"
-    fi
-    exec docker run --rm -e IN_RVPOINT_CONTAINER=1 \
-        -v "$PROJECT_ROOT:/workspace" -w /workspace \
-        "$IMAGE" bash scripts/build.sh "$@"
-fi
+source "$SCRIPT_DIR/lib/common.sh"
+wsl_bootstrap "scripts/build.sh" "$@"
 
-# Defaults
+source "${PROJECT_ROOT}/env/activate.sh"
+export RISCV_PATH="${RISCV:-${RISCV_ROOT:-/opt/riscv}}"
+
+# Defaults (can be overridden by command line)
 TOOLCHAIN="linux"
-CLEAN=false
 BACKEND="rvv"
+CLEAN=false
 TARGET=""
 
 # Parse arguments
@@ -49,96 +43,110 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-case "$BACKEND" in
-    rvv)
-        RISCV_ARCH="rv64gcv"
-        RVV_CMAKE="ON"
-        ;;
-    riscv|scalar|normal)
-        RISCV_ARCH="rv64gc"
-        RVV_CMAKE="OFF"
-        BACKEND="riscv"
-        ;;
-    *)
-        echo "Error: unknown backend '$BACKEND'. Use 'riscv' or 'rvv'."
-        exit 1
-        ;;
-esac
+# Helper function to build a single backend (scalar or rvv)
+build_backend() {
+    local b_name="$1"
+    local riscv_arch=""
+    local rvv_cmake=""
 
-# Map toolchain name to cmake file
-case "$TOOLCHAIN" in
-    linux)
-        TOOLCHAIN_FILE="${PROJECT_ROOT}/cmake/riscv_linux.cmake"
-        ;;
-    elf)
-        TOOLCHAIN_FILE="${PROJECT_ROOT}/cmake/riscv.cmake"
-        ;;
-    *)
-        echo "Error: unknown toolchain '$TOOLCHAIN'. Use 'linux' or 'elf'."
-        exit 1
-        ;;
-esac
+    case "$b_name" in
+        rvv)
+            riscv_arch="rv64gcv"
+            rvv_cmake="ON"
+            ;;
+        scalar|riscv|normal)
+            b_name="scalar"
+            riscv_arch="rv64gc"
+            rvv_cmake="OFF"
+            ;;
+        *)
+            echo "Error: unknown backend '$b_name'. Use 'scalar', 'rvv', or 'all'."
+            exit 1
+            ;;
+    esac
 
-# Clean if requested
-if [ "$CLEAN" = true ]; then
-    echo "Cleaning build directory..."
-    rm -rf "$BUILD_DIR"
-fi
+    local b_dir="${PROJECT_ROOT}/build/${b_name}"
 
-# Auto-clean on toolchain mismatch
-MARKER="$BUILD_DIR/.toolchain"
-BACKEND_MARKER="$BUILD_DIR/.backend"
-if [ -f "$MARKER" ] && [ "$(cat "$MARKER")" != "$TOOLCHAIN" ]; then
-    echo "Toolchain changed ($(cat "$MARKER") -> $TOOLCHAIN), reconfiguring..."
-    rm -rf "$BUILD_DIR"
-fi
-if [ -f "$BACKEND_MARKER" ] && [ "$(cat "$BACKEND_MARKER")" != "$BACKEND" ]; then
-    echo "Backend changed ($(cat "$BACKEND_MARKER") -> $BACKEND), reconfiguring..."
-    rm -rf "$BUILD_DIR"
-fi
+    # Map toolchain name to cmake file
+    local toolchain_file=""
+    case "$TOOLCHAIN" in
+        linux)
+            toolchain_file="${PROJECT_ROOT}/src/cmake/riscv_linux.cmake"
+            ;;
+        elf)
+            toolchain_file="${PROJECT_ROOT}/src/cmake/riscv.cmake"
+            ;;
+        *)
+            echo "Error: unknown toolchain '$TOOLCHAIN'. Use 'linux' or 'elf'."
+            exit 1
+            ;;
+    esac
 
-# Auto-clean if CMake cache is pinned to a non-RISC-V compiler.
-CACHE_FILE="$BUILD_DIR/CMakeCache.txt"
-if [ -f "$CACHE_FILE" ]; then
-    CXX_COMPILER="$(sed -n 's/^CMAKE_CXX_COMPILER:FILEPATH=//p' "$CACHE_FILE" | head -n 1)"
-    CACHE_ARCH="$(sed -n 's/^RISCV_ARCH:STRING=//p' "$CACHE_FILE" | head -n 1)"
-    CACHE_RVV="$(sed -n 's/^RVV_PCL_USE_RVV:BOOL=//p' "$CACHE_FILE" | head -n 1)"
-    CACHE_BUILD_TYPE="$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' "$CACHE_FILE" | head -n 1)"
-    if [ -n "$CXX_COMPILER" ] && [[ "$CXX_COMPILER" != *riscv64* ]]; then
-        echo "Detected stale host compiler in CMake cache ($CXX_COMPILER), reconfiguring..."
-        rm -rf "$BUILD_DIR"
-    elif [ -n "$CACHE_ARCH" ] && [ "$CACHE_ARCH" != "$RISCV_ARCH" ]; then
-        echo "Detected stale ISA in CMake cache ($CACHE_ARCH -> $RISCV_ARCH), reconfiguring..."
-        rm -rf "$BUILD_DIR"
-    elif [ -n "$CACHE_RVV" ] && [ "$CACHE_RVV" != "$RVV_CMAKE" ]; then
-        echo "Detected stale RVV setting in CMake cache ($CACHE_RVV -> $RVV_CMAKE), reconfiguring..."
-        rm -rf "$BUILD_DIR"
-    elif [ -z "$CACHE_BUILD_TYPE" ] || [ "$CACHE_BUILD_TYPE" != "Release" ]; then
-        echo "Detected non-Release build type in CMake cache ($CACHE_BUILD_TYPE), reconfiguring..."
-        rm -rf "$BUILD_DIR"
+    # Clean if requested
+    if [ "$CLEAN" = true ]; then
+        echo "Cleaning build directory for $b_name..."
+        rm -rf "$b_dir"
     fi
-fi
 
-# Configure if needed
-if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
-    echo "Configuring CMake (toolchain: $TOOLCHAIN, backend: $BACKEND)..."
-    cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" \
-        -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DRISCV_ARCH="$RISCV_ARCH" \
-        -DRISCV_ABI="lp64d" \
-        -DRVV_PCL_USE_RVV="$RVV_CMAKE"
-    echo "$TOOLCHAIN" > "$MARKER"
-    echo "$BACKEND" > "$BACKEND_MARKER"
-fi
+    # Auto-clean on toolchain mismatch
+    local marker="$b_dir/.toolchain"
+    if [ -f "$marker" ] && [ "$(cat "$marker")" != "$TOOLCHAIN" ]; then
+        echo "Toolchain changed ($(cat "$marker") -> $TOOLCHAIN), reconfiguring $b_name..."
+        rm -rf "$b_dir"
+    fi
 
-# Build
-if [ -n "$TARGET" ]; then
-    echo "Building target '$TARGET'..."
-    cmake --build "$BUILD_DIR" --target "$TARGET" -j"$(nproc)"
-else
-    echo "Building..."
-    cmake --build "$BUILD_DIR" -j"$(nproc)"
-fi
+    # Auto-clean if CMake cache is pinned to a non-RISC-V compiler or different build configuration
+    local cache_file="$b_dir/CMakeCache.txt"
+    if [ -f "$cache_file" ]; then
+        local cxx_compiler="$(sed -n 's/^CMAKE_CXX_COMPILER:FILEPATH=//p' "$cache_file" | head -n 1)"
+        local cache_arch="$(sed -n 's/^RISCV_ARCH:STRING=//p' "$cache_file" | head -n 1)"
+        local cache_rvv="$(sed -n 's/^RVV_PCL_USE_RVV:BOOL=//p' "$cache_file" | head -n 1)"
+        local cache_build_type="$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' "$cache_file" | head -n 1)"
+        if [ -n "$cxx_compiler" ] && [[ "$cxx_compiler" != *riscv64* ]]; then
+            echo "Detected stale host compiler in CMake cache ($cxx_compiler), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -n "$cache_arch" ] && [ "$cache_arch" != "$riscv_arch" ]; then
+            echo "Detected stale ISA in CMake cache ($cache_arch -> $riscv_arch), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -n "$cache_rvv" ] && [ "$cache_rvv" != "$rvv_cmake" ]; then
+            echo "Detected stale RVV setting in CMake cache ($cache_rvv -> $rvv_cmake), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -z "$cache_build_type" ] || [ "$cache_build_type" != "Release" ]; then
+            echo "Detected non-Release build type in CMake cache ($cache_build_type), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        fi
+    fi
 
-echo "Build complete. Binaries in: ${PROJECT_ROOT}/bin/"
+    # Configure if needed
+    if [ ! -f "$b_dir/CMakeCache.txt" ]; then
+        echo "Configuring CMake (toolchain: $TOOLCHAIN, backend: $b_name)..."
+        cmake -S "$PROJECT_ROOT" -B "$b_dir" \
+            -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DRISCV_ARCH="$riscv_arch" \
+            -DRISCV_ABI="lp64d" \
+            -DRVV_PCL_USE_RVV="$rvv_cmake"
+        echo "$TOOLCHAIN" > "$marker"
+    fi
+
+    # Build
+    if [ -n "$TARGET" ]; then
+        echo "Building target '$TARGET' [$b_name]..."
+        cmake --build "$b_dir" --target "$TARGET" -j"${NPROC:-2}"
+    else
+        echo "Building [$b_name]..."
+        cmake --build "$b_dir" -j"${NPROC:-2}"
+    fi
+
+    echo "Build complete for $b_name backend. Binaries in: ${PROJECT_ROOT}/build/bin/${b_name}/"
+}
+
+case "$BACKEND" in
+    all|both)
+        build_backend "scalar"
+        build_backend "rvv"
+        ;;
+    *)
+        build_backend "$BACKEND"
+        ;;
+esac

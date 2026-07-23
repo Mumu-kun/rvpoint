@@ -1,4 +1,4 @@
-#include "../src/include/rvv_pcl.h"
+#include "rvv_pcl.h"
 
 #include <cmath>
 #include <iostream>
@@ -78,3 +78,4 @@ int main() {
             << std::endl;
   return 0;
 }
+

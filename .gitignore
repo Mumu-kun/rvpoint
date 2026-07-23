@@ -1,22 +1,22 @@
 # Build directories
 build_cmake/
 build/
-cmake/
 
 # Binaries
 bin/
 *.o
 *.a
 *.so
+**pycache**
 
-# Test binaries (root level)
+# Test binaries
 test_*_linux
-
-# Test binaries (built in tests/ due to manual builds or misconfigured CMake)
 tests/test_*
 
-# Output results
+# Output results & renders
+output/
 results/
+renders/
 *.pcd
 *.png
 
@@ -29,6 +29,13 @@ docs/doxygen/
 .vscode/
 .idea/
 
-# Exceptions (keep data if needed, but usually large files ignored)
+# Exception (keep data if needed, but usually large files ignored)
 !data/*.pcd
 !doc/*.png
+
+# Local tools, venv, and WSL caches
+.tools/
+env/.tools/
+wsl/
+env/.wsl/
+.venv/

@@ -19,26 +19,28 @@ jobs:
         sudo apt-get install -y \
           cmake \
           ninja-build \
-          qemu-user \
-          qemu-system-misc \
-          cppcheck \
-          clang-format \
-          build-essential \
           wget \
-          tar
+          tar \
+          build-essential \
+          libglib2.0-dev \
+          libpixman-1-dev \
+          meson
+
+    - name: Install QEMU 9.2 from source
+      run: |
+        source env/versions.sh
+        source env/packages/qemu.sh
+        install_qemu_linux
+        echo "/opt/qemu/bin" >> $GITHUB_PATH
 
     - name: Install RISC-V Toolchain
       run: |
-        wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2024.09.03/riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz
-        sudo mkdir -p /opt/riscv
-        sudo tar -xzf riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz -C /opt
-        rm riscv64-elf-ubuntu-22.04-gcc-nightly-2024.09.03-nightly.tar.gz
+        source env/versions.sh
+        source env/linux/paths.sh
+        source env/packages/riscv.sh
+        install_riscv_toolchain_linux
         echo "/opt/riscv/bin" >> $GITHUB_PATH
-        export PATH="/opt/riscv/bin:$PATH"
-        riscv64-unknown-elf-gcc --version
 
     - name: Run Verification
       run: |
-        # Ensure path is set for this shell session too, though GITHUB_PATH handles subsequent steps
-        export PATH="/opt/riscv/bin:$PATH"
         bash scripts/verify_container.sh

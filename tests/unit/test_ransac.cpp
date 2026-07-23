@@ -1,4 +1,4 @@
-#include "../src/include/rvv_pcl.h"
+#include "rvv_pcl.h"
 
 #include <cmath>
 #include <iostream>
@@ -48,3 +48,4 @@ int main() {
   std::cout << "[PASS] RANSACFitter finds the dominant plane." << std::endl;
   return 0;
 }
+

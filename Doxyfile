@@ -1,7 +1,7 @@
 PROJECT_NAME           = "RVPoint"
 PROJECT_BRIEF          = "RISC-V Vector Optimized Point Cloud Library"
 OUTPUT_DIRECTORY       = docs/doxygen
-INPUT                  = /home/fatin-ishrak-arian/Capstone/rvpoint/src/include /home/fatin-ishrak-arian/Capstone/rvpoint/README.md /home/fatin-ishrak-arian/Capstone/rvpoint/README_RVV_DEMO.md /home/fatin-ishrak-arian/Capstone/rvpoint/docs/INSTRUCTION_MANUAL.md /home/fatin-ishrak-arian/Capstone/rvpoint/docs/vector_operations_explained.md /home/fatin-ishrak-arian/Capstone/rvpoint/results/spatial_hash_vs_octree_report.md
+INPUT                  = src/include README.md docs/INSTRUCTION_MANUAL.md docs/vector_operations_explained.md
 USE_MDFILE_AS_MAINPAGE = README.md
 RECURSIVE              = YES
 GENERATE_LATEX         = NO

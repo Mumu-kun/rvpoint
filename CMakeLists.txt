@@ -5,10 +5,6 @@ project(RVVPCL LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Set output directory for executables
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
-file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-
 # Static linking for QEMU compatibility
 set(CMAKE_EXE_LINKER_FLAGS "-static")
 option(RVV_PCL_USE_RVV "Enable RVV helper backend" ON)
@@ -20,13 +16,20 @@ set(RISCV_FLAGS "-march=${RISCV_ARCH} -mabi=${RISCV_ABI}")
 set(RVV_PCL_ENABLE_RVV OFF)
 if(RVV_PCL_USE_RVV AND RISCV_ARCH MATCHES ".*v.*")
     set(RVV_PCL_ENABLE_RVV ON)
-elseif(RVV_PCL_USE_RVV)
-    message(WARNING "RVV requested, but RISCV_ARCH='${RISCV_ARCH}' has no vector extension. Building scalar fallback.")
+    set(BACKEND_SUBDIR "rvv")
+else()
+    set(BACKEND_SUBDIR "scalar")
 endif()
+
+# Set output directory for executables (e.g. build/bin/rvv or build/bin/scalar)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/bin/${BACKEND_SUBDIR}")
+file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+
 message(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
 message(STATUS "RISC-V ISA: ${RISCV_ARCH}")
 message(STATUS "RISC-V ABI: ${RISCV_ABI}")
 message(STATUS "RVV backend enabled: ${RVV_PCL_ENABLE_RVV}")
+message(STATUS "Binary output dir: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 # 1. The Library (rvvpcl)
 list(APPEND SOURCES
@@ -51,6 +54,7 @@ function(add_rvv_test src)
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
     target_link_libraries(${name} PRIVATE rvvpcl)
+    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 endfunction()
 
 # 2. Test Executables
@@ -92,6 +96,7 @@ file(GLOB BENCHMARK_SOURCES "tests/benchmark/*.cpp")
 foreach(src ${BENCHMARK_SOURCES})
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
+    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
     target_compile_options(${name} PRIVATE "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
     target_link_libraries(${name} PRIVATE rvvpcl)
     if(EXISTS "${CMAKE_SOURCE_DIR}/src/benchmark_kernels.cpp")
@@ -100,5 +105,6 @@ foreach(src ${BENCHMARK_SOURCES})
 endforeach()
 
 # Pipeline Export Utility
-add_executable(pipeline_export tools/pipeline_export.cpp)
+add_executable(pipeline_export src/tools/pipeline_export.cpp)
+target_include_directories(pipeline_export PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 target_link_libraries(pipeline_export PRIVATE rvvpcl)

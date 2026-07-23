@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
-#include "../src/include/rvv_pcl.h"
-#include "../src/include/simple_pcd_loader.h"
+#include "rvv_pcl.h"
+#include "simple_pcd_loader.h"
 
 int main() {
     std::vector<rvv_pcl::PointXYZ> points;
@@ -25,3 +25,4 @@ int main() {
         return 1;
     }
 }
+

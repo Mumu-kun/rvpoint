@@ -1,4 +1,4 @@
-#include "../src/include/rvv_pcl.h"
+#include "rvv_pcl.h"
 
 #include <algorithm>
 #include <cmath>
@@ -96,3 +96,4 @@ int main() {
   std::cout << "[PASS] VoxelGridFilter matches reference output." << std::endl;
   return 0;
 }
+

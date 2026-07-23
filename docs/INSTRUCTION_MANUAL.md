@@ -1337,7 +1337,7 @@ scripts/verify_container.sh
 ### Benchmarking
 
 ```bash
-scripts/run_trace_benchmark.sh
+scripts/bench <mode> <kernel> <size>
 ```
 
 **What it measures:**
@@ -1527,7 +1527,7 @@ Project Root
 │   └── test_<algorithm>.cpp    → Test programs
 ├── scripts/
 │   ├── verify_container.sh     → Full test suite
-│   └── run_trace_benchmark.sh  → Performance analysis
+│   ├── bench                   → gem5 cycle benchmark
 ├── CMakeLists.txt              → Build configuration
 └── cmake/riscv.cmake           → Toolchain file
 ```

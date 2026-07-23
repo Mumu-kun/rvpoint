@@ -1,5 +1,5 @@
-#include "../src/include/rvv_pcl.h"
-#include "../src/include/simple_pcd_loader.h"
+#include "rvv_pcl.h"
+#include "simple_pcd_loader.h"
 
 #include <chrono>
 #include <iostream>
@@ -31,6 +31,12 @@ int main(int argc, char **argv) {
 
   std::vector<PointXYZ> loaded_points;
   int count = loadPCD(input_file, loaded_points);
+  if (count < 0) {
+    count = loadPCD("data/" + input_file, loaded_points);
+  }
+  if (count < 0) {
+    count = loadPCD("../data/" + input_file, loaded_points);
+  }
   if (count < 0) {
     count = loadPCD("/workspace/" + input_file, loaded_points);
   }
@@ -86,3 +92,4 @@ int main(int argc, char **argv) {
             << std::endl;
   return 0;
 }
+

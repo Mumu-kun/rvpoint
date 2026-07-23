@@ -1,133 +1,92 @@
 FROM ubuntu:22.04
 
-# Prevent interactive prompts during installation
+# Environment version for layer caching
+ARG ENVIRONMENT_VERSION=1.0.0
+LABEL org.opencontainers.image.version="${ENVIRONMENT_VERSION}"
+
+# === Layer 1: Base Image ===
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Layer 1: Basic system packages (includes QEMU 9.2 build dependencies)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    ninja-build \
-    git \
-    wget \
+# === Layer 2: Core System Dependencies ===
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    \
+    # Core utilities
+    bash \
+    ca-certificates \
     curl \
+    wget \
+    git \
     zip \
     unzip \
     tar \
+    xz-utils \
     pkg-config \
+    \
+    # Build system
+    build-essential \
+    cmake \
+    ninja-build \
+    \
+    # Python
     python3 \
     python3-pip \
     python3-venv \
-    autoconf \
-    automake \
-    autotools-dev \
-    libmpc-dev \
-    libmpfr-dev \
-    libgmp-dev \
-    gawk \
-    bison \
-    flex \
-    texinfo \
-    gperf \
-    libtool \
-    patchutils \
-    bc \
-    zlib1g-dev \
-    libexpat-dev \
-    device-tree-compiler \
-    vim \
-    nano \
-    htop \
-    gcc-riscv64-linux-gnu \
-    g++-riscv64-linux-gnu \
+    \
+    # QEMU build dependencies (only required if building QEMU from source)
+    meson \
     libglib2.0-dev \
     libpixman-1-dev \
-    meson \
-    && pip3 install --no-cache-dir pre-commit tomli \
-    && rm -rf /var/lib/apt/lists/*
+    \
+    # Miscellaneous
+    zlib1g-dev \
+    libexpat-dev \
+    \
+    # Optional development utilities
+    vim \
+    htop
 
-# Layer 1.5: Build QEMU 9.2.0 from source (required for full RVV v1.0 support)
-# QEMU 7.2 has bugs with vfcvt_rtz, vfredosum, vmul/vadd integer vector ops.
-# QEMU 9.2+ correctly implements the complete RVV v1.0 instruction set.
+# Copy env directory for version manifest and package scripts
+COPY env/ /opt/rvpoint-env/
+
+# === Layer 3: QEMU (only changes when QEMU_VERSION changes) ===
 WORKDIR /tmp
-RUN wget -q https://download.qemu.org/qemu-9.2.0.tar.xz \
-    && tar xf qemu-9.2.0.tar.xz \
-    && cd qemu-9.2.0 \
-    && ./configure \
-        --target-list=riscv64-linux-user \
-        --prefix=/opt/qemu \
-        --disable-system \
-        --enable-linux-user \
-        --disable-docs \
-        --disable-gtk \
-        --disable-sdl \
-        --disable-vnc \
-        --disable-capstone \
-        --disable-spice \
-        --disable-libusb \
-    && make -j$(nproc) \
-    && make install \
-    && cd /tmp && rm -rf qemu-9.2.0 qemu-9.2.0.tar.xz
+RUN cd /opt/rvpoint-env && \
+    source versions.sh && \
+    source linux/paths.sh && \
+    source packages/qemu.sh && \
+    install_qemu_linux
 
-# Symlink QEMU 9.2 as the default qemu-riscv64
-RUN ln -sf /opt/qemu/bin/qemu-riscv64 /usr/bin/qemu-riscv64
+# === Layer 4: RISC-V Toolchain (only changes when RISCV_ELF_VERSION changes) ===
+RUN cd /opt/rvpoint-env && \
+    source versions.sh && \
+    source linux/paths.sh && \
+    source packages/riscv.sh && \
+    install_riscv_toolchain_linux
 
 # Set environment variables
 ENV RISCV=/opt/riscv
 ENV PATH="${RISCV}/bin:/opt/qemu/bin:${PATH}"
 
-# Layer 2: Install RISC-V GNU Toolchain (matching your version)
-WORKDIR /tmp
-RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.01.20/riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz \
-    && mkdir -p ${RISCV} \
-    && tar -xJf riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz -C /opt \
-    && rm riscv64-elf-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz
-
-# Layer 2.5: Install RISC-V Linux (glibc) Toolchain (GCC 14)
-RUN wget https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.01.20/riscv64-glibc-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz \
-    && tar -xJf riscv64-glibc-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz -C /opt \
-    && rm riscv64-glibc-ubuntu-22.04-gcc-nightly-2025.01.20-nightly.tar.xz
-
-# Layer 3: Build and install Spike (RISC-V ISA Simulator)
-RUN git clone https://github.com/riscv-software-src/riscv-isa-sim.git \
-    && cd riscv-isa-sim \
-    && git checkout v1.1.0 \
-    && mkdir build && cd build \
-    && ../configure --prefix=${RISCV} \
-    && make -j$(nproc) \
-    && make install \
-    && cd /tmp && rm -rf riscv-isa-sim
-
-# Layer 4: Build and install RISC-V Proxy Kernel (pk)
-RUN git clone https://github.com/riscv-software-src/riscv-pk.git \
-    && cd riscv-pk \
-    && mkdir build && cd build \
-    && ../configure --prefix=${RISCV} --host=riscv64-unknown-elf \
-    && make -j$(nproc) \
-    && make install \
-    && cd /tmp && rm -rf riscv-pk
-
 # Set working directory
 WORKDIR /workspace
 
 # Verify installations
-RUN echo "Verifying RISC-V toolchain installation..." \
-    && riscv64-unknown-elf-gcc --version \
-    && qemu-riscv64 --version \
-    && which spike \
-    && echo "RISC-V environment ready!"
+RUN echo "Verifying RISC-V toolchain installation..." && \
+    riscv64-unknown-elf-gcc --version && \
+    qemu-riscv64 --version && \
+    echo "RISC-V environment ready!"
 
 # Default command
 CMD ["/bin/bash"]
 
-# Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
+# === Layer 5: Welcome message (cosmetic - easily updated without rebuilding everything) ===
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "╔════════════════════════════════════════════════════════════╗"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  RVPoint: RISC-V Vector Optimized Point Cloud Library      ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "╠════════════════════════════════════════════════════════════╣"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  Environment Ready:                                        ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    - RISC-V GCC 14 Toolchain (rv64gcv)                     ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - QEMU 9.2 (full RVV v1.0) & Spike Simulators           ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - QEMU 9.2 (full RVV v1.0)                            ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    - CMake, Ninja, Python3                                 ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║                                                            ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  Quick Commands:                                           ║"' >> /usr/local/bin/welcome.sh && \

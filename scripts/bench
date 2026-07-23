@@ -1,18 +1,41 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BENCH_BIN="$PROJECT_ROOT/bin/benchmark"
+
+source "$SCRIPT_DIR/lib/common.sh"
+wsl_bootstrap "scripts/bench" "$@"
 
 if [[ $# -ne 3 ]]; then
-  echo "Usage: $0 <mode> <kernel> <size>" >&2
+  echo "Usage: ./scripts/bench <mode> <kernel> <size>" >&2
+  echo "  mode   : scalar|rvv" >&2
+  echo "  kernel : l2|reduction|filter|radius|normal" >&2
+  echo "  size   : 1k|10k|100k or a raw point count" >&2
   exit 1
 fi
 
 MODE="$1"
 KERNEL="$2"
 SIZE="$3"
+
+case "$MODE" in
+  scalar|rvv)
+    ;;
+  *)
+    echo "Invalid mode: $MODE" >&2
+    exit 1
+    ;;
+esac
+
+case "$KERNEL" in
+  l2|reduction|filter|radius|normal)
+    ;;
+  *)
+    echo "Invalid kernel: $KERNEL" >&2
+    exit 1
+    ;;
+esac
 
 GEM5_BIN="${GEM5_BIN:-gem5.opt}"
 GEM5_CONFIG="${GEM5_CONFIG:-}"
@@ -22,12 +45,17 @@ if [[ -z "$GEM5_CONFIG" ]]; then
   exit 2
 fi
 
+echo "Building benchmark for $MODE..." >&2
+"$SCRIPT_DIR/build.sh" --toolchain linux --backend "$MODE" --target benchmark >&2
+
+BENCH_BIN="$PROJECT_ROOT/bin/benchmark"
 OUTDIR="$PROJECT_ROOT/results/gem5/${MODE}_${KERNEL}_${SIZE}"
 mkdir -p "$OUTDIR"
 
 LOG_FILE="$OUTDIR/gem5.log"
 STATS_FILE="$OUTDIR/stats.txt"
 
+echo "Running gem5 simulation..." >&2
 "$GEM5_BIN" -d "$OUTDIR" "$GEM5_CONFIG" --cmd "$BENCH_BIN" --options "$MODE $KERNEL $SIZE" \
   >"$LOG_FILE" 2>&1
 

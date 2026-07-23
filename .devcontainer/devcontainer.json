@@ -22,6 +22,6 @@
   "runArgs": [
     "--memory=3g"
   ],
-  "postCreateCommand": "echo '🚀 RISC-V Development Environment Ready!' && /workspace/scripts/download_datasets.sh && riscv64-unknown-elf-gcc --version && spike --version",
+  "postCreateCommand": "bash /workspace/scripts/download_datasets.sh",
   "remoteUser": "root"
 }

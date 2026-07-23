@@ -1,19 +1,13 @@
 #!/bin/bash
 set -e
 
-# --- Auto-launch in Docker if not inside a container ---
-SCRIPT_DIR_EARLY="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT_EARLY="$(cd "$SCRIPT_DIR_EARLY/.." && pwd)"
-if [ ! -f /.dockerenv ] && [ -z "$IN_RVPOINT_CONTAINER" ]; then
-    IMAGE="${RVPOINT_IMAGE:-rvpoint}"
-    if ! docker image inspect "$IMAGE" &> /dev/null; then
-        echo "Docker image '$IMAGE' not found. Building from .devcontainer/Dockerfile..."
-        docker build -f "$PROJECT_ROOT_EARLY/.devcontainer/Dockerfile" -t "$IMAGE" "$PROJECT_ROOT_EARLY"
-    fi
-    exec docker run --rm -e TERM="$TERM" -e IN_RVPOINT_CONTAINER=1 \
-        -v "$PROJECT_ROOT_EARLY:/workspace" -w /workspace \
-        "$IMAGE" bash scripts/verify_container.sh "$@"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+source "$SCRIPT_DIR/lib/common.sh"
+wsl_bootstrap "scripts/verify_container.sh" "$@"
+
+source "${PROJECT_ROOT}/env/activate.sh"
 
 # ==============================================================================
 # Styling Constants
@@ -31,7 +25,7 @@ MAGENTA="\033[1;35m"
 # Helper Functions
 # ==============================================================================
 log_header() {
-    echo -e "\n${BLUE}${BOLD}============================================================${RESET}"
+    echo -e "${BLUE}${BOLD}============================================================${RESET}"
     echo -e "${BLUE}${BOLD}  $1${RESET}"
     echo -e "${BLUE}${BOLD}============================================================${RESET}"
 }
@@ -65,101 +59,54 @@ print_banner() {
     echo -e "${RESET}"
 }
 
-# ==============================================================================
-# Main Script
-# ==============================================================================
+# Parse arguments
+BUILD_ONLY=true
+RUN_TESTS=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --build-only|-b)
+            BUILD_ONLY=true
+            RUN_TESTS=false
+            shift
+            ;;
+        --test|--tests|-t|--all)
+            BUILD_ONLY=false
+            RUN_TESTS=true
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [--build-only|-b] [--test|-t]"
+            echo "  Default mode is --build-only."
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            echo "Usage: $0 [--build-only|-b] [--test|-t]"
+            exit 1
+            ;;
+    esac
+done
 
 print_banner
 log_header "Starting Verification Suite"
 
 # 1. Build
 log_step "1. Building Project"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-"$SCRIPT_DIR/build.sh" --clean --toolchain linux > /dev/null
+"$SCRIPT_DIR/build.sh" --clean --toolchain linux
 log_success "Build Complete"
 
-# Helper: Find QEMU
-if command -v qemu-riscv64 &> /dev/null; then
-    QEMU_BIN="qemu-riscv64"
-elif [ -f "/opt/qemu/bin/qemu-riscv64" ]; then
-    QEMU_BIN="/opt/qemu/bin/qemu-riscv64"
-else
-    log_error "qemu-riscv64 not found"
-    exit 1
+if [ "$BUILD_ONLY" = true ] && [ "$RUN_TESTS" = false ]; then
+    log_header "Build Verification Passed!"
+    exit 0
 fi
 
-QEMU_FLAGS="-L ${RISCV_PATH:-/opt/riscv}/sysroot -cpu rv64,v=true,vlen=128"
-
-# 2. Scalar Test
-log_step "2. Running Scalar Test"
-if "$QEMU_BIN" $QEMU_FLAGS bin/test_scalar | grep -q "verification"; then
-    log_success "Scalar Test Passed"
+# 2. Running Test Suite
+log_step "2. Running Test Suite"
+if "$SCRIPT_DIR/run.sh" test; then
+    log_success "All Tests Passed"
 else
-    log_error "Scalar Test Failed"
-    exit 1
-fi
-
-# 3. Vector Test
-log_step "3. Running Vector Test"
-if "$QEMU_BIN" $QEMU_FLAGS bin/test_vector | grep -q "verification"; then
-    log_success "Vector Test Passed"
-else
-    log_error "Vector Test Failed"
-    exit 1
-fi
-
-# 4. Voxel Grid
-log_step "4. Verifying Voxel Grid"
-OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_voxel_grid)
-echo "$OUT"
-if echo "$OUT" | grep -q "PASS"; then
-    log_success "Voxel Grid OK"
-else
-    log_error "Voxel Grid Failed"
-    exit 1
-fi
-
-# 5. SOR
-log_step "5. Verifying SOR"
-OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_sor)
-echo "$OUT"
-if echo "$OUT" | grep -q "PASS"; then
-    log_success "SOR OK"
-else
-    log_error "SOR Failed"
-    exit 1
-fi
-
-# 6. Normal Estimation
-log_step "6. Verifying Normal Estimation"
-OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_normal)
-echo "$OUT"
-if echo "$OUT" | grep -q "PASS"; then
-    log_success "Normal Estimation OK"
-else
-    log_error "Normal Estimation Failed"
-    exit 1
-fi
-
-# 7. Radius Search
-log_step "7. Verifying Radius Search"
-OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_radius)
-echo "$OUT"
-if echo "$OUT" | grep -q "PASS"; then
-    log_success "Radius Search OK"
-else
-    log_error "Radius Search Failed"
-    exit 1
-fi
-
-# 8. RANSAC
-log_step "8. Verifying RANSAC"
-OUT=$("$QEMU_BIN" $QEMU_FLAGS bin/test_ransac)
-echo "$OUT"
-if echo "$OUT" | grep -q "PASS"; then
-    log_success "RANSAC OK"
-else
-    log_error "RANSAC Failed"
+    log_error "Test Suite Failed"
     exit 1
 fi
 

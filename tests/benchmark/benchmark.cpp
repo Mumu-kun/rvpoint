@@ -1,4 +1,4 @@
-#include "../src/include/benchmark_kernels.h"
+#include "benchmark_kernels.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -91,3 +91,4 @@ int main(int argc, char **argv) {
   benchmark_sink ^= checksum;
   return 0;
 }
+

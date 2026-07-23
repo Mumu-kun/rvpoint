@@ -1,4 +1,4 @@
-#include "../src/include/rvv_pcl.h"
+#include "rvv_pcl.h"
 
 #include <algorithm>
 #include <cmath>
@@ -54,3 +54,4 @@ int main() {
   std::cout << "[PASS] SORFilter removed outliers and kept a dense core." << std::endl;
   return 0;
 }
+
