@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 source "${SCRIPT_DIR}/../common.sh"
 source "${SCRIPT_DIR}/../versions.sh"
@@ -21,8 +21,6 @@ LINUX_PREREQUISITES=(
     pkg-config
     meson
     ninja-build
-    gcc-riscv64-linux-gnu
-    g++-riscv64-linux-gnu
     libglib2.0-dev
     libpixman-1-dev
 )

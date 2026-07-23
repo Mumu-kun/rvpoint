@@ -58,11 +58,7 @@ convert_to_wsl_path() {
 # Quick path conversion using WSL's wslpath utility (if available)
 wslpath_to_wsl() {
     local path="$1"
-    if command -v wslpath &>/dev/null; then
-        wslpath -u "$path"
-    else
-        convert_to_wsl_path "$path"
-    fi
+    convert_to_wsl_path "$path"
 }
 
 # --- QEMU Location ---
@@ -120,3 +116,5 @@ download_and_extract() {
     tar -xJf "$tarball" -C "$dest"
     rm -f "$tarball"
 }
+
+export -f detect_platform is_windows_gitbash is_wsl_available convert_to_wsl_path wslpath_to_wsl find_qemu setup_env_paths download_and_extract 2>/dev/null || true
