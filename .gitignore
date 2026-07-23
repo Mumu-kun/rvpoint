@@ -39,3 +39,4 @@ env/.tools/
 wsl/
 env/.wsl/
 .venv/
+AGENTS.md

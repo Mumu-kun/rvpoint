@@ -1,85 +1,62 @@
-FROM ubuntu:22.04
+# === Stage 1: Base System Prerequisites ===
+FROM ubuntu:24.04 AS base
 
-# Environment version for layer caching
 ARG ENVIRONMENT_VERSION=1.0.0
 LABEL org.opencontainers.image.version="${ENVIRONMENT_VERSION}"
 
-# === Layer 1: Base Image ===
 ENV DEBIAN_FRONTEND=noninteractive
 
-# === Layer 2: Core System Dependencies ===
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    \
-    # Core utilities
-    bash \
-    ca-certificates \
-    curl \
-    wget \
-    git \
-    zip \
-    unzip \
-    tar \
-    xz-utils \
-    pkg-config \
-    \
-    # Build system
-    build-essential \
-    cmake \
-    ninja-build \
-    \
-    # Python
-    python3 \
-    python3-pip \
-    python3-venv \
-    \
-    # QEMU build dependencies (only required if building QEMU from source)
-    meson \
-    libglib2.0-dev \
-    libpixman-1-dev \
-    \
-    # Miscellaneous
-    zlib1g-dev \
-    libexpat-dev \
-    \
-    # Optional development utilities
-    vim \
-    htop
+# Copy common files and prereqs installer
+COPY env/common.sh env/versions.sh /tmp/env/
+COPY env/linux/install_prereqs.sh /tmp/env/linux/
 
-# Copy env directory for version manifest and package scripts
-COPY env/ /opt/rvpoint-env/
+# Install core apt prerequisites using single source of truth script
+RUN bash /tmp/env/linux/install_prereqs.sh
 
-# === Layer 3: QEMU (only changes when QEMU_VERSION changes) ===
-WORKDIR /tmp
-RUN cd /opt/rvpoint-env && \
-    source versions.sh && \
-    source linux/paths.sh && \
-    source packages/qemu.sh && \
-    install_qemu_linux
+# === Stage 2: CMake Builder ===
+FROM base AS cmake-builder
+COPY env/linux/install_cmake.sh /tmp/env/linux/
+RUN bash /tmp/env/linux/install_cmake.sh
 
-# === Layer 4: RISC-V Toolchain (only changes when RISCV_ELF_VERSION changes) ===
-RUN cd /opt/rvpoint-env && \
-    source versions.sh && \
-    source linux/paths.sh && \
-    source packages/riscv.sh && \
-    install_riscv_toolchain_linux
+# === Stage 3: QEMU Builder ===
+FROM base AS qemu-builder
+COPY env/linux/install_qemu.sh /tmp/env/linux/
+RUN bash /tmp/env/linux/install_qemu.sh
+
+# === Stage 4: RISC-V Toolchain Builder ===
+FROM base AS riscv-builder
+COPY env/linux/install_riscv.sh /tmp/env/linux/
+RUN bash /tmp/env/linux/install_riscv.sh
+
+# === Stage 5: Final DevContainer Image ===
+FROM base AS final
+
+# Copy cached toolchain builds from dedicated stages
+COPY --from=cmake-builder /opt/cmake /opt/cmake
+COPY --from=qemu-builder /opt/qemu /opt/qemu
+COPY --from=riscv-builder /opt/riscv /opt/riscv
+
+# Clean up temp env scripts from base layer
+RUN rm -rf /tmp/env
 
 # Set environment variables
+ENV CMAKE_ROOT=/opt/cmake
+ENV QEMU_ROOT=/opt/qemu
 ENV RISCV=/opt/riscv
-ENV PATH="${RISCV}/bin:/opt/qemu/bin:${PATH}"
+ENV PATH="/opt/cmake/bin:/opt/riscv/bin:/opt/qemu/bin:${PATH}"
 
-# Set working directory
 WORKDIR /workspace
 
-# Verify installations
-RUN echo "Verifying RISC-V toolchain installation..." && \
+# Verify installation inside image build
+RUN cmake --version && \
     riscv64-unknown-elf-gcc --version && \
     qemu-riscv64 --version && \
     echo "RISC-V environment ready!"
 
-# Default command
-CMD ["/bin/bash"]
+# Automatically activate environment in interactive shells
+RUN echo '[ -f /workspace/env/activate.sh ] && source /workspace/env/activate.sh' >> /etc/bash.bashrc
 
-# === Layer 5: Welcome message (cosmetic - easily updated without rebuilding everything) ===
+# Welcome banner
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "╔════════════════════════════════════════════════════════════╗"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  RVPoint: RISC-V Vector Optimized Point Cloud Library      ║"' >> /usr/local/bin/welcome.sh && \
@@ -90,9 +67,11 @@ RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "║    - CMake, Ninja, Python3                                 ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║                                                            ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║  Quick Commands:                                           ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    Verify All:   scripts/verify_container.sh               ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Verify All:   env/verify_container.sh                   ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    Manual Build: mkdir build && cd build && cmake ..       ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "║    Run Tests:    qemu-riscv64 -L /opt/riscv/sysroot ...    ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "╚════════════════════════════════════════════════════════════╝"' >> /usr/local/bin/welcome.sh && \
     chmod +x /usr/local/bin/welcome.sh && \
     echo '/usr/local/bin/welcome.sh' >> /etc/bash.bashrc
+
+CMD ["/bin/bash"]

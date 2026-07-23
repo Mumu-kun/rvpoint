@@ -87,14 +87,15 @@ setup_env_paths() {
 
     source "${COMMON_DIR}/versions.sh"
 
-    CMAKE_ROOT=/opt/cmake-${CMAKE_VERSION}
+    CMAKE_ROOT=/opt/cmake
+    QEMU_ROOT=/opt/qemu
     RISCV_ROOT=/opt/riscv
-    QEMU_ROOT=${PROJECT_ROOT}/env/.tools/qemu
 
-    export RISCV="${RISCV_ROOT}"
-    export RISCV_PATH="${RISCV_ROOT}"
     export CMAKE_ROOT
     export QEMU_ROOT
+    export RISCV="${RISCV_ROOT}"
+    export RISCV_PATH="${RISCV_ROOT}"
+
     export PATH="${CMAKE_ROOT}/bin:${RISCV_ROOT}/bin:${QEMU_ROOT}/bin:${PATH}"
 
     export QEMU_CPU_FLAGS="-cpu rv64,v=true,vlen=128"
