@@ -1,42 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GEM5_REPO="${GEM5_REPO:-https://github.com/gem5/gem5.git}"
-GEM5_DIR="${GEM5_DIR:-$HOME/gem5}"
-GEM5_BUILD="${GEM5_BUILD:-$GEM5_DIR/build/RISCV/gem5.opt}"
+# === RVPoint Gem5 Installation Script (Docker-based) ===
+# Pulls the prebuilt manuel313/gem5_v25 image and sets up execution wrappers.
 
-if [ "$(id -u)" -ne 0 ]; then
-  SUDO="sudo"
-else
-  SUDO=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Ensure docker is installed
+if ! command -v docker &> /dev/null; then
+  echo "Error: docker command not found. Please install Docker in WSL." >&2
+  exit 1
 fi
 
-$SUDO apt-get update
-$SUDO apt-get install -y \
-  scons \
-  python3-dev \
-  libprotobuf-dev \
-  protobuf-compiler \
-  libboost-all-dev \
-  swig \
-  m4 \
-  libgoogle-perftools-dev \
-  ccache
-  
-# ---- ENABLE CCACHE FOR SCONS ----
-export PATH="/usr/lib/ccache:$PATH"
-export USE_CCACHE=1
+echo "Pulling Docker image 'manuel313/gem5_v25'..."
+docker pull manuel313/gem5_v25
 
-which g++
-
-if [ ! -d "$GEM5_DIR/.git" ]; then
-  git clone "$GEM5_REPO" "$GEM5_DIR"
-fi
-
-cd "$GEM5_DIR"
-scons build/RISCV/gem5.opt -j1
-
-echo "gem5 built at: $GEM5_BUILD"
-echo "Set:"
-echo "  export GEM5_BIN=$GEM5_BUILD"
-echo "  export GEM5_CONFIG=$GEM5_DIR/configs/example/se.py"
+echo ""
+echo "gem5 Docker integration setup completed successfully."
+echo "Set the following environment variables (or source env/activate.sh):"
+echo "  export GEM5_BIN=$PROJECT_ROOT/env/extras/gem5_docker.sh"
+echo "  export GEM5_CONFIG=/gem5/configs/deprecated/example/se.py"

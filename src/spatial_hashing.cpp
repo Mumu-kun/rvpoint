@@ -15,10 +15,12 @@ void SpatialHashNeighborSearch::buildHashTable() {
     return;
   }
 
-  float max_x = 0.0f;
-  float max_y = 0.0f;
-  float max_z = 0.0f;
-  RVVHelper::computeBoundingBox(*pointCloud_, min_x_, min_y_, min_z_, max_x, max_y, max_z);
+  min_x_ = RVVHelper::vmin(pointCloud_->xData(), pointCloud_->size());
+  min_y_ = RVVHelper::vmin(pointCloud_->yData(), pointCloud_->size());
+  min_z_ = RVVHelper::vmin(pointCloud_->zData(), pointCloud_->size());
+  float max_x = RVVHelper::vmax(pointCloud_->xData(), pointCloud_->size());
+  float max_y = RVVHelper::vmax(pointCloud_->yData(), pointCloud_->size());
+  float max_z = RVVHelper::vmax(pointCloud_->zData(), pointCloud_->size());
   tableSize_ = static_cast<int>(pointCloud_->size());
 
   for (std::size_t i = 0; i < pointCloud_->size(); ++i) {
@@ -80,9 +82,18 @@ std::size_t SpatialHashNeighborSearch::radiusSearch(
         if (it == grid_.end()) {
           continue;
         }
-        RVVHelper::gatherIndicesInRadius(*pointCloud_, it->second.data(), it->second.size(),
-                                         query.x, query.y, query.z,
-                                         searchRadius_ * searchRadius_, resultIndices, dists);
+        const std::size_t num = it->second.size();
+        if (num == 0) continue;
+        std::vector<float> d2(num);
+        const float r2 = searchRadius_ * searchRadius_;
+        RVVHelper::gatherDistanceSquared(pointCloud_->xData(), pointCloud_->yData(), pointCloud_->zData(),
+                                         it->second.data(), num, query.x, query.y, query.z, d2.data());
+        for (std::size_t i = 0; i < num; ++i) {
+          if (d2[i] <= r2) {
+            resultIndices.push_back(it->second[i]);
+            dists.push_back(d2[i]);
+          }
+        }
       }
     }
   }

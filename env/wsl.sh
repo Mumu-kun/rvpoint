@@ -18,7 +18,7 @@ if [ "$(detect_platform)" != "wsl2" ] && is_windows_gitbash; then
     fi
 
     if [ $# -gt 0 ]; then
-        exec "$WSL_BIN" -d rvpoint --cd "$TARGET_PATH" bash -c "source env/activate.sh; exec \"\$@\"" bash "$@"
+        exec "$WSL_BIN" -d rvpoint -u root --cd "$TARGET_PATH" -e bash -c 'source env/activate.sh && exec "$@"' bash "$@"
     else
         exec "$WSL_BIN" -d rvpoint --cd "$TARGET_PATH" bash --rcfile env/activate.sh -i
     fi

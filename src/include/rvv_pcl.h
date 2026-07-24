@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -18,6 +19,9 @@ struct PointXYZ {
   float y = 0.0f;
   float z = 0.0f;
 };
+
+class PointCloudSoA;
+using PointCloudSoAPtr = std::shared_ptr<PointCloudSoA>;
 
 class PointCloudSoA {
 public:
@@ -103,19 +107,13 @@ public:
   static float vmin(const float *a, std::size_t n);
   static float vdot(const float *a, const float *b, std::size_t n);
 
-  static void distanceSquared(const PointCloudSoA &cloud, float qx, float qy, float qz,
-                              float *out_d2);
-  static void gatherIndicesInRadius(const PointCloudSoA &cloud,
-                                    const int *subset_indices, std::size_t n, float qx,
-                                    float qy, float qz, float r2,
-                                    std::vector<int> &out_indices,
-                                    std::vector<float> &out_dists);
-  static void computeBoundingBox(const PointCloudSoA &cloud, float &min_x, float &min_y,
-                                 float &min_z, float &max_x, float &max_y,
-                                 float &max_z);
-  static int countPlaneInliers(const PointCloudSoA &cloud,
-                               const std::array<float, 4> &coefficients,
-                               float distance_threshold);
+  static void distanceSquared(const float *px, const float *py, const float *pz, std::size_t n,
+                              float qx, float qy, float qz, float *out_d2);
+  static void planeDistances(const float *px, const float *py, const float *pz, std::size_t n,
+                             const std::array<float, 4> &coeffs, float *out_dist);
+  static void gatherDistanceSquared(const float *px, const float *py, const float *pz,
+                                    const int *subset_indices, std::size_t n,
+                                    float qx, float qy, float qz, float *out_d2);
 };
 
 class Filter {

@@ -1,0 +1,32 @@
+{
+  "_comment": "Tokyo Night – rvpoint edition",
+  "_instructions": [
+    "Open Windows Terminal → Settings (Ctrl+,) → Open JSON file (bottom-left)",
+    "Paste the object inside the 'schemes' array.",
+    "Then in 'profiles' → your rvpoint WSL profile, set: \"colorScheme\": \"Tokyo Night\""
+  ],
+
+  "name": "Tokyo Night",
+  "background":      "#0f111a",
+  "foreground":      "#c8ccd4",
+  "cursorColor":     "#7aa2f7",
+  "selectionBackground": "#283457",
+
+  "black":           "#1e2030",
+  "blue":            "#7aa2f7",
+  "cyan":            "#7dcfff",
+  "green":           "#9ece6a",
+  "purple":          "#bb9af7",
+  "red":             "#f7768e",
+  "white":           "#c8ccd4",
+  "yellow":          "#e0af68",
+
+  "brightBlack":     "#3d4466",
+  "brightBlue":      "#a9b1d6",
+  "brightCyan":      "#b4f9f8",
+  "brightGreen":     "#c3e88d",
+  "brightPurple":    "#cba6f7",
+  "brightRed":       "#ff9e9e",
+  "brightWhite":     "#ffffff",
+  "brightYellow":    "#ffc777"
+}

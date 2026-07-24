@@ -3,11 +3,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BIN_DIR="$PROJECT_ROOT/build/bin"
 
 source "$SCRIPT_DIR/lib/common.sh"
 wsl_bootstrap "scripts/run.sh" "$@"
 
+BUILD_DIR="$(get_build_dir)"
 source "${PROJECT_ROOT}/env/activate.sh"
 
 TOOLCHAIN="linux"
@@ -98,13 +98,17 @@ else
     QEMU_FLAGS+=("-cpu" "rv64")
 fi
 
-TARGET_BIN="$BIN_DIR/$BACKEND/$TARGET_NAME"
+BIN_DIR="${BUILD_DIR}/${BACKEND}/bin/${BACKEND}"
+TARGET_BIN="$BIN_DIR/$TARGET_NAME"
 if [ ! -f "$TARGET_BIN" ]; then
-    TARGET_BIN="$BIN_DIR/$TARGET_NAME"
+    TARGET_BIN="${BUILD_DIR}/${BACKEND}/bin/$TARGET_NAME"
+fi
+if [ ! -f "$TARGET_BIN" ]; then
+    TARGET_BIN="${PROJECT_ROOT}/build/bin/${BACKEND}/$TARGET_NAME"
 fi
 
 if [ ! -f "$TARGET_BIN" ]; then
-    echo "Error: Executable '$TARGET_NAME' not found in $BIN_DIR/$BACKEND/"
+    echo "Error: Executable '$TARGET_NAME' not found in $BIN_DIR"
     exit 1
 fi
 

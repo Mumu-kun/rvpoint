@@ -171,15 +171,15 @@ float RVVHelper::vdot(const float *a, const float *b, std::size_t n) {
   return total;
 }
 
-void RVVHelper::distanceSquared(const PointCloudSoA &cloud, float qx, float qy, float qz,
-                                float *out_d2) {
+void RVVHelper::distanceSquared(const float *px, const float *py, const float *pz, std::size_t n,
+                                float qx, float qy, float qz, float *out_d2) {
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
   std::size_t i = 0;
-  while (i < cloud.size()) {
-    std::size_t vl = __riscv_vsetvl_e32m8(cloud.size() - i);
-    vfloat32m8_t vx = __riscv_vle32_v_f32m8(cloud.xData() + i, vl);
-    vfloat32m8_t vy = __riscv_vle32_v_f32m8(cloud.yData() + i, vl);
-    vfloat32m8_t vz = __riscv_vle32_v_f32m8(cloud.zData() + i, vl);
+  while (i < n) {
+    std::size_t vl = __riscv_vsetvl_e32m8(n - i);
+    vfloat32m8_t vx = __riscv_vle32_v_f32m8(px + i, vl);
+    vfloat32m8_t vy = __riscv_vle32_v_f32m8(py + i, vl);
+    vfloat32m8_t vz = __riscv_vle32_v_f32m8(pz + i, vl);
     vfloat32m8_t dx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
     vfloat32m8_t dy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
     vfloat32m8_t dz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
@@ -190,20 +190,41 @@ void RVVHelper::distanceSquared(const PointCloudSoA &cloud, float qx, float qy, 
     i += vl;
   }
 #else
-  for (std::size_t i = 0; i < cloud.size(); ++i) {
-    const float dx = cloud.xCoords()[i] - qx;
-    const float dy = cloud.yCoords()[i] - qy;
-    const float dz = cloud.zCoords()[i] - qz;
+  for (std::size_t i = 0; i < n; ++i) {
+    const float dx = px[i] - qx;
+    const float dy = py[i] - qy;
+    const float dz = pz[i] - qz;
     out_d2[i] = dx * dx + dy * dy + dz * dz;
   }
 #endif
 }
 
-void RVVHelper::gatherIndicesInRadius(const PointCloudSoA &cloud,
-                                      const int *subset_indices, std::size_t n, float qx,
-                                      float qy, float qz, float r2,
-                                      std::vector<int> &out_indices,
-                                      std::vector<float> &out_dists) {
+void RVVHelper::planeDistances(const float *px, const float *py, const float *pz, std::size_t n,
+                             const std::array<float, 4> &coeffs, float *out_dist) {
+#if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
+  std::size_t i = 0;
+  while (i < n) {
+    std::size_t vl = __riscv_vsetvl_e32m8(n - i);
+    vfloat32m8_t vx = __riscv_vle32_v_f32m8(px + i, vl);
+    vfloat32m8_t vy = __riscv_vle32_v_f32m8(py + i, vl);
+    vfloat32m8_t vz = __riscv_vle32_v_f32m8(pz + i, vl);
+    vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, coeffs[0], vl);
+    dist = __riscv_vfmacc_vf_f32m8(dist, coeffs[1], vy, vl);
+    dist = __riscv_vfmacc_vf_f32m8(dist, coeffs[2], vz, vl);
+    dist = __riscv_vfadd_vf_f32m8(dist, coeffs[3], vl);
+    __riscv_vse32_v_f32m8(out_dist + i, dist, vl);
+    i += vl;
+  }
+#else
+  for (std::size_t i = 0; i < n; ++i) {
+    out_dist[i] = coeffs[0] * px[i] + coeffs[1] * py[i] + coeffs[2] * pz[i] + coeffs[3];
+  }
+#endif
+}
+
+void RVVHelper::gatherDistanceSquared(const float *px, const float *py, const float *pz,
+                                    const int *subset_indices, std::size_t n,
+                                    float qx, float qy, float qz, float *out_d2) {
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
   std::size_t i = 0;
   while (i < n) {
@@ -211,86 +232,26 @@ void RVVHelper::gatherIndicesInRadius(const PointCloudSoA &cloud,
     vint32m2_t v_idx = __riscv_vle32_v_i32m2(subset_indices + i, vl);
     vuint32m2_t v_uidx = __riscv_vreinterpret_v_i32m2_u32m2(v_idx);
     vuint32m2_t v_byte_offsets = __riscv_vsll_vx_u32m2(v_uidx, 2, vl);
-    vfloat32m2_t vx = __riscv_vluxei32_v_f32m2(cloud.xData(), v_byte_offsets, vl);
-    vfloat32m2_t vy = __riscv_vluxei32_v_f32m2(cloud.yData(), v_byte_offsets, vl);
-    vfloat32m2_t vz = __riscv_vluxei32_v_f32m2(cloud.zData(), v_byte_offsets, vl);
+    vfloat32m2_t vx = __riscv_vluxei32_v_f32m2(px, v_byte_offsets, vl);
+    vfloat32m2_t vy = __riscv_vluxei32_v_f32m2(py, v_byte_offsets, vl);
+    vfloat32m2_t vz = __riscv_vluxei32_v_f32m2(pz, v_byte_offsets, vl);
     vfloat32m2_t dx = __riscv_vfsub_vf_f32m2(vx, qx, vl);
     vfloat32m2_t dy = __riscv_vfsub_vf_f32m2(vy, qy, vl);
     vfloat32m2_t dz = __riscv_vfsub_vf_f32m2(vz, qz, vl);
     vfloat32m2_t dist2 = __riscv_vfmul_vv_f32m2(dx, dx, vl);
     dist2 = __riscv_vfmacc_vv_f32m2(dist2, dy, dy, vl);
     dist2 = __riscv_vfmacc_vv_f32m2(dist2, dz, dz, vl);
-    vbool16_t mask = __riscv_vmfle_vf_f32m2_b16(dist2, r2, vl);
-    const long count = __riscv_vcpop_m_b16(mask, vl);
-    if (count > 0) {
-      const std::size_t old_size = out_indices.size();
-      out_indices.resize(old_size + static_cast<std::size_t>(count));
-      out_dists.resize(old_size + static_cast<std::size_t>(count));
-      vint32m2_t filtered_indices = __riscv_vcompress_vm_i32m2(v_idx, mask, vl);
-      vfloat32m2_t filtered_dists = __riscv_vcompress_vm_f32m2(dist2, mask, vl);
-      __riscv_vse32_v_i32m2(out_indices.data() + old_size, filtered_indices, count);
-      __riscv_vse32_v_f32m2(out_dists.data() + old_size, filtered_dists, count);
-    }
+    __riscv_vse32_v_f32m2(out_d2 + i, dist2, vl);
     i += vl;
   }
 #else
   for (std::size_t i = 0; i < n; ++i) {
     const int idx = subset_indices[i];
-    const float dx = cloud.xCoords()[idx] - qx;
-    const float dy = cloud.yCoords()[idx] - qy;
-    const float dz = cloud.zCoords()[idx] - qz;
-    const float d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 <= r2) {
-      out_indices.push_back(idx);
-      out_dists.push_back(d2);
-    }
+    const float dx = px[idx] - qx;
+    const float dy = py[idx] - qy;
+    const float dz = pz[idx] - qz;
+    out_d2[i] = dx * dx + dy * dy + dz * dz;
   }
-#endif
-}
-
-void RVVHelper::computeBoundingBox(const PointCloudSoA &cloud, float &min_x, float &min_y,
-                                   float &min_z, float &max_x, float &max_y,
-                                   float &max_z) {
-  min_x = vmin(cloud.xData(), cloud.size());
-  min_y = vmin(cloud.yData(), cloud.size());
-  min_z = vmin(cloud.zData(), cloud.size());
-  max_x = vmax(cloud.xData(), cloud.size());
-  max_y = vmax(cloud.yData(), cloud.size());
-  max_z = vmax(cloud.zData(), cloud.size());
-}
-
-int RVVHelper::countPlaneInliers(const PointCloudSoA &cloud,
-                                 const std::array<float, 4> &coefficients,
-                                 float distance_threshold) {
-#if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
-  int count = 0;
-  std::size_t i = 0;
-  while (i < cloud.size()) {
-    std::size_t vl = __riscv_vsetvl_e32m8(cloud.size() - i);
-    vfloat32m8_t vx = __riscv_vle32_v_f32m8(cloud.xData() + i, vl);
-    vfloat32m8_t vy = __riscv_vle32_v_f32m8(cloud.yData() + i, vl);
-    vfloat32m8_t vz = __riscv_vle32_v_f32m8(cloud.zData() + i, vl);
-    vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, coefficients[0], vl);
-    dist = __riscv_vfmacc_vf_f32m8(dist, coefficients[1], vy, vl);
-    dist = __riscv_vfmacc_vf_f32m8(dist, coefficients[2], vz, vl);
-    dist = __riscv_vfadd_vf_f32m8(dist, coefficients[3], vl);
-    vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, distance_threshold, vl);
-    vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -distance_threshold, vl);
-    count += __riscv_vcpop_m_b4(__riscv_vmand_mm_b4(mask_le, mask_ge, vl), vl);
-    i += vl;
-  }
-  return count;
-#else
-  int count = 0;
-  for (std::size_t i = 0; i < cloud.size(); ++i) {
-    const float dist = coefficients[0] * cloud.xCoords()[i] +
-                       coefficients[1] * cloud.yCoords()[i] +
-                       coefficients[2] * cloud.zCoords()[i] + coefficients[3];
-    if (std::abs(dist) <= distance_threshold) {
-      ++count;
-    }
-  }
-  return count;
 #endif
 }
 

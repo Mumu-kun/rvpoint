@@ -1,4 +1,5 @@
 #include "include/rvv_pcl.h"
+#include "include/simple_pcd_loader.h"
 
 #include <fstream>
 #include <sstream>
@@ -29,37 +30,12 @@ void PointCloudSoA::resize(std::size_t new_size) {
 }
 
 bool PointCloudSoA::loadFromPCD(const std::string &filename) {
-  std::ifstream file(filename);
-  if (!file.is_open()) {
-    return false;
-  }
-
   clear();
-  std::string line;
-  bool data_started = false;
-  while (std::getline(file, line)) {
-    if (line.rfind("DATA", 0) == 0) {
-      data_started = true;
-      break;
-    }
-  }
-
-  if (!data_started) {
+  std::vector<PointXYZ> points;
+  int count = loadPCD(filename, points);
+  if (count <= 0) {
     return false;
   }
-
-  std::vector<PointXYZ> points;
-  while (std::getline(file, line)) {
-    if (line.empty()) {
-      continue;
-    }
-    std::stringstream ss(line);
-    PointXYZ point;
-    if (ss >> point.x >> point.y >> point.z) {
-      points.push_back(point);
-    }
-  }
-
   assign(points);
   return true;
 }

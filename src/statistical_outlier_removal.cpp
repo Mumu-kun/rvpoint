@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace rvv_pcl {
 
@@ -64,17 +65,20 @@ void SORFilter::filter(PointCloudSoA &output) const {
     return;
   }
 
-  std::vector<float> meanDistances(input_->size(), 0.0f);
-  for (std::size_t i = 0; i < input_->size(); ++i) {
+  const std::size_t total_points = input_->size();
+  std::vector<float> meanDistances(total_points, 0.0f);
+
+  for (std::size_t i = 0; i < total_points; ++i) {
     std::vector<int> neighbors;
     std::vector<float> dists;
     searcher_->radiusSearch(static_cast<int>(i), neighbors, &dists, 0);
     if (neighbors.size() < static_cast<std::size_t>(meanK_ + 1)) {
-      std::vector<float> all_dists(input_->size(), 0.0f);
+      std::vector<float> all_dists(total_points, 0.0f);
       const PointXYZ point = input_->point(i);
-      RVVHelper::distanceSquared(*input_, point.x, point.y, point.z, all_dists.data());
-      std::vector<int> order(input_->size());
-      for (std::size_t j = 0; j < input_->size(); ++j) {
+      RVVHelper::distanceSquared(input_->xData(), input_->yData(), input_->zData(), total_points,
+                                 point.x, point.y, point.z, all_dists.data());
+      std::vector<int> order(total_points);
+      for (std::size_t j = 0; j < total_points; ++j) {
         order[j] = static_cast<int>(j);
       }
       std::partial_sort(order.begin(),
@@ -93,7 +97,7 @@ void SORFilter::filter(PointCloudSoA &output) const {
   computeGlobalStatistics(meanDistances, meanDist, stddev);
   const float threshold = meanDist + stdThreshold_ * stddev;
 
-  for (std::size_t i = 0; i < input_->size(); ++i) {
+  for (std::size_t i = 0; i < total_points; ++i) {
     if (meanDistances[i] <= threshold) {
       output.push_back(input_->point(i));
     }

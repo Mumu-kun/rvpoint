@@ -103,6 +103,9 @@ setup_env_paths() {
     export RISCV_ARCH="${RISCV_ARCH:-rv64gcv}"
     export RISCV_ABI="${RISCV_ABI:-lp64d}"
     
+    export GEM5_BIN="${GEM5_BIN:-${PROJECT_ROOT}/env/extras/gem5_docker.sh}"
+    export GEM5_CONFIG="${GEM5_CONFIG:-/gem5/configs/deprecated/example/se.py}"
+    
     QEMU_BIN="${QEMU_ROOT}/bin"
     RISCV_BIN="${RISCV_ROOT}/bin"
 }

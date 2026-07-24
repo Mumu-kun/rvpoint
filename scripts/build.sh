@@ -3,11 +3,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_DIR="${PROJECT_ROOT}/build"
 
 source "$SCRIPT_DIR/lib/common.sh"
 wsl_bootstrap "scripts/build.sh" "$@"
 
+BUILD_DIR="$(get_build_dir)"
 source "${PROJECT_ROOT}/env/activate.sh"
 export RISCV_PATH="${RISCV:-${RISCV_ROOT:-/opt/riscv}}"
 
@@ -65,7 +65,7 @@ build_backend() {
             ;;
     esac
 
-    local b_dir="${PROJECT_ROOT}/build/${b_name}"
+    local b_dir="${BUILD_DIR}/${b_name}"
 
     # Map toolchain name to cmake file
     local toolchain_file=""
@@ -138,7 +138,7 @@ build_backend() {
         cmake --build "$b_dir" -j"${NPROC:-2}"
     fi
 
-    echo "Build complete for $b_name backend. Binaries in: ${PROJECT_ROOT}/build/bin/${b_name}/"
+    echo "Build complete for $b_name backend. Binaries in: ${b_dir}/bin/${b_name}/"
 }
 
 case "$BACKEND" in

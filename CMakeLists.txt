@@ -22,8 +22,7 @@ else()
 endif()
 
 # Set output directory for executables (e.g. build/bin/rvv or build/bin/scalar)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/bin/${BACKEND_SUBDIR}")
-file(MAKE_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${BACKEND_SUBDIR}")
 
 message(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
 message(STATUS "RISC-V ISA: ${RISCV_ARCH}")
@@ -41,6 +40,7 @@ list(APPEND SOURCES
     "src/ransac_plane.cpp"
     "src/octree.cpp"
     "src/spatial_hashing.cpp"
+    "src/caravan_radius_search.cpp"
 )
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC src/include)

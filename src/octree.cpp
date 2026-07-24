@@ -29,8 +29,12 @@ void OctreeNeighborSearch::buildTree() {
   }
 
   root_ = new Node();
-  RVVHelper::computeBoundingBox(*pointCloud_, root_->min_x, root_->min_y, root_->min_z,
-                                root_->max_x, root_->max_y, root_->max_z);
+  root_->min_x = RVVHelper::vmin(pointCloud_->xData(), pointCloud_->size());
+  root_->min_y = RVVHelper::vmin(pointCloud_->yData(), pointCloud_->size());
+  root_->min_z = RVVHelper::vmin(pointCloud_->zData(), pointCloud_->size());
+  root_->max_x = RVVHelper::vmax(pointCloud_->xData(), pointCloud_->size());
+  root_->max_y = RVVHelper::vmax(pointCloud_->yData(), pointCloud_->size());
+  root_->max_z = RVVHelper::vmax(pointCloud_->zData(), pointCloud_->size());
   root_->max_x += buildEpsilon_;
   root_->max_y += buildEpsilon_;
   root_->max_z += buildEpsilon_;
@@ -119,11 +123,17 @@ void OctreeNeighborSearch::recursiveSearch(Node *node, const PointXYZ &query,
   }
 
   if (node->is_leaf) {
-    std::vector<float> local_dists;
-    std::vector<float> &distance_output = dists ? *dists : local_dists;
-    RVVHelper::gatherIndicesInRadius(*pointCloud_, node->indices.data(), node->indices.size(),
-                                     query.x, query.y, query.z, radius_sq, indices,
-                                     distance_output);
+    const std::size_t num = node->indices.size();
+    if (num == 0) return;
+    std::vector<float> d2(num);
+    RVVHelper::gatherDistanceSquared(pointCloud_->xData(), pointCloud_->yData(), pointCloud_->zData(),
+                                     node->indices.data(), num, query.x, query.y, query.z, d2.data());
+    for (std::size_t i = 0; i < num; ++i) {
+      if (d2[i] <= radius_sq) {
+        indices.push_back(node->indices[i]);
+        if (dists) dists->push_back(d2[i]);
+      }
+    }
     return;
   }
 

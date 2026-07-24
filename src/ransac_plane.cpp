@@ -48,11 +48,14 @@ float PlaneModel::evaluatePoint(const PointCloudSoA &points, int pointIdx,
 int PlaneModel::evaluateAll(const PointCloudSoA &points, const std::array<float, 4> &coeffs,
                             std::vector<int> &inliers, int maxInliers, float threshold) {
   inliers.clear();
-  const int count = RVVHelper::countPlaneInliers(points, coeffs, threshold);
-  const int reserve_count = maxInliers > 0 ? std::min(count, maxInliers) : count;
-  inliers.reserve(static_cast<std::size_t>(reserve_count));
-  for (std::size_t i = 0; i < points.size(); ++i) {
-    if (evaluatePoint(points, static_cast<int>(i), coeffs) <= threshold) {
+  const std::size_t n = points.size();
+  std::vector<float> dists(n);
+  RVVHelper::planeDistances(points.xData(), points.yData(), points.zData(), n, coeffs, dists.data());
+
+  int count = 0;
+  for (std::size_t i = 0; i < n; ++i) {
+    if (std::abs(dists[i]) <= threshold) {
+      ++count;
       inliers.push_back(static_cast<int>(i));
       if (maxInliers > 0 && inliers.size() >= static_cast<std::size_t>(maxInliers)) {
         break;

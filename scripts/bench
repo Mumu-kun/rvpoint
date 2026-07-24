@@ -1,98 +1,17 @@
-#!/bin/bash
-set -euo pipefail
+#!/usr/bin/env bash
+# ─── DEPRECATED ─────────────────────────────────────────────────────────────
+# 'scripts/bench' is obsolete.
+# Use './scripts/gem5run' for gem5 simulations or './scripts/run.sh' for QEMU/host.
+# ─────────────────────────────────────────────────────────────────────────────
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BOLD=$'\e[1m'
+YELLOW=$'\e[33m'
+CYAN=$'\e[36m'
+RESET=$'\e[0m'
 
-source "$SCRIPT_DIR/lib/common.sh"
-wsl_bootstrap "scripts/bench" "$@"
-
-if [[ $# -ne 3 ]]; then
-  echo "Usage: ./scripts/bench <mode> <kernel> <size>" >&2
-  echo "  mode   : scalar|rvv" >&2
-  echo "  kernel : l2|reduction|filter|radius|normal" >&2
-  echo "  size   : 1k|10k|100k or a raw point count" >&2
-  exit 1
-fi
-
-MODE="$1"
-KERNEL="$2"
-SIZE="$3"
-
-case "$MODE" in
-  scalar|rvv)
-    ;;
-  *)
-    echo "Invalid mode: $MODE" >&2
-    exit 1
-    ;;
-esac
-
-case "$KERNEL" in
-  l2|reduction|filter|radius|normal)
-    ;;
-  *)
-    echo "Invalid kernel: $KERNEL" >&2
-    exit 1
-    ;;
-esac
-
-GEM5_BIN="${GEM5_BIN:-gem5.opt}"
-GEM5_CONFIG="${GEM5_CONFIG:-}"
-if [[ -z "$GEM5_CONFIG" ]]; then
-  echo "Set GEM5_CONFIG to the gem5 config script for SE benchmarking." >&2
-  echo "Example: export GEM5_CONFIG=/path/to/gem5/configs/example/se.py" >&2
-  exit 2
-fi
-
-echo "Building benchmark for $MODE..." >&2
-"$SCRIPT_DIR/build.sh" --toolchain linux --backend "$MODE" --target benchmark >&2
-
-BENCH_BIN="$PROJECT_ROOT/bin/benchmark"
-OUTDIR="$PROJECT_ROOT/results/gem5/${MODE}_${KERNEL}_${SIZE}"
-mkdir -p "$OUTDIR"
-
-LOG_FILE="$OUTDIR/gem5.log"
-STATS_FILE="$OUTDIR/stats.txt"
-
-echo "Running gem5 simulation..." >&2
-"$GEM5_BIN" -d "$OUTDIR" "$GEM5_CONFIG" --cmd "$BENCH_BIN" --options "$MODE $KERNEL $SIZE" \
-  >"$LOG_FILE" 2>&1
-
-if [[ ! -f "$STATS_FILE" ]]; then
-  echo "gem5 stats file not found: $STATS_FILE" >&2
-  echo "See log: $LOG_FILE" >&2
-  exit 3
-fi
-
-parse_cycles() {
-  local file="$1"
-  local key value
-  for key in \
-    system.cpu.numCycles \
-    system.cpu.cycle \
-    system.cpus.numCycles \
-    system.cpus.cycle \
-    simTicks; do
-    value=$(awk -v key="$key" '$1 == key {print $2; exit}' "$file")
-    if [[ -n "$value" ]]; then
-      echo "$value"
-      return 0
-    fi
-  done
-
-  value=$(awk '$1 ~ /(numCycles|cycle|simTicks)/ {print $2; exit}' "$file")
-  if [[ -n "$value" ]]; then
-    echo "$value"
-    return 0
-  fi
-
-  return 1
-}
-
-if ! CYCLES="$(parse_cycles "$STATS_FILE")"; then
-  echo "Unable to parse cycle count from $STATS_FILE" >&2
-  exit 4
-fi
-
-echo "$MODE $KERNEL $SIZE $CYCLES"
+echo "${YELLOW}${BOLD}[DEPRECATED] 'scripts/bench' is obsolete.${RESET}"
+echo "Please use direct runner scripts:"
+echo "  ${CYAN}./scripts/gem5run tests/bench/bench_caravan_radius.cpp [--scalar|--rvv]${RESET}"
+echo "  ${CYAN}./scripts/run.sh tests/bench/bench_caravan_radius.cpp${RESET}"
+echo ""
+exit 1

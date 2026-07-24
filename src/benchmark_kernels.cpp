@@ -1,4 +1,5 @@
 #include "include/benchmark_kernels.h"
+#include "include/caravan_radius_search.h"
 
 #include <cmath>
 #include <cstdint>
@@ -62,6 +63,10 @@ bool parseKernel(const std::string &name, Kernel &kernel) {
     kernel = Kernel::Normal;
     return true;
   }
+  if (name == "caravan" || name == "carvan") {
+    kernel = Kernel::Caravan;
+    return true;
+  }
   return false;
 }
 
@@ -77,6 +82,8 @@ const char *kernelName(Kernel kernel) {
     return "radius";
   case Kernel::Normal:
     return "normal";
+  case Kernel::Caravan:
+    return "caravan";
   }
   return "unknown";
 }
@@ -298,6 +305,25 @@ uint64_t runNormalEstimation(const PointCloudSoA &cloud) {
     checksum += static_cast<uint64_t>(std::fabs(cross_z[index]));
   }
   return checksum;
+}
+
+uint64_t runCaravanRadiusSearch(const PointCloudSoA &cloud) {
+  if (cloud.empty()) {
+    return 0;
+  }
+  CaravanRadiusSearch caravan;
+  caravan.setInputCloud(cloud);
+
+  PointCloudSoA queries;
+  queries.push_back({kRadiusQueryX, kRadiusQueryY, kRadiusQueryZ});
+
+  std::vector<std::vector<int32_t>> results;
+  caravan.batchRadiusSearch(queries, 45.0f, results);
+
+  if (results.empty()) {
+    return 0;
+  }
+  return static_cast<uint64_t>(results[0].size());
 }
 
 } // namespace rvv_pcl::bench

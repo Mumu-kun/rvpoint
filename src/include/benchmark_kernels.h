@@ -14,6 +14,7 @@ enum class Kernel {
   Filter,
   Radius,
   Normal,
+  Caravan,
 };
 
 PointCloudSoA makeDeterministicCloud(std::size_t size);
@@ -26,5 +27,6 @@ uint64_t runReduction(const PointCloudSoA &cloud);
 uint64_t runMaskedFilter(const PointCloudSoA &cloud);
 uint64_t runRadiusSearch(const PointCloudSoA &cloud);
 uint64_t runNormalEstimation(const PointCloudSoA &cloud);
+uint64_t runCaravanRadiusSearch(const PointCloudSoA &cloud);
 
 } // namespace rvv_pcl::bench
