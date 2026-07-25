@@ -23,10 +23,13 @@ var searchData=
   ['for_20new_20agents_20',['Recommended Reading Order for New Agents',['../md_guides_2AGENT.html#recommended-reading-order-for-new-agents',1,'']]],
   ['for_20this_20benchmark_21',['Key design rules for this benchmark',['../md_guides_2AGENT.html#key-design-rules-for-this-benchmark',1,'']]],
   ['format_22',['Output format',['../md_guides_2AGENT.html#output-format',1,'']]],
-  ['found_23',['Error 3: &quot;qemu-riscv64: command not found&quot;',['../instruction_manual.html#error-3-qemu-riscv64-command-not-found',1,'']]],
-  ['full_20test_20suite_24',['Task 1: Running the Full Test Suite',['../md_guides_2AGENT.html#task-1-running-the-full-test-suite',1,'']]],
-  ['full_20verification_25',['Full Verification',['../index.html#full-verification',1,'']]],
-  ['function_20extend_20the_20code_26',['2. How to Function &amp; Extend the Code',['../instruction_manual.html#autotoc_md2-how-to-function--extend-the-code',1,'']]],
-  ['further_20reading_27',['Further Reading',['../instruction_manual.html#further-reading',1,'']]],
-  ['fused_20gather_20filter_28',['Advanced Optimization: Fused Gather-Filter',['../vector_theory.html#advanced-optimization-fused-gather-filter',1,'']]]
+  ['formats_23',['3. Instruction Encoding Formats',['..//home/runner/work/rvpoint/rvpoint/src/custom_rvv_octree/README.md#autotoc_md3-instruction-encoding-formats',1,'']]],
+  ['found_24',['Error 3: &quot;qemu-riscv64: command not found&quot;',['../instruction_manual.html#error-3-qemu-riscv64-command-not-found',1,'']]],
+  ['full_20test_20suite_25',['Task 1: Running the Full Test Suite',['../md_guides_2AGENT.html#task-1-running-the-full-test-suite',1,'']]],
+  ['full_20verification_26',['Full Verification',['../index.html#full-verification',1,'']]],
+  ['function_20extend_20the_20code_27',['2. How to Function &amp; Extend the Code',['../instruction_manual.html#autotoc_md2-how-to-function--extend-the-code',1,'']]],
+  ['further_20reading_28',['Further Reading',['../instruction_manual.html#further-reading',1,'']]],
+  ['fused_203d_20squared_20distance_29',['A. &lt;tt&gt;vdist3d.vf&lt;/tt&gt; (Fused 3D Squared Distance)',['..//home/runner/work/rvpoint/rvpoint/src/custom_rvv_octree/README.md#a-vdist3dvf-fused-3d-squared-distance',1,'']]],
+  ['fused_20compress_20store_30',['B. &lt;tt&gt;vstore_compressed.v&lt;/tt&gt; (Fused Compress-Store)',['..//home/runner/work/rvpoint/rvpoint/src/custom_rvv_octree/README.md#b-vstore_compressedv-fused-compress-store',1,'']]],
+  ['fused_20gather_20filter_31',['Advanced Optimization: Fused Gather-Filter',['../vector_theory.html#advanced-optimization-fused-gather-filter',1,'']]]
 ];

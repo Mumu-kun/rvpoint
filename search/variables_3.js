@@ -1,12 +1,18 @@
 var searchData=
 [
   ['cell_5fsize_5f_0',['cell_size_',['../classrvv__pcl_1_1SpatialHash.html#ae04eeccbfb840ae62458138d8f2db005',1,'rvv_pcl::SpatialHash']]],
-  ['children_1',['children',['../structrvv__pcl_1_1OctreeNode.html#a68e0907cabe2b57aa877bfe61ce8899b',1,'rvv_pcl::OctreeNode']]],
-  ['choices_2',['choices',['../namespacegem5__se.html#aeab4210936df846bdd7eb1d74b0dbcfb',1,'gem5_se']]],
-  ['clk_5fdomain_3',['clk_domain',['../namespacegem5__se.html#a8d3bb3c7a0ab285a48e36e66b4f7f42f',1,'gem5_se']]],
-  ['clock_4',['clock',['../namespacegem5__se.html#a7e5e5a2c903df04ca77eadb7e39fcc50',1,'gem5_se']]],
-  ['cloud_5f_5',['cloud_',['../classrvv__pcl_1_1Octree.html#a350aeea9e39f10699be47f496faa537f',1,'rvv_pcl::Octree::cloud_'],['../classrvv__pcl_1_1SpatialHash.html#aa0014a79604f78c69f5c02fba42c006d',1,'rvv_pcl::SpatialHash::cloud_']]],
-  ['cmd_6',['cmd',['../namespacegem5__se.html#ad5b156ffddc50242fba73e69c408b8c7',1,'gem5_se']]],
-  ['counts_7',['counts',['../structrvv__pcl_1_1detail_1_1PCDHeader.html#a4c64decdc26563a6eecec9e88ff9f7c3',1,'rvv_pcl::detail::PCDHeader']]],
-  ['cpu_8',['cpu',['../namespacegem5__se.html#aa3bdd4ab99676855567984731b972beb',1,'gem5_se']]]
+  ['child_5fmax_5fx_1',['child_max_x',['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html#a309788f952a08fd5a713eb3d0ebdcc9d',1,'rvv_pcl::VectorizedTraversalOctreeNode']]],
+  ['child_5fmax_5fy_2',['child_max_y',['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html#ab6f5c3d2404090e65c0bf0f79c2a6b1b',1,'rvv_pcl::VectorizedTraversalOctreeNode']]],
+  ['child_5fmax_5fz_3',['child_max_z',['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html#a039fb816289dd29be6a5d62f7a5b5068',1,'rvv_pcl::VectorizedTraversalOctreeNode']]],
+  ['child_5fmin_5fx_4',['child_min_x',['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html#ab4998aaa7895d11b22de350259951962',1,'rvv_pcl::VectorizedTraversalOctreeNode']]],
+  ['child_5fmin_5fy_5',['child_min_y',['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html#ac40679198d06aaa810c29f080c7cbbe1',1,'rvv_pcl::VectorizedTraversalOctreeNode']]],
+  ['child_5fmin_5fz_6',['child_min_z',['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html#ab36cc97eec3765b7f03c612dcea24fb5',1,'rvv_pcl::VectorizedTraversalOctreeNode']]],
+  ['children_7',['children',['../structrvv__pcl_1_1MortonPointerOctreeNode.html#aa768ae216529d3c862f340551166c83b',1,'rvv_pcl::MortonPointerOctreeNode::children'],['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html#a9f3db04ac28ebcd1aedf197cd403f3f5',1,'rvv_pcl::VectorizedTraversalOctreeNode::children'],['../structrvv__pcl_1_1PointerOctreeNode.html#ad074ed80893f7e8e7f5726bdf63b216a',1,'rvv_pcl::PointerOctreeNode::children'],['../structrvv__pcl_1_1PacketPointerOctreeNode.html#aca3c241d2f93381f7a729b9f0a1df6a5',1,'rvv_pcl::PacketPointerOctreeNode::children'],['../structrvv__pcl_1_1OctreeNode.html#a68e0907cabe2b57aa877bfe61ce8899b',1,'rvv_pcl::OctreeNode::children'],['../structrvv__pcl_1_1CustomPointerOctreeNode.html#ac370543de1e86e26be1a1b6ae554235e',1,'rvv_pcl::CustomPointerOctreeNode::children']]],
+  ['choices_8',['choices',['../namespacegem5__se.html#aeab4210936df846bdd7eb1d74b0dbcfb',1,'gem5_se']]],
+  ['clk_5fdomain_9',['clk_domain',['../namespacegem5__se.html#a8d3bb3c7a0ab285a48e36e66b4f7f42f',1,'gem5_se']]],
+  ['clock_10',['clock',['../namespacegem5__se.html#a7e5e5a2c903df04ca77eadb7e39fcc50',1,'gem5_se']]],
+  ['cloud_5f_11',['cloud_',['../classrvv__pcl_1_1CustomPointerOctree.html#a1c59a53c22dee299638e34e34517f151',1,'rvv_pcl::CustomPointerOctree::cloud_'],['../classrvv__pcl_1_1VectorizedTraversalOctree.html#a3f2ff42600705505888dcb512a468528',1,'rvv_pcl::VectorizedTraversalOctree::cloud_'],['../classrvv__pcl_1_1PointerOctree.html#a301840ee2eb48928c952573d547f16d6',1,'rvv_pcl::PointerOctree::cloud_'],['../classrvv__pcl_1_1PacketPointerOctree.html#acf81078a9a447729bb32b94c73f524c7',1,'rvv_pcl::PacketPointerOctree::cloud_'],['../classrvv__pcl_1_1MortonPointerOctree.html#a729e0ba84a7a18ebe1ea4d06f7e66018',1,'rvv_pcl::MortonPointerOctree::cloud_'],['../classrvv__pcl_1_1KdTree.html#ab99eccd3bec7670a743790a7327a5848',1,'rvv_pcl::KdTree::cloud_'],['../classrvv__pcl_1_1SpatialHash.html#aa0014a79604f78c69f5c02fba42c006d',1,'rvv_pcl::SpatialHash::cloud_'],['../classrvv__pcl_1_1Octree.html#a350aeea9e39f10699be47f496faa537f',1,'rvv_pcl::Octree::cloud_']]],
+  ['cmd_12',['cmd',['../namespacegem5__se.html#ad5b156ffddc50242fba73e69c408b8c7',1,'gem5_se']]],
+  ['counts_13',['counts',['../structrvv__pcl_1_1detail_1_1PCDHeader.html#a4c64decdc26563a6eecec9e88ff9f7c3',1,'rvv_pcl::detail::PCDHeader']]],
+  ['cpu_14',['cpu',['../namespacegem5__se.html#aa3bdd4ab99676855567984731b972beb',1,'gem5_se']]]
 ];

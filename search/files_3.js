@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['instruction_5fcounting_2emd_0',['INSTRUCTION_COUNTING.md',['../INSTRUCTION__COUNTING_8md.html',1,'']]],
-  ['instruction_5fmanual_2emd_1',['INSTRUCTION_MANUAL.md',['../INSTRUCTION__MANUAL_8md.html',1,'']]]
+  ['gem5_5fse_2epy_0',['gem5_se.py',['../gem5__se_8py.html',1,'']]]
 ];

@@ -8,5 +8,6 @@ var searchData=
   ['n_5fsc_5fsor_5',['n_sc_sor',['../structPipelineResult.html#a9981c514a6c6c182560b7f4fa82807a3',1,'PipelineResult']]],
   ['n_5fsc_5fvox_6',['n_sc_vox',['../structPipelineResult.html#ade3d86190e54e3a49c46707aeb26c9e3',1,'PipelineResult']]],
   ['name_7',['name',['../structBenchmarkData.html#a8916f4b094ed48f9bd892011b049b0ee',1,'BenchmarkData']]],
-  ['norm_5fr_8',['norm_r',['../structPipelineParams.html#a212caa95c02219ac56cd52707beeec25',1,'PipelineParams']]]
+  ['node_8',['node',['../structrvv__pcl_1_1TraversalItem.html#afa5ad02753ea8e60ee7983323d04ff9c',1,'rvv_pcl::TraversalItem']]],
+  ['norm_5fr_9',['norm_r',['../structPipelineParams.html#a212caa95c02219ac56cd52707beeec25',1,'PipelineParams']]]
 ];

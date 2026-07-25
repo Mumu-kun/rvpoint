@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['normal_5festimation_2ecpp_0',['normal_estimation.cpp',['../normal__estimation_8cpp.html',1,'']]]
+  ['instruction_5fcounting_2emd_0',['INSTRUCTION_COUNTING.md',['../INSTRUCTION__COUNTING_8md.html',1,'']]],
+  ['instruction_5fmanual_2emd_1',['INSTRUCTION_MANUAL.md',['../INSTRUCTION__MANUAL_8md.html',1,'']]]
 ];

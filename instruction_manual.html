@@ -311,7 +311,7 @@ Command Breakdown</h3>
 <li>Generates: Two code paths in same binary</li>
 </ul>
 <p>**<code><a class="el" href="test__voxel__grid_8cpp.html">tests/test_voxel_grid.cpp</a></code>**</p><ul>
-<li>Contains: <code><a class="el" href="rvv__test_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code>, test logic, verification</li>
+<li>Contains: <code><a class="el" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code>, test logic, verification</li>
 <li>Entry point: Program execution starts here</li>
 </ul>
 <h4><a class="anchor" id="autotoc_md6--o-test_voxel_rvv---output-filename"></a>
@@ -342,7 +342,7 @@ Stage 1: Preprocessing</h4>
 <div class="line">  <span class="keyword">struct </span>PointXYZ { <span class="keywordtype">float</span> <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#a8152bc0ca1af1fca7af2e9cfa109c3b1">x</a>, <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb">y</a>, <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5">z</a>; };</div>
 <div class="line">  <span class="comment">// ... 100+ lines from header</span></div>
 <div class="line">}</div>
-<div class="ttc" id="anamespacervv__pcl_html"><div class="ttname"><a href="namespacervv__pcl.html">rvv_pcl</a></div><div class="ttdoc">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library.</div></div>
+<div class="ttc" id="anamespacervv__pcl_html"><div class="ttname"><a href="namespacervv__pcl.html">rvv_pcl</a></div><div class="ttdoc">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library.</div><div class="ttdef"><b>Definition</b> custom_pointer_octree.cpp:7</div></div>
 <div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_a33da344ee6bf3aa17ca495a83f2e37b5"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5">rvv_pcl::PointXYZ::z</a></div><div class="ttdeci">float z</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
 <div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_a8152bc0ca1af1fca7af2e9cfa109c3b1"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#a8152bc0ca1af1fca7af2e9cfa109c3b1">rvv_pcl::PointXYZ::x</a></div><div class="ttdeci">float x</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
 <div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_ae75d9a71891478b54dfe1cae48c2edcb"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb">rvv_pcl::PointXYZ::y</a></div><div class="ttdeci">float y</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
@@ -541,7 +541,7 @@ QEMU Execution Command Breakdown</h3>
 </div><!-- fragment --><p><b>What QEMU does with it:</b></p><ol type="1">
 <li><b>Parse ELF headers</b> - Understand file structure</li>
 <li><b>Load sections</b> - Code, data, BSS into emulated memory</li>
-<li><b>Set entry point</b> - Usually <code>_start</code>, which calls <code><a class="el" href="rvv__test_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code></li>
+<li><b>Set entry point</b> - Usually <code>_start</code>, which calls <code><a class="el" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code></li>
 <li><b>Initialize registers</b> - Program counter, stack pointer, etc.</li>
 <li><b>Start execution</b> - Begin instruction-by-instruction emulation</li>
 </ol>
@@ -801,13 +801,13 @@ Step-by-Step Execution: Voxel Grid Test</h3>
 <p>Let's trace execution of <code>test_voxel_rvv</code> line by line.</p>
 <h4><a class="anchor" id="program-start"></a>
 Program Start</h4>
-<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="rvv__test_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
+<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
 <div class="line">    <span class="keyword">const</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a> = 1000;</div>
 <div class="line">    <span class="keyword">const</span> <span class="keywordtype">float</span> LEAF = 0.5f;</div>
 <div class="ttc" id="abenchmark_8cpp_html_adf99ea743b5dadbe8dc48388c0d7fa94"><div class="ttname"><a href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a></div><div class="ttdeci">const size_t N</div><div class="ttdef"><b>Definition</b> benchmark.cpp:38</div></div>
-<div class="ttc" id="arvv__test_8c_html_ae66f6b31b5ad750f1fe042a706a4e3d4"><div class="ttname"><a href="rvv__test_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a></div><div class="ttdeci">int main()</div><div class="ttdef"><b>Definition</b> rvv_test.c:4</div></div>
+<div class="ttc" id="averify_8cpp_html_ae66f6b31b5ad750f1fe042a706a4e3d4"><div class="ttname"><a href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a></div><div class="ttdeci">int main()</div><div class="ttdef"><b>Definition</b> verify.cpp:94</div></div>
 </div><!-- fragment --><p><b>QEMU:</b></p><ul>
-<li>Sets PC (program counter) to <code><a class="el" href="rvv__test_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code> address</li>
+<li>Sets PC (program counter) to <code><a class="el" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code> address</li>
 <li>Allocates stack frame</li>
 <li>Stores constants in registers</li>
 </ul>
@@ -1086,7 +1086,7 @@ Testing &amp; Verification</h2>
 <h3><a class="anchor" id="test-pattern"></a>
 Test Pattern</h3>
 <p>Every algorithm test follows this structure:</p>
-<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="rvv__test_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
+<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
 <div class="line">    <span class="comment">// 1. Generate test data</span></div>
 <div class="line">    std::vector&lt;float&gt; x(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>), y(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>), z(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>);</div>
 <div class="line">    std::vector&lt;PointXYZ&gt; input_aos(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>);</div>
@@ -1232,7 +1232,7 @@ Spatial Indexing</h3>
 &lt;strong&gt;Class &lt;tt&gt;Octree&lt;/tt&gt;&lt;/strong&gt;</h4>
 <p>A hierarchical tree structure for multidimensional spatial partitioning.</p><ul>
 <li><code>setInputCloud(const PointCloudSoA&amp; cloud)</code>: Attach the point cloud to the tree.</li>
-<li><code>build()</code>: Construct the tree structure recursively.</li>
+<li><code><a class="el" href="build_8cpp.html#a76db41697daff46008717b584b49d27c">build()</a></code>: Construct the tree structure recursively.</li>
 <li><code>radiusSearch(...)</code>: Perform efficient neighbor search using tree traversal.</li>
 <li><b>Configuration</b>:<ul>
 <li><code>setMaxPointsPerLeaf(n)</code>: Sets the maximum points before splitting a node. Default: <code>64</code>.</li>
@@ -1245,7 +1245,7 @@ Spatial Indexing</h3>
 &lt;strong&gt;Class &lt;tt&gt;SpatialHash&lt;/tt&gt;&lt;/strong&gt;</h4>
 <p>A high-performance hash grid optimized for uniform or near-uniform datasets. Built specifically for RVV 1.0 hardware.</p><ul>
 <li><code>setInputCloud(const PointCloudSoA&amp; cloud, float cell_size)</code>: Attach cloud and define grid resolution.</li>
-<li><code>build()</code>: Map points to hash cells using vectorized bounding box kernels.</li>
+<li><code><a class="el" href="build_8cpp.html#a76db41697daff46008717b584b49d27c">build()</a></code>: Map points to hash cells using vectorized bounding box kernels.</li>
 <li><code>radiusSearch(...)</code>: Fast neighbor discovery using O(1) cell lookups and RVV fused gather-filter kernels.</li>
 <li><b>Configuration</b>:<ul>
 <li><code>setCellSizeEpsilon(eps)</code>: Scales the cell overlap margin. Default: <code>0.01</code>.</li>
