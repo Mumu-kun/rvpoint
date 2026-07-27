@@ -59,6 +59,75 @@ print_banner() {
     echo -e "${RESET}"
 }
 
+# Runs every test_* / rvv_test binary produced by the build under QEMU.
+# Excludes benchmark/pipeline_export (not self-checking tests) and gives
+# test_pcd_radius (a parameterized CLI tool, not a plain test) sample args.
+run_tests() {
+    local build_dir bin_dir qemu_bin
+    build_dir="$(get_build_dir)"
+    bin_dir="${build_dir}/rvv/bin/rvv"
+    qemu_bin="$(find_qemu)"
+    # shellcheck disable=SC2054  # comma is part of the -cpu value, not an array separator
+    local qemu_flags=(-cpu "rv64,v=true,vlen=128" -L "${RISCV}/sysroot")
+
+    if [ ! -d "$bin_dir" ]; then
+        log_error "Build output directory not found: $bin_dir"
+        return 1
+    fi
+
+    local total=0
+    local failed=0
+    local log_file
+
+    for bin in "$bin_dir"/*; do
+        [ -f "$bin" ] && [ -x "$bin" ] || continue
+        local name
+        name="$(basename "$bin")"
+
+        case "$name" in
+            benchmark|pipeline_export)
+                continue
+                ;;
+        esac
+        case "$name" in
+            test_*|rvv_test) ;;
+            *) continue ;;
+        esac
+
+        total=$((total + 1))
+        log_file="$(mktemp)"
+
+        local rc=0
+        if [ "$name" = "test_pcd_radius" ]; then
+            local sample_pcd="${PROJECT_ROOT}/data/table_scene_lms400.pcd"
+            if [ ! -f "$sample_pcd" ]; then
+                log_info "Skipping $name (sample PCD not found: $sample_pcd)"
+                total=$((total - 1))
+                rm -f "$log_file"
+                continue
+            fi
+            log_info "Running $name..."
+            "$qemu_bin" "${qemu_flags[@]}" "$bin" "$sample_pcd" octree 0.5 3 0 >"$log_file" 2>&1 || rc=$?
+        else
+            log_info "Running $name..."
+            "$qemu_bin" "${qemu_flags[@]}" "$bin" >"$log_file" 2>&1 || rc=$?
+        fi
+
+        if [ "$rc" -eq 0 ]; then
+            log_success "$name passed"
+        else
+            failed=$((failed + 1))
+            log_error "$name FAILED"
+            cat "$log_file"
+        fi
+        rm -f "$log_file"
+    done
+
+    log_info ""
+    log_info "Ran ${total} test binaries, ${failed} failed."
+    [ "$failed" -eq 0 ]
+}
+
 # Parse arguments
 BUILD_ONLY=true
 RUN_TESTS=false
@@ -103,7 +172,7 @@ fi
 
 # 2. Running Test Suite
 log_step "2. Running Test Suite"
-if "$SCRIPT_DIR/run.sh" test; then
+if run_tests; then
     log_success "All Tests Passed"
 else
     log_error "Test Suite Failed"
