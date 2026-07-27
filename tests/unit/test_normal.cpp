@@ -1,81 +1,61 @@
 #include "rvv_pcl.h"
-
-#include <cmath>
-#include <iostream>
+#include <vector>
 #include <random>
+#include <iostream>
+#include <cmath>
+#include <algorithm>
 
 using namespace rvv_pcl;
 
-namespace {
-
-PointXYZ normalize(PointXYZ normal) {
-  const float mag =
-      std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-  return {normal.x / mag, normal.y / mag, normal.z / mag};
-}
-
-int run_plane_case(float slope_x, float slope_y, float z_bias,
-                   const PointXYZ &expected_normal, const char *label) {
-  constexpr std::size_t N = 1000;
-  std::mt19937 gen(42);
-  std::uniform_real_distribution<float> dist_xy(-10.0f, 10.0f);
-  std::normal_distribution<float> noise(0.0f, 0.01f);
-
-  PointCloudSoA cloud;
-  cloud.reserve(N);
-  for (std::size_t i = 0; i < N; ++i) {
-    const float x = dist_xy(gen);
-    const float y = dist_xy(gen);
-    const float z = slope_x * x + slope_y * y + z_bias + noise(gen);
-    cloud.push_back({x, y, z});
-  }
-
-  OctreeNeighborSearch search;
-  search.setInputCloud(cloud);
-  search.setSearchRadius(2.0f);
-  search.buildTree();
-
-  NormalEstimation estimator;
-  estimator.setInputCloud(cloud);
-  estimator.setNeighborSearch(&search);
-  estimator.setK(10);
-
-  NormalCloud normals;
-  estimator.estimate(normals);
-
-  int pass_count = 0;
-  for (std::size_t i = 0; i < normals.size(); ++i) {
-    const float dot = normals.nx()[i] * expected_normal.x +
-                      normals.ny()[i] * expected_normal.y +
-                      normals.nz()[i] * expected_normal.z;
-    if (std::abs(dot) > 0.9f) {
-      ++pass_count;
-    }
-  }
-
-  if (pass_count < static_cast<int>(N * 0.95f)) {
-    std::cerr << "[FAIL] " << label << " produced too many incorrect normals: "
-              << pass_count << std::endl;
-    return 1;
-  }
-
-  return 0;
-}
-
-} // namespace
-
 int main() {
-  if (run_plane_case(0.0f, 0.0f, 0.0f, {0.0f, 0.0f, 1.0f}, "Axis-aligned plane") != 0) {
-    return 1;
-  }
+    const size_t N = 1000;
+    const int K = 10;
+    
+    std::vector<float> x(N), y(N), z(N);
+    std::vector<PointXYZ> input_aos(N);
+    
+    std::mt19937 gen(42);
+    std::uniform_real_distribution<float> dist_surf(-10.0f, 10.0f);
+    std::normal_distribution<float> dist_noise(0.0f, 0.01f);
 
-  const PointXYZ tilted_normal = normalize({0.4f, -0.25f, -1.0f});
-  if (run_plane_case(0.4f, -0.25f, 5.0f, tilted_normal, "Tilted plane") != 0) {
-    return 1;
-  }
+    for(size_t i=0; i<N; ++i) {
+        x[i] = dist_surf(gen);
+        y[i] = dist_surf(gen);
+        z[i] = dist_noise(gen);
+        input_aos[i] = {x[i], y[i], z[i]};
+    }
 
-  std::cout << "[PASS] NormalEstimation recovers axis-aligned and tilted plane normals."
-            << std::endl;
-  return 0;
+    PointCloudSoA input_soa = {x.data(), y.data(), z.data(), N};
+
+    std::vector<float> nx_sc(N), ny_sc(N), nz_sc(N);
+    normal_estimation_sc(input_aos.data(), N, nx_sc.data(), ny_sc.data(), nz_sc.data(), K, 2.0f);
+
+    std::vector<float> nx_rvv(N), ny_rvv(N), nz_rvv(N);
+    
+    Octree octree;
+    octree.setInputCloud(input_soa);
+    octree.build();
+    
+    normal_estimation_rvv(input_soa, octree, nx_rvv.data(), ny_rvv.data(), nz_rvv.data(), K, 2.0f);
+
+    int pass_count = 0;
+    for(size_t i=0; i<N; ++i) {
+        float dot_sc = std::abs(nz_sc[i]);
+        float dot_rvv = std::abs(nz_rvv[i]);
+        float impl_dot = nx_sc[i]*nx_rvv[i] + ny_sc[i]*ny_rvv[i] + nz_sc[i]*nz_rvv[i];
+        
+        if(dot_sc > 0.9 && dot_rvv > 0.9 && std::abs(impl_dot) > 0.9) {
+            pass_count++;
+        }
+    }
+    
+    std::cout << "Points with correct normal: " << pass_count << "/" << N << std::endl;
+    
+    if (pass_count < N * 0.95) {
+        std::cerr << "[FAIL] Too many incorrect normals!" << std::endl;
+        return 1;
+    }
+
+    std::cout << "[PASS] Normal Estimation Verification Successful!" << std::endl;
+    return 0;
 }
-

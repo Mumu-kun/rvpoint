@@ -1,6 +1,5 @@
 #include "rvv_pcl.h"
 #include "simple_pcd_loader.h"
-#include "caravan_radius_search.h"
 
 #include <chrono>
 #include <iomanip>
@@ -13,7 +12,7 @@ using namespace rvv_pcl;
 
 void printUsage() {
   std::cerr << "Usage: test_pcd_radius <pcd_file> <search_type> <radius> [iterations] [query_index]\n"
-            << "  search_type : caravan|octree|spatial_hash|rvv_helper\n"
+            << "  search_type : octree|spatial_hash|rvv_helper\n"
             << "  radius      : search radius float (e.g. 0.5)\n"
             << "  iterations  : number of benchmark iterations (default: 10)\n"
             << "  query_index : index of point to query (default: 0)\n";
@@ -57,55 +56,47 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  PointCloudSoA cloud;
-  cloud.assign(raw_points);
+  const std::size_t n = raw_points.size();
+  std::vector<float> x(n), y(n), z(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    x[i] = raw_points[i].x;
+    y[i] = raw_points[i].y;
+    z[i] = raw_points[i].z;
+  }
+  PointCloudSoA cloud = {x.data(), y.data(), z.data(), n};
 
-  if (query_index < 0 || static_cast<std::size_t>(query_index) >= cloud.size()) {
+  if (query_index < 0 || static_cast<std::size_t>(query_index) >= cloud.n) {
     query_index = 0;
   }
 
-  PointXYZ query_pt = cloud.point(query_index);
+  PointXYZ query_pt = raw_points[query_index];
   std::vector<int> result_indices;
+  std::vector<float> result_dists;
   std::size_t total_found = 0;
 
-  // Instantiate selected search algorithm
-  std::unique_ptr<CaravanRadiusSearch> caravan;
-  std::unique_ptr<OctreeNeighborSearch> octree;
-  std::unique_ptr<SpatialHashNeighborSearch> hash_search;
+  std::unique_ptr<Octree> octree;
+  std::unique_ptr<SpatialHash> hash_search;
 
-  if (search_type == "caravan" || search_type == "carvan") {
-    caravan = std::make_unique<CaravanRadiusSearch>();
-    caravan->setInputCloud(cloud);
-    caravan->setSearchRadius(radius);
-  } else if (search_type == "octree") {
-    octree = std::make_unique<OctreeNeighborSearch>();
+  if (search_type == "octree") {
+    octree = std::make_unique<Octree>();
     octree->setInputCloud(cloud);
-    octree->setSearchRadius(radius);
-    octree->buildTree();
+    octree->build();
   } else if (search_type == "spatial_hash" || search_type == "hash") {
-    hash_search = std::make_unique<SpatialHashNeighborSearch>();
-    hash_search->setInputCloud(cloud);
-    hash_search->setSearchRadius(radius);
-    hash_search->setCellSize(radius);
-    hash_search->buildHashTable();
+    hash_search = std::make_unique<SpatialHash>();
+    hash_search->setInputCloud(cloud, radius);
+    hash_search->build();
   }
 
   // Warmup run
-  if (caravan) {
-    caravan->radiusSearch(query_index, result_indices, nullptr, 0);
-  } else if (octree) {
-    octree->radiusSearch(query_index, result_indices, nullptr, 0);
+  if (octree) {
+    octree->radiusSearch(query_pt, radius, result_indices, result_dists, 0);
   } else if (hash_search) {
-    hash_search->radiusSearch(query_index, result_indices, nullptr, 0);
+    hash_search->radiusSearch(query_pt, radius, result_indices, result_dists, 0);
   } else {
-    // rvv_helper fallback
-    std::vector<float> d2(cloud.size());
-    const float r2 = radius * radius;
-    RVVHelper::distanceSquared(cloud.xData(), cloud.yData(), cloud.zData(), cloud.size(),
-                               query_pt.x, query_pt.y, query_pt.z, d2.data());
-    for (std::size_t i = 0; i < cloud.size(); ++i) {
-      if (d2[i] <= r2) result_indices.push_back(static_cast<int>(i));
-    }
+    std::vector<int> indices(n);
+    std::vector<float> dists(n);
+    total_found = radius_search_rvv(cloud, query_pt, radius, indices.data(), dists.data(), 0);
+    result_indices.assign(indices.begin(), indices.begin() + total_found);
   }
   total_found = result_indices.size();
 
@@ -113,20 +104,16 @@ int main(int argc, char **argv) {
   auto start_time = std::chrono::high_resolution_clock::now();
   for (std::size_t iter = 0; iter < iterations; ++iter) {
     result_indices.clear();
-    if (caravan) {
-      caravan->radiusSearch(query_index, result_indices, nullptr, 0);
-    } else if (octree) {
-      octree->radiusSearch(query_index, result_indices, nullptr, 0);
+    result_dists.clear();
+    if (octree) {
+      octree->radiusSearch(query_pt, radius, result_indices, result_dists, 0);
     } else if (hash_search) {
-      hash_search->radiusSearch(query_index, result_indices, nullptr, 0);
+      hash_search->radiusSearch(query_pt, radius, result_indices, result_dists, 0);
     } else {
-      std::vector<float> d2(cloud.size());
-      const float r2 = radius * radius;
-      RVVHelper::distanceSquared(cloud.xData(), cloud.yData(), cloud.zData(), cloud.size(),
-                                 query_pt.x, query_pt.y, query_pt.z, d2.data());
-      for (std::size_t i = 0; i < cloud.size(); ++i) {
-        if (d2[i] <= r2) result_indices.push_back(static_cast<int>(i));
-      }
+      std::vector<int> indices(n);
+      std::vector<float> dists(n);
+      std::size_t count = radius_search_rvv(cloud, query_pt, radius, indices.data(), dists.data(), 0);
+      result_indices.assign(indices.begin(), indices.begin() + count);
     }
   }
   auto end_time = std::chrono::high_resolution_clock::now();
@@ -135,7 +122,7 @@ int main(int argc, char **argv) {
   const double avg_us = static_cast<double>(total_us) / static_cast<double>(iterations);
 
   std::cout << "[PCD_RADIUS_TEST] PCD: " << filename
-            << " | Points: " << cloud.size()
+            << " | Points: " << cloud.n
             << " | Algorithm: " << search_type
             << " | Radius: " << radius
             << " | Found: " << total_found
@@ -143,7 +130,7 @@ int main(int argc, char **argv) {
             << " | Avg: " << std::fixed << std::setprecision(2) << avg_us << " us/iter\n";
 
   std::cout << "PCD_RESULT pcd=" << filename
-            << " points=" << cloud.size()
+            << " points=" << cloud.n
             << " algorithm=" << search_type
             << " radius=" << radius
             << " found=" << total_found

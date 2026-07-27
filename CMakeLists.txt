@@ -32,7 +32,6 @@ message(STATUS "Binary output dir: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 # 1. The Library (rvvpcl)
 list(APPEND SOURCES
-    "src/point_cloud.cpp"
     "src/voxel_grid_downsamp.cpp"
     "src/rvv_common.cpp"
     "src/statistical_outlier_removal.cpp"
@@ -40,10 +39,11 @@ list(APPEND SOURCES
     "src/ransac_plane.cpp"
     "src/octree.cpp"
     "src/spatial_hashing.cpp"
-    "src/caravan_radius_search.cpp"
+    "src/radius_search.cpp"
+    "src/pointer_octree/pointer_octree.cpp"
 )
 add_library(rvvpcl ${SOURCES})
-target_include_directories(rvvpcl PUBLIC src/include)
+target_include_directories(rvvpcl PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(rvvpcl PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
 if(RVV_PCL_ENABLE_RVV)
     target_compile_definitions(rvvpcl PUBLIC RVV_PCL_USE_RVV=1)
@@ -54,7 +54,7 @@ function(add_rvv_test src)
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
     target_link_libraries(${name} PRIVATE rvvpcl)
-    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 endfunction()
 
 # 2. Test Executables
@@ -92,16 +92,13 @@ foreach(src ${SUPPORT_TEST_SOURCES})
 endforeach()
 
 # --- Benchmark ---
-file(GLOB BENCHMARK_SOURCES "tests/benchmark/*.cpp")
+file(GLOB BENCHMARK_SOURCES "tests/benchmark_*.cpp")
 foreach(src ${BENCHMARK_SOURCES})
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
-    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
     target_compile_options(${name} PRIVATE "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
     target_link_libraries(${name} PRIVATE rvvpcl)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/src/benchmark_kernels.cpp")
-        target_sources(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/benchmark_kernels.cpp")
-    endif()
 endforeach()
 
 # Pipeline Export Utility

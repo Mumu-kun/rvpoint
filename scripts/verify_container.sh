@@ -90,7 +90,7 @@ run_tests() {
                 ;;
         esac
         case "$name" in
-            test_*|rvv_test) ;;
+            test_*|rvv_test|benchmark_pointer_octree_real) ;;
             *) continue ;;
         esac
 

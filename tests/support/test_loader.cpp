@@ -8,6 +8,11 @@ int main() {
     std::string filename = "bunny.pcd";
     
     int count = rvv_pcl::loadPCD(filename, points);
+    if (count < 0) count = rvv_pcl::loadPCD("data/" + filename, points);
+    if (count < 0) count = rvv_pcl::loadPCD("../data/" + filename, points);
+    if (count < 0) count = rvv_pcl::loadPCD("../" + filename, points);
+    if (count < 0) count = rvv_pcl::loadPCD("/workspace/data/" + filename, points);
+    if (count < 0) count = rvv_pcl::loadPCD("/workspace/" + filename, points);
     
     if (count < 0) {
         std::cerr << "[FAIL] Failed to load " << filename << std::endl;

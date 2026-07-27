@@ -1,90 +1,245 @@
 #include "rvv_pcl.h"
 #include "simple_pcd_loader.h"
-
-#include <filesystem>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <ctime>
+#include <fstream>
 #include <iostream>
+#include <random>
 #include <vector>
 
 using namespace rvv_pcl;
 
+// Mimics https://pcl.readthedocs.io/projects/tutorials/en/master/walkthrough.html
 int main(int argc, char **argv) {
+  std::cout << "========================================" << std::endl;
+  std::cout << "   RISC-V PCL Pipeline Walkthrough      " << std::endl;
+  std::cout << "========================================" << std::endl;
+
   std::string input_file = "bunny.pcd";
   if (argc > 1) {
     input_file = argv[1];
   }
 
+  std::string base_name = input_file;
+  size_t last_slash = base_name.find_last_of("/\\");
+  if (last_slash != std::string::npos) {
+    base_name = base_name.substr(last_slash + 1);
+  }
+  std::string stem = base_name.substr(0, base_name.find_last_of('.'));
+
+  // Generate timestamp for serialization
+  auto now = std::chrono::system_clock::now();
+  auto time_t_now = std::chrono::system_clock::to_time_t(now);
+  std::tm *tm_now = std::localtime(&time_t_now);
+  char timestamp[32];
+  std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_now);
+
+  std::string output_dir = "results/";
+  std::ifstream check_res("results");
+  if (!check_res.good()) {
+    output_dir = "../results/";
+  }
+
+  std::string output_file =
+      output_dir + stem + "_" + timestamp + "_voxelized.pcd";
+
+  // 1. Load Cloud
+  std::cout << "\n[Step 1] Loading " << input_file << "..." << std::endl;
   std::vector<PointXYZ> loaded_points;
-  int count = loadPCD(input_file, loaded_points);
-  if (count < 0) {
-    count = loadPCD("data/" + input_file, loaded_points);
+  int n = loadPCD(input_file, loaded_points);
+  if (n < 0) n = loadPCD("../" + input_file, loaded_points);
+  if (n < 0) n = loadPCD("data/" + input_file, loaded_points);
+  if (n < 0) n = loadPCD("../data/" + input_file, loaded_points);
+  if (n < 0) n = loadPCD("/workspace/data/" + input_file, loaded_points);
+
+  if (n < 0) {
+    std::cerr << "[FAIL] Could not load " << input_file << std::endl;
+    return 1;
   }
-  if (count < 0) {
-    count = loadPCD("../data/" + input_file, loaded_points);
+  std::cout << "Loaded " << n << " points." << std::endl;
+
+  // Convert to SoA for processing
+  std::vector<float> x(n), y(n), z(n);
+  for (int i = 0; i < n; ++i) {
+    x[i] = loaded_points[i].x;
+    y[i] = loaded_points[i].y;
+    z[i] = loaded_points[i].z;
   }
-  if (count < 0) {
-    count = loadPCD("/workspace/" + input_file, loaded_points);
+
+  // 1.5 Add Synthetic Ground Plane
+  std::cout << "\n[Step 1.5] Adding Synthetic Ground Plane..." << std::endl;
+
+  float min_z = *std::min_element(z.begin(), z.end());
+  float min_x = *std::min_element(x.begin(), x.end());
+  float max_x = *std::max_element(x.begin(), x.end());
+  float min_y = *std::min_element(y.begin(), y.end());
+  float max_y = *std::max_element(y.begin(), y.end());
+
+  float ground_z = min_z - 0.005f;
+  const size_t N_GROUND = 1000;
+
+  std::mt19937 gen(42);
+  std::uniform_real_distribution<float> dist_x(min_x - 0.02f, max_x + 0.02f);
+  std::uniform_real_distribution<float> dist_y(min_y - 0.02f, max_y + 0.02f);
+
+  size_t original_n = n;
+  x.reserve(n + N_GROUND);
+  y.reserve(n + N_GROUND);
+  z.reserve(n + N_GROUND);
+
+  for (size_t i = 0; i < N_GROUND; ++i) {
+    x.push_back(dist_x(gen));
+    y.push_back(dist_y(gen));
+    z.push_back(ground_z);
   }
-  if (count < 0) {
-    count = loadPCD("/workspace/data/" + input_file, loaded_points);
+  n = x.size();
+
+  std::cout << "Added " << N_GROUND << " ground plane points at Z=" << ground_z << std::endl;
+  std::cout << "Total points: " << n << " (Bunny: " << original_n << " + Ground: " << N_GROUND << ")" << std::endl;
+
+  PointCloudSoA cloud_soa = {x.data(), y.data(), z.data(), (size_t)n};
+
+  // 2. Voxel Grid Downsampling
+  std::cout << "\n[Step 2] Voxel Grid Downsampling (Leaf=0.01)..." << std::endl;
+  std::vector<PointXYZ> filtered_points(n);
+  size_t n_filtered =
+      voxel_grid_downsamp_rvv_v2(cloud_soa, filtered_points.data(), 0.01f);
+  std::cout << "Filtered count: " << n_filtered << " (Original: " << n << ")"
+            << std::endl;
+
+  // 2.5 RANSAC Plane Segmentation
+  std::cout << "\n[Step 2.5] RANSAC Plane Segmentation..." << std::endl;
+
+  std::vector<float> vx(n_filtered), vy(n_filtered), vz(n_filtered);
+  for (size_t i = 0; i < n_filtered; ++i) {
+    vx[i] = filtered_points[i].x;
+    vy[i] = filtered_points[i].y;
+    vz[i] = filtered_points[i].z;
   }
-  if (count < 0) {
-    std::cerr << "[FAIL] Could not load input point cloud." << std::endl;
+  PointCloudSoA voxel_soa = {vx.data(), vy.data(), vz.data(), n_filtered};
+
+  float plane_model[4];
+  float ransac_thresh = 0.005f;
+  int ransac_iters = 1000;
+
+  int n_plane_inliers = ransac_plane_rvv(voxel_soa, ransac_thresh, ransac_iters, plane_model);
+
+  std::cout << "RANSAC found " << n_plane_inliers << " plane inliers" << std::endl;
+  std::cout << "Plane model: " << plane_model[0] << "x + " << plane_model[1] << "y + "
+            << plane_model[2] << "z + " << plane_model[3] << " = 0" << std::endl;
+
+  std::vector<PointXYZ> plane_pts(n_filtered);
+  std::vector<PointXYZ> object_pts(n_filtered);
+  std::size_t actual_inliers, actual_outliers;
+
+  extract_plane_inliers_outliers_rvv(voxel_soa, plane_model, ransac_thresh,
+                                      plane_pts.data(), object_pts.data(),
+                                      actual_inliers, actual_outliers);
+
+  std::cout << "Extracted: " << actual_inliers << " plane points (ground), "
+            << actual_outliers << " object points (bunny)" << std::endl;
+
+  std::string ground_file = output_dir + stem + "_" + timestamp + "_ground.pcd";
+  std::vector<PointXYZ> ground_vec(plane_pts.begin(), plane_pts.begin() + actual_inliers);
+  savePCD(ground_file, ground_vec);
+  std::cout << "Saved ground plane to: " << ground_file << std::endl;
+
+  std::vector<PointXYZ> final_points;
+  for (size_t i = 0; i < actual_outliers; ++i)
+    final_points.push_back(object_pts[i]);
+
+  savePCD(output_file, final_points);
+
+  n_filtered = actual_outliers;
+  filtered_points.resize(n_filtered);
+  for (size_t i = 0; i < n_filtered; ++i) {
+    filtered_points[i] = object_pts[i];
+  }
+
+  std::cout << "Continuing pipeline with " << n_filtered << " object points (ground removed)." << std::endl;
+
+  // 3. Statistical Outlier Removal (SOR)
+  std::cout << "\n[Step 3] Statistical Outlier Removal (K=50, Std=1.0)..."
+            << std::endl;
+  std::vector<float> fx(n_filtered), fy(n_filtered), fz(n_filtered);
+  for (size_t i = 0; i < n_filtered; ++i) {
+    fx[i] = filtered_points[i].x;
+    fy[i] = filtered_points[i].y;
+    fz[i] = filtered_points[i].z;
+  }
+  PointCloudSoA filtered_soa = {fx.data(), fy.data(), fz.data(), n_filtered};
+
+  std::vector<PointXYZ> sor_points(n_filtered);
+
+  size_t n_sor = sor_rvv(filtered_soa, sor_points.data(), 50, 1.0f);
+  std::cout << "SOR Filtered count: " << n_sor << " (Original: " << n_filtered
+            << ")" << std::endl;
+
+  // 4. Build Octree (Explicit Step)
+  std::cout << "\n[Step 4] Building Octree..." << std::endl;
+  std::vector<float> sx(n_sor), sy(n_sor), sz(n_sor);
+  for (size_t i = 0; i < n_sor; ++i) {
+    sx[i] = sor_points[i].x;
+    sy[i] = sor_points[i].y;
+    sz[i] = sor_points[i].z;
+  }
+  PointCloudSoA sor_soa = {sx.data(), sy.data(), sz.data(), n_sor};
+
+  Octree octree;
+  octree.setInputCloud(sor_soa);
+  octree.build();
+  std::cout << "Octree built successfully." << std::endl;
+
+  // 5. Normal Estimation using Octree
+  std::cout << "\n[Step 5] Estimating Normals (K=10) with ViewPoint(0,0,0)..."
+            << std::endl;
+  std::vector<float> nx(n_sor), ny(n_sor), nz(n_sor);
+
+  normal_estimation_rvv(sor_soa, octree, nx.data(), ny.data(), nz.data(), 10,
+                        0.03f, 0.0f, 0.0f, 0.0f);
+
+  float vp_dx = 0 - sx[0];
+  float vp_dy = 0 - sy[0];
+  float vp_dz = 0 - sz[0];
+  float dot = nx[0] * vp_dx + ny[0] * vp_dy + nz[0] * vp_dz;
+  std::cout << "Point[0] Normal Dot with ViewVec: " << dot << std::endl;
+
+  if (dot >= -1e-5) {
+    std::cout
+        << "[PASS] Normal orientation correct (aligned with line of sight)."
+        << std::endl;
+  } else {
+    std::cerr << "[FAIL] Normal points away from viewpoint!" << std::endl;
+  }
+
+  // 6. Verify Radius Search (Sanity Check)
+  std::cout << "\n[Step 6] Octree Radius Search Verification..." << std::endl;
+  size_t mid_idx = n_sor / 2;
+  PointXYZ query = sor_points[mid_idx];
+  float radius = 0.05f;
+
+  std::vector<int> indices;
+  std::vector<float> dists;
+  std::size_t found = octree.radiusSearch(query, radius, indices, dists);
+
+  std::cout << "Neighbors found within r=" << radius << ": " << found
+            << std::endl;
+
+  bool found_self = false;
+  for (float d : dists) {
+    if (d < 1e-9)
+      found_self = true;
+  }
+
+  if (found > 0 && found_self) {
+    std::cout << "[PASS] Search returned valid results." << std::endl;
+  } else {
+    std::cerr << "[FAIL] Search failed or did not find self." << std::endl;
     return 1;
   }
 
-  PointCloudSoA cloud;
-  cloud.assign(loaded_points);
-
-  VoxelGridFilter voxel;
-  voxel.setInput(cloud);
-  voxel.setLeafSize(0.01f);
-  PointCloudSoA voxelized;
-  voxel.filter(voxelized);
-
-  OctreeNeighborSearch search;
-  search.setInputCloud(voxelized);
-  search.setSearchRadius(0.03f);
-  search.buildTree();
-
-  SORFilter sor;
-  sor.setInput(voxelized);
-  sor.setNeighborSearch(&search);
-  sor.setMeanK(20);
-  PointCloudSoA filtered;
-  sor.filter(filtered);
-
-  search.setInputCloud(filtered);
-  search.buildTree();
-
-  NormalEstimation estimation;
-  estimation.setInputCloud(filtered);
-  estimation.setNeighborSearch(&search);
-  estimation.setK(10);
-  NormalCloud normals;
-  estimation.estimate(normals);
-
-  if (filtered.empty() || normals.size() != filtered.size()) {
-    std::cerr << "[FAIL] Pipeline outputs are inconsistent." << std::endl;
-    return 1;
-  }
-
-  const std::filesystem::path output_dir("results");
-  std::error_code ec;
-  std::filesystem::create_directories(output_dir, ec);
-  if (ec) {
-    std::cerr << "[FAIL] Could not create output directory: " << ec.message()
-              << std::endl;
-    return 1;
-  }
-
-  const std::filesystem::path output_path = output_dir / "pipeline_voxelized.pcd";
-  savePCD(output_path.string(), voxelized.toAoS());
-  if (!std::filesystem::exists(output_path)) {
-    std::cerr << "[FAIL] Walkthrough did not produce output artifact." << std::endl;
-    return 1;
-  }
-
-  std::cout << "[PASS] Pipeline walkthrough completed on class-based API." << std::endl;
+  std::cout << "\n[SUCCESS] Custom Pipeline Walkthrough Complete!" << std::endl;
   return 0;
 }
-

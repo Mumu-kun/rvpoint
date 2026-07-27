@@ -1,125 +1,336 @@
 #include "include/rvv_pcl.h"
-
-#include <algorithm>
+#include <vector>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
+#include <algorithm>
 
 namespace rvv_pcl {
 
-int PlaneModel::minSamples() { return 3; }
-
-bool PlaneModel::computeModel(const PointCloudSoA &points, const std::vector<int> &samples,
-                              std::array<float, 4> &coeffs) {
-  if (samples.size() < static_cast<std::size_t>(minSamples())) {
-    return false;
-  }
-
-  const PointXYZ p0 = points.point(static_cast<std::size_t>(samples[0]));
-  const PointXYZ p1 = points.point(static_cast<std::size_t>(samples[1]));
-  const PointXYZ p2 = points.point(static_cast<std::size_t>(samples[2]));
-  const float v1x = p1.x - p0.x;
-  const float v1y = p1.y - p0.y;
-  const float v1z = p1.z - p0.z;
-  const float v2x = p2.x - p0.x;
-  const float v2y = p2.y - p0.y;
-  const float v2z = p2.z - p0.z;
-  float a = v1y * v2z - v1z * v2y;
-  float b = v1z * v2x - v1x * v2z;
-  float c = v1x * v2y - v1y * v2x;
-  const float norm = std::sqrt(a * a + b * b + c * c);
-  if (norm < 1e-6f) {
-    return false;
-  }
-
-  a /= norm;
-  b /= norm;
-  c /= norm;
-  coeffs = {a, b, c, -(a * p0.x + b * p0.y + c * p0.z)};
-  return true;
+// Helper: Compute plane coefficients from 3 points
+// ax + by + cz + d = 0
+// Returns false if collinear
+static bool compute_plane_coefficients(float x1, float y1, float z1,
+                                       float x2, float y2, float z2,
+                                       float x3, float y3, float z3,
+                                       float* model, float collinear_thresh) 
+{
+    float v1x = x2 - x1;
+    float v1y = y2 - y1;
+    float v1z = z2 - z1;
+    
+    float v2x = x3 - x1;
+    float v2y = y3 - y1;
+    float v2z = z3 - z1;
+    
+    // Cross product
+    float a = v1y*v2z - v1z*v2y;
+    float b = v1z*v2x - v1x*v2z;
+    float c = v1x*v2y - v1y*v2x;
+    //
+    // Normalize
+    float norm = std::sqrt(a*a + b*b + c*c);
+    if (norm < collinear_thresh) return false; // Collinear
+    
+    a /= norm;
+    b /= norm;
+    c /= norm;
+    float d = -(a*x1 + b*y1 + c*z1);
+    
+    model[0] = a;
+    model[1] = b;
+    model[2] = c;
+    model[3] = d;
+    return true;
 }
 
-float PlaneModel::evaluatePoint(const PointCloudSoA &points, int pointIdx,
-                                const std::array<float, 4> &coeffs) {
-  const PointXYZ point = points.point(static_cast<std::size_t>(pointIdx));
-  return std::abs(coeffs[0] * point.x + coeffs[1] * point.y + coeffs[2] * point.z +
-                  coeffs[3]);
-}
-
-int PlaneModel::evaluateAll(const PointCloudSoA &points, const std::array<float, 4> &coeffs,
-                            std::vector<int> &inliers, int maxInliers, float threshold) {
-  inliers.clear();
-  const std::size_t n = points.size();
-  std::vector<float> dists(n);
-  RVVHelper::planeDistances(points.xData(), points.yData(), points.zData(), n, coeffs, dists.data());
-
-  int count = 0;
-  for (std::size_t i = 0; i < n; ++i) {
-    if (std::abs(dists[i]) <= threshold) {
-      ++count;
-      inliers.push_back(static_cast<int>(i));
-      if (maxInliers > 0 && inliers.size() >= static_cast<std::size_t>(maxInliers)) {
-        break;
-      }
+// ============================================================================
+// Scalar Implementation
+// ============================================================================
+int ransac_plane_sc(const PointXYZ* cloud, std::size_t n, 
+                    float dist_thresh, int max_iters, float* model,
+                    float collinear_thresh) 
+{
+    if (n < 3) return 0;
+    std::srand(0); // Fixed seed for reproducibility
+    
+    int best_inliers = 0;
+    float best_model[4] = {0,0,0,0};
+    
+    for(int iter=0; iter<max_iters; ++iter) {
+        // 1. Pick 3 random points
+        int i1 = std::rand() % n;
+        int i2 = std::rand() % n;
+        int i3 = std::rand() % n;
+        if(i1 == i2 || i1 == i3 || i2 == i3) continue;
+        
+        float cand_model[4];
+        if(!compute_plane_coefficients(cloud[i1].x, cloud[i1].y, cloud[i1].z,
+                                       cloud[i2].x, cloud[i2].y, cloud[i2].z,
+                                       cloud[i3].x, cloud[i3].y, cloud[i3].z,
+                                       cand_model, collinear_thresh)) continue;
+                                       
+        // 2. Count Inliers
+        int current_inliers = 0;
+        for(size_t i=0; i<n; ++i) {
+            float dist = std::abs(cand_model[0]*cloud[i].x + 
+                                  cand_model[1]*cloud[i].y + 
+                                  cand_model[2]*cloud[i].z + 
+                                  cand_model[3]);
+            if(dist <= dist_thresh) {
+                current_inliers++;
+            }
+        }
+        
+        if(current_inliers > best_inliers) {
+            best_inliers = current_inliers;
+            for(int k=0; k<4; k++) best_model[k] = cand_model[k];
+        }
     }
-  }
-  return count;
+    
+    for(int k=0; k<4; k++) model[k] = best_model[k];
+    return best_inliers;
 }
 
-void RANSACFitter::setDistanceThreshold(float threshold) {
-  distanceThreshold_ = threshold;
-}
+// ============================================================================
+// RVV Implementation
+// ============================================================================
+int ransac_plane_rvv(const PointCloudSoA& cloud, 
+                     float dist_thresh, int max_iters, float* model,
+                     float collinear_thresh) 
+{
+    if (cloud.n < 3) return 0;
+    std::srand(0);
+    
+    int best_inliers = 0;
+    float best_model[4] = {0,0,0,0};
+    
+    for(int iter=0; iter<max_iters; ++iter) {
+        // 1. Pick 3 random points (Scalar)
+        int i1 = std::rand() % cloud.n;
+        int i2 = std::rand() % cloud.n;
+        int i3 = std::rand() % cloud.n;
+        if(i1 == i2 || i1 == i3 || i2 == i3) continue;
+        
+        float cand_model[4];
+        if(!compute_plane_coefficients(cloud.x[i1], cloud.y[i1], cloud.z[i1],
+                                       cloud.x[i2], cloud.y[i2], cloud.z[i2],
+                                       cloud.x[i3], cloud.y[i3], cloud.z[i3],
+                                       cand_model, collinear_thresh)) continue;
+        
+        float a = cand_model[0];
+        float b = cand_model[1];
+        float c = cand_model[2];
+        float d = cand_model[3];
+        
+        // 2. Count Inliers (RVV)
+        int current_inliers = 0;
+        size_t n = cloud.n;
+        size_t i = 0;
+        
+        while (i < n) {
+            size_t vl = __riscv_vsetvl_e32m8(n - i);
+            
+            vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
+            vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[i], vl);
+            vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[i], vl);
+            
+            // dist = a*x + b*y + c*z + d
+            vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, a, vl);
+            dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
+            dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
+            dist = __riscv_vfadd_vf_f32m8(dist, d, vl); // Add D
+            
+            // abs(dist)
+            // No direct vfabs in standard arithmetic, but we can do bitwise clear sign?
+            // Or max(x, -x). Let's use vfsgnjx for absolute value if available or just check bounds.
+            // Actually, RISC-V V spec has vfabs.v as pseudo for fsgnjx.
+            // But intrinsic is __riscv_vfabs_v_f32m8? Use pseudo if not sure.
+            // Let's use mask: -thresh <= dist <= thresh.
+            
+            vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, dist_thresh, vl);
+            vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl);
+            vbool4_t mask_in = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
+            
+            // Count set bits
+            current_inliers += __riscv_vcpop_m_b4(mask_in, vl);
+            
+            i += vl;
+        }
 
-void RANSACFitter::setMaxIterations(int iter) { maxIterations_ = iter; }
-
-void RANSACFitter::setProbability(float prob) { probability_ = prob; }
-
-void RANSACFitter::sampleRandomIndices(std::vector<int> &sample) const {
-  sample.clear();
-  while (sample.size() < static_cast<std::size_t>(PlaneModel::minSamples())) {
-    const int index = std::rand() % static_cast<int>(input_->size());
-    if (std::find(sample.begin(), sample.end(), index) == sample.end()) {
-      sample.push_back(index);
+        if(current_inliers > best_inliers) {
+            best_inliers = current_inliers;
+            for(int k=0; k<4; k++) best_model[k] = cand_model[k];
+        }
     }
-  }
+    
+    for(int k=0; k<4; k++) model[k] = best_model[k];
+    return best_inliers;
 }
 
-int RANSACFitter::evaluateModel(const std::array<float, 4> &coeffs,
-                                std::vector<int> &inliers, int maxInliers) const {
-  return PlaneModel::evaluateAll(*input_, coeffs, inliers, maxInliers, distanceThreshold_);
+// ============================================================================
+// Extract plane inliers / outliers (RVV)
+// Strategy: compute plane distance vectorized + vcompress x/y/z SoA into
+// temp buffers, then pack to AoS. Eliminates branch-per-point scalar loop.
+// ============================================================================
+
+// Shared: compute dist = a*x + b*y + c*z + d for one vector group
+static inline vfloat32m8_t plane_dist_rvv(float a, float b, float c, float d,
+                                           const float *px, const float *py,
+                                           const float *pz, size_t vl) {
+    vfloat32m8_t vx = __riscv_vle32_v_f32m8(px, vl);
+    vfloat32m8_t vy = __riscv_vle32_v_f32m8(py, vl);
+    vfloat32m8_t vz = __riscv_vle32_v_f32m8(pz, vl);
+    vfloat32m8_t dist = __riscv_vfmv_v_f_f32m8(d, vl);
+    dist = __riscv_vfmacc_vf_f32m8(dist, a, vx, vl);
+    dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
+    dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
+    return dist;
 }
 
-bool RANSACFitter::fit(std::array<float, 4> &coefficients, std::vector<int> &inlierIndices,
-                       int maxInliers) const {
-  if (!input_ || input_->size() < static_cast<std::size_t>(PlaneModel::minSamples())) {
-    return false;
-  }
+// ── Shared helper: emit vcompress of x/y/z directly into AoS PointXYZ* ───────
+// Uses vsse32 (strided store) to write x/y/z into an AoS array without a
+// scalar packing loop — this avoids auto-vectorised vsseg3 from the compiler.
+// stride = sizeof(PointXYZ) = 12 bytes in all cases.
+#ifndef GEM5_BUILD
+static inline void compress_to_aos(vfloat32m8_t vx, vfloat32m8_t vy, vfloat32m8_t vz,
+                                    vbool4_t mask, size_t vl,
+                                    PointXYZ *out, std::size_t off) {
+    long cnt = __riscv_vcpop_m_b4(mask, vl);
+    if (cnt <= 0) return;
+    float *base = reinterpret_cast<float*>(out + off);
+    const ptrdiff_t stride = (ptrdiff_t)sizeof(PointXYZ);  // 12 bytes
+    __riscv_vsse32_v_f32m8(base + 0, stride, __riscv_vcompress_vm_f32m8(vx, mask, vl), cnt);
+    __riscv_vsse32_v_f32m8(base + 1, stride, __riscv_vcompress_vm_f32m8(vy, mask, vl), cnt);
+    __riscv_vsse32_v_f32m8(base + 2, stride, __riscv_vcompress_vm_f32m8(vz, mask, vl), cnt);
+}
+#endif
 
-  std::srand(0);
-  int effective_iterations = maxIterations_;
-  if (probability_ > 0.0f && probability_ < 1.0f) {
-    effective_iterations = std::max(1, static_cast<int>(maxIterations_ * probability_));
-  }
-
-  int best_inliers = 0;
-  std::array<float, 4> best_coeffs = {0.0f, 0.0f, 0.0f, 0.0f};
-  std::vector<int> sample;
-  std::vector<int> current_inliers;
-  for (int iter = 0; iter < effective_iterations; ++iter) {
-    sampleRandomIndices(sample);
-    std::array<float, 4> current_coeffs;
-    if (!PlaneModel::computeModel(*input_, sample, current_coeffs)) {
-      continue;
+std::size_t extract_plane_inliers_rvv(const PointCloudSoA &cloud,
+                                       const float *model, float dist_thresh,
+                                       PointXYZ *inliers) {
+    float a = model[0], b = model[1], c = model[2], d = model[3];
+    std::size_t n = cloud.n, count = 0, i = 0;
+#ifdef GEM5_BUILD
+    // gem5: vectorised distances, scalar filter (no vsseg auto-generated)
+    std::vector<float> dists(n);
+    {   size_t j = 0;
+        while (j < n) {
+            size_t vl = __riscv_vsetvl_e32m8(n - j);
+            vfloat32m8_t dist = plane_dist_rvv(a, b, c, d,
+                                                &cloud.x[j], &cloud.y[j], &cloud.z[j], vl);
+            __riscv_vse32_v_f32m8(&dists[j], dist, vl);
+            j += vl;
+        }
     }
-    const int count = evaluateModel(current_coeffs, current_inliers, maxInliers);
-    if (count > best_inliers) {
-      best_inliers = count;
-      best_coeffs = current_coeffs;
-      inlierIndices = current_inliers;
+    for (size_t j = 0; j < n; ++j)
+        if (dists[j] >= -dist_thresh && dists[j] <= dist_thresh)
+            inliers[count++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
+#else
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[i], vl);
+        vfloat32m8_t dist = plane_dist_rvv(a, b, c, d, &cloud.x[i], &cloud.y[i], &cloud.z[i], vl);
+        vbool4_t mask = __riscv_vmand_mm_b4(
+                            __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl),
+                            __riscv_vmfle_vf_f32m8_b4(dist,  dist_thresh, vl), vl);
+        long cnt = __riscv_vcpop_m_b4(mask, vl);
+        compress_to_aos(vx, vy, vz, mask, vl, inliers, count);
+        count += (size_t)cnt;
+        i += vl;
     }
-  }
+#endif
+    return count;
+}
 
-  coefficients = best_coeffs;
-  return best_inliers > 0;
+std::size_t extract_plane_outliers_rvv(const PointCloudSoA &cloud,
+                                        const float *model, float dist_thresh,
+                                        PointXYZ *outliers) {
+    float a = model[0], b = model[1], c = model[2], d = model[3];
+    std::size_t n = cloud.n, count = 0, i = 0;
+#ifdef GEM5_BUILD
+    std::vector<float> dists(n);
+    {   size_t j = 0;
+        while (j < n) {
+            size_t vl = __riscv_vsetvl_e32m8(n - j);
+            vfloat32m8_t dist = plane_dist_rvv(a, b, c, d,
+                                                &cloud.x[j], &cloud.y[j], &cloud.z[j], vl);
+            __riscv_vse32_v_f32m8(&dists[j], dist, vl);
+            j += vl;
+        }
+    }
+    for (size_t j = 0; j < n; ++j)
+        if (dists[j] < -dist_thresh || dists[j] > dist_thresh)
+            outliers[count++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
+#else
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[i], vl);
+        vfloat32m8_t dist = plane_dist_rvv(a, b, c, d, &cloud.x[i], &cloud.y[i], &cloud.z[i], vl);
+        // outlier: dist outside [-thresh, thresh] — use NOT(inlier mask)
+        vbool4_t in_mask = __riscv_vmand_mm_b4(
+                               __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl),
+                               __riscv_vmfle_vf_f32m8_b4(dist,  dist_thresh, vl), vl);
+        vbool4_t out_mask = __riscv_vmnot_m_b4(in_mask, vl);
+        long cnt = __riscv_vcpop_m_b4(out_mask, vl);
+        compress_to_aos(vx, vy, vz, out_mask, vl, outliers, count);
+        count += (size_t)cnt;
+        i += vl;
+    }
+#endif
+    return count;
+}
+
+void extract_plane_inliers_outliers_rvv(const PointCloudSoA &cloud,
+                                         const float *model, float dist_thresh,
+                                         PointXYZ *inliers, PointXYZ *outliers,
+                                         std::size_t &n_inliers,
+                                         std::size_t &n_outliers) {
+    float a = model[0], b = model[1], c = model[2], d = model[3];
+    std::size_t n = cloud.n;
+    n_inliers = 0; n_outliers = 0;
+    size_t i = 0;
+#ifdef GEM5_BUILD
+    std::vector<float> dists(n);
+    {   size_t j = 0;
+        while (j < n) {
+            size_t vl = __riscv_vsetvl_e32m8(n - j);
+            vfloat32m8_t dist = plane_dist_rvv(a, b, c, d,
+                                                &cloud.x[j], &cloud.y[j], &cloud.z[j], vl);
+            __riscv_vse32_v_f32m8(&dists[j], dist, vl);
+            j += vl;
+        }
+    }
+    for (size_t j = 0; j < n; ++j) {
+        if (dists[j] >= -dist_thresh && dists[j] <= dist_thresh)
+            inliers[n_inliers++]  = {cloud.x[j], cloud.y[j], cloud.z[j]};
+        else
+            outliers[n_outliers++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
+    }
+#else
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[i], vl);
+        vfloat32m8_t dist = plane_dist_rvv(a, b, c, d, &cloud.x[i], &cloud.y[i], &cloud.z[i], vl);
+        vbool4_t in_mask  = __riscv_vmand_mm_b4(
+                                __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl),
+                                __riscv_vmfle_vf_f32m8_b4(dist,  dist_thresh, vl), vl);
+        vbool4_t out_mask = __riscv_vmnot_m_b4(in_mask, vl);
+        long ic = __riscv_vcpop_m_b4(in_mask,  vl);
+        long oc = __riscv_vcpop_m_b4(out_mask, vl);
+        compress_to_aos(vx, vy, vz, in_mask,  vl, inliers,  n_inliers);
+        compress_to_aos(vx, vy, vz, out_mask, vl, outliers, n_outliers);
+        n_inliers  += (size_t)ic;
+        n_outliers += (size_t)oc;
+        i += vl;
+    }
+#endif
 }
 
 } // namespace rvv_pcl

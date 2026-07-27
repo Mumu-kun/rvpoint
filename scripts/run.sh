@@ -30,6 +30,7 @@ Examples:
   ./run.sh pipeline_export --progress --skip-sor ./data/indoor_scene.pcd ./output/results/indoor/
   ./run.sh --backend scalar src/tools/pipeline_export.cpp --progress ./data/indoor_scene.pcd
   ./run.sh benchmark
+  ./run.sh pointer_octree data/0000000010.pcd
 EOF
     exit 0
 }
@@ -80,7 +81,9 @@ TARGET_NAME="${TARGET_NAME%.cpp}"
 TARGET_NAME="${TARGET_NAME%.c}"
 TARGET_NAME="${TARGET_NAME%.cc}"
 
-if [[ "$TARGET_NAME" != test_* && "$TARGET_NAME" != rvv_test && "$TARGET_NAME" != benchmark && "$TARGET_NAME" != pipeline_export ]]; then
+if [[ "$TARGET_NAME" == "pointer_octree" || "$TARGET_NAME" == "pointer_octree_bench" || "$TARGET_NAME" == "pointer_octree_real" ]]; then
+    TARGET_NAME="benchmark_pointer_octree_real"
+elif [[ "$TARGET_NAME" != test_* && "$TARGET_NAME" != rvv_test && "$TARGET_NAME" != benchmark && "$TARGET_NAME" != benchmark_* && "$TARGET_NAME" != pipeline_export ]]; then
     TARGET_NAME="test_$TARGET_NAME"
 fi
 

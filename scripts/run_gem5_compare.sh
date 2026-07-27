@@ -186,6 +186,16 @@ case "$MODE_TYPE" in
     echo "==================================================================================="
     ;;
 
+  pointer_octree|pointer)
+    PCD_FILE="${1:-data/0000000010.pcd}"
+    echo "==================================================================================="
+    echo "       Pointer-Based Octree Real PCD Benchmark Comparison (RVV)                    "
+    echo "==================================================================================="
+    echo "PCD File: $PCD_FILE"
+    echo "-----------------------------------------------------------------------------------"
+    "$SCRIPT_DIR/run.sh" rvv benchmark_pointer_octree_real "$PCD_FILE"
+    ;;
+
   *)
     usage
     ;;

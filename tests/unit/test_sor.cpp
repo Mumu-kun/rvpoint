@@ -1,57 +1,66 @@
 #include "rvv_pcl.h"
-
-#include <algorithm>
-#include <cmath>
-#include <iostream>
-#include <random>
 #include <vector>
+#include <random>
+#include <iostream>
+#include <cmath>
+#include <algorithm>
 
 using namespace rvv_pcl;
 
-namespace {
-
-PointCloudSoA make_cloud() {
-  constexpr std::size_t N = 1000;
-  std::mt19937 gen(42);
-  std::normal_distribution<float> cluster(0.0f, 1.0f);
-  std::uniform_real_distribution<float> outlier(-20.0f, 20.0f);
-
-  PointCloudSoA cloud;
-  cloud.reserve(N);
-  for (std::size_t i = 0; i < N; ++i) {
-    if (i < N * 9 / 10) {
-      cloud.push_back({cluster(gen), cluster(gen), cluster(gen)});
-    } else {
-      cloud.push_back({outlier(gen), outlier(gen), outlier(gen)});
-    }
-  }
-  return cloud;
+bool are_points_close(const PointXYZ& a, const PointXYZ& b, float eps = 1e-4) {
+    return std::abs(a.x - b.x) < eps &&
+           std::abs(a.y - b.y) < eps &&
+           std::abs(a.z - b.z) < eps;
 }
-
-} // namespace
 
 int main() {
-  PointCloudSoA cloud = make_cloud();
-  OctreeNeighborSearch search;
-  search.setInputCloud(cloud);
-  search.setSearchRadius(5.0f);
-  search.buildTree();
+    const size_t N = 1000;
+    const int K = 10;
+    const float ALPHA = 1.0f;
 
-  SORFilter filter;
-  filter.setInput(cloud);
-  filter.setNeighborSearch(&search);
-  filter.setMeanK(10);
-  filter.setStdThreshold(1.0f);
+    std::vector<float> x(N), y(N), z(N);
+    std::vector<PointXYZ> input_aos(N);
+    
+    std::mt19937 gen(42);
+    std::normal_distribution<float> cluster_dist(0.0f, 1.0f);
+    std::uniform_real_distribution<float> outlier_dist(-20.0f, 20.0f);
 
-  PointCloudSoA output;
-  filter.filter(output);
+    for(size_t i=0; i<N; ++i) {
+        if (i < N*0.9) {
+            x[i] = cluster_dist(gen);
+            y[i] = cluster_dist(gen);
+            z[i] = cluster_dist(gen);
+        } else {
+            x[i] = outlier_dist(gen);
+            y[i] = outlier_dist(gen);
+            z[i] = outlier_dist(gen);
+        }
+        input_aos[i] = {x[i], y[i], z[i]};
+    }
 
-  if (output.size() >= cloud.size() || output.size() < cloud.size() * 7 / 10) {
-    std::cerr << "[FAIL] Unexpected SOR output size: " << output.size() << std::endl;
-    return 1;
-  }
+    PointCloudSoA input_soa = {x.data(), y.data(), z.data(), N};
 
-  std::cout << "[PASS] SORFilter removed outliers and kept a dense core." << std::endl;
-  return 0;
+    std::vector<PointXYZ> out_sc(N); 
+    size_t count_sc = sor_sc(input_aos.data(), N, out_sc.data(), K, ALPHA);
+
+    std::vector<PointXYZ> out_rvv(N);
+    size_t count_rvv = sor_rvv(input_soa, out_rvv.data(), K, ALPHA);
+
+    std::cout << "Scalar Count: " << count_sc << std::endl;
+    std::cout << "RVV Count:    " << count_rvv << std::endl;
+
+    if (count_sc != count_rvv) {
+        std::cerr << "[FAIL] Counts differ!" << std::endl;
+        return 1;
+    }
+
+    for(size_t i=0; i<count_sc; ++i) {
+        if (!are_points_close(out_sc[i], out_rvv[i])) {
+            std::cerr << "[FAIL] Data mismatch at index " << i << std::endl;
+            return 1;
+        }
+    }
+
+    std::cout << "[PASS] SOR Verification Successful!" << std::endl;
+    return 0;
 }
-
