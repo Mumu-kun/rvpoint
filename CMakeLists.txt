@@ -41,6 +41,7 @@ list(APPEND SOURCES
     "src/octree.cpp"
     "src/spatial_hashing.cpp"
     "src/caravan_radius_search.cpp"
+    "src/euclidean_clustering.cpp"
 )
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC src/include)

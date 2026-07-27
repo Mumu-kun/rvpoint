@@ -28,6 +28,9 @@ public:
 
   void buildIndex() override {}
 
+  /// Expose the stored search radius so batch callers can retrieve it.
+  float searchRadius() const { return searchRadius_; }
+
   /**
    * @brief NeighborSearch base interface implementation for radius search by query index
    */
@@ -51,7 +54,7 @@ public:
    * @param results Output neighbor indices for each query point
    */
   void batchRadiusSearch(const PointCloudSoA &queries, float radius,
-                         std::vector<std::vector<int32_t>> &results) const;
+                         std::vector<std::vector<int>> &results) const override;
 
   /**
    * @brief Single PointXYZ query radius search

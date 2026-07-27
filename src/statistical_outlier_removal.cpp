@@ -1,4 +1,5 @@
 #include "include/rvv_pcl.h"
+#include "include/caravan_radius_search.h"
 
 #include <algorithm>
 #include <cmath>
@@ -68,10 +69,11 @@ void SORFilter::filter(PointCloudSoA &output) const {
   const std::size_t total_points = input_->size();
   std::vector<float> meanDistances(total_points, 0.0f);
 
+  std::vector<std::vector<int>> batch_neighbors;
+  searcher_->batchRadiusSearch(*input_, searcher_->searchRadius(), batch_neighbors);
+
   for (std::size_t i = 0; i < total_points; ++i) {
-    std::vector<int> neighbors;
-    std::vector<float> dists;
-    searcher_->radiusSearch(static_cast<int>(i), neighbors, &dists, 0);
+    auto &neighbors = batch_neighbors[i];
     if (neighbors.size() < static_cast<std::size_t>(meanK_ + 1)) {
       std::vector<float> all_dists(total_points, 0.0f);
       const PointXYZ point = input_->point(i);

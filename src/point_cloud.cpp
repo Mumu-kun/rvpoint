@@ -1,5 +1,6 @@
 #include "include/rvv_pcl.h"
 #include "include/simple_pcd_loader.h"
+#include "include/caravan_radius_search.h"
 
 #include <fstream>
 #include <sstream>
@@ -125,6 +126,14 @@ int NeighborSearch::nearestNeighborSearch(int queryPointIndex) const {
   return best_index;
 }
 
+void NeighborSearch::batchRadiusSearch(const PointCloudSoA &queries, float radius,
+                                       std::vector<std::vector<int>> &results) const {
+  results.resize(queries.size());
+  for (std::size_t i = 0; i < queries.size(); ++i) {
+    radiusSearch(static_cast<int>(i), results[i], nullptr, 0);
+  }
+}
+
 void FeatureEstimator::setInputCloud(const PointCloudSoA &cloud) { input_ = &cloud; }
 
 void FeatureEstimator::setK(int k) { k_ = k; }
@@ -141,10 +150,12 @@ void FeatureEstimator::estimate(FeatureCloud &featureCloud) const {
   }
 
   featureCloud.resize(input_->size());
+
+  std::vector<std::vector<int>> batch_neighbors;
+  searcher_->batchRadiusSearch(*input_, searcher_->searchRadius(), batch_neighbors);
+
   for (std::size_t i = 0; i < input_->size(); ++i) {
-    std::vector<int> neighbors;
-    std::vector<float> dists;
-    searcher_->radiusSearch(static_cast<int>(i), neighbors, &dists, 0);
+    auto &neighbors = batch_neighbors[i];
     if (neighbors.size() > static_cast<std::size_t>(k_)) {
       neighbors.resize(static_cast<std::size_t>(k_));
     }

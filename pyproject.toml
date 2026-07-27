@@ -1,0 +1,9 @@
+[tool.basilisk]
+typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"
+
+[tool.basilisk.rule-tags]
+basilisk = "error"
+
+[tool.basilisk.rules]
+BSK-0002 = "warning"
+BSK-0152 = "warning"

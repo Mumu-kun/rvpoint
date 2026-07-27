@@ -1,4 +1,5 @@
 #include "rvv_pcl.h"
+#include "euclidean_clustering.h"
 #include "simple_pcd_loader.h"
 
 #include <chrono>
@@ -6,6 +7,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <stdexcept>
 #include <vector>
@@ -14,7 +16,7 @@ using namespace rvv_pcl;
 
 namespace {
 
-constexpr int kStageCount = 8;
+constexpr int kStageCount = 10;
 
 struct StageTiming {
   int index;
@@ -40,6 +42,11 @@ struct PipelineConfig {
   float ransac_distance_threshold = 0.2f; // Larger threshold accepts more inliers.
   int ransac_max_iterations = 1000; // More iterations improve robustness but cost time.
   float ransac_probability = 0.99f; // Higher probability increases expected iterations.
+
+  // Euclidean clustering
+  float cluster_tolerance = 0.15f; // Distance threshold for cluster extraction.
+  int min_cluster_size = 50;       // Minimum points per cluster.
+  int max_cluster_size = 100000;   // Maximum points per cluster.
 };
 
 constexpr PipelineConfig kPipelineConfig;
@@ -141,6 +148,9 @@ int main(int argc, char **argv) {
   bool progress_enabled = false;
   bool skip_sor = false;
   float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
+  float cluster_tolerance = kPipelineConfig.cluster_tolerance;
+  int min_cluster_size = kPipelineConfig.min_cluster_size;
+  int max_cluster_size = kPipelineConfig.max_cluster_size;
   std::vector<StageTiming> stage_timings;
   stage_timings.reserve(kStageCount);
   std::vector<std::string> positional_args;
@@ -165,6 +175,39 @@ int main(int argc, char **argv) {
         std::cerr << "Invalid value for --leaf-size: " << voxel_leaf_size << std::endl;
         return 1;
       }
+    } else if (arg == "--cluster-tolerance") {
+      if (i + 1 >= argc) {
+        std::cerr << "Missing value for --cluster-tolerance" << std::endl;
+        return 1;
+      }
+      try {
+        cluster_tolerance = std::stof(argv[++i]);
+      } catch (const std::exception &) {
+        std::cerr << "Invalid value for --cluster-tolerance: " << argv[i] << std::endl;
+        return 1;
+      }
+    } else if (arg == "--min-cluster") {
+      if (i + 1 >= argc) {
+        std::cerr << "Missing value for --min-cluster" << std::endl;
+        return 1;
+      }
+      try {
+        min_cluster_size = std::stoi(argv[++i]);
+      } catch (const std::exception &) {
+        std::cerr << "Invalid value for --min-cluster: " << argv[i] << std::endl;
+        return 1;
+      }
+    } else if (arg == "--max-cluster") {
+      if (i + 1 >= argc) {
+        std::cerr << "Missing value for --max-cluster" << std::endl;
+        return 1;
+      }
+      try {
+        max_cluster_size = std::stoi(argv[++i]);
+      } catch (const std::exception &) {
+        std::cerr << "Invalid value for --max-cluster: " << argv[i] << std::endl;
+        return 1;
+      }
     } else {
       positional_args.push_back(arg);
     }
@@ -172,7 +215,7 @@ int main(int argc, char **argv) {
 
   if (positional_args.size() < 1 || positional_args.size() > 2) {
     std::cerr << "Usage: " << argv[0]
-              << " [--progress] [--skip-sor] [--leaf-size <value>] <input.pcd> [output_dir]"
+              << " [--progress] [--skip-sor] [--leaf-size <value>] [--cluster-tolerance <value>] [--min-cluster <value>] [--max-cluster <value>] <input.pcd> [output_dir]"
               << std::endl;
     return 1;
   }
@@ -186,10 +229,10 @@ int main(int argc, char **argv) {
           ? std::filesystem::path(positional_args[1])
           : std::filesystem::path("results") / (input_stem.string() + "_pipeline");
 
-  std::error_code ec;
-  std::filesystem::create_directories(output_dir, ec);
-  if (ec) {
-    std::cerr << "Failed to create output directory: " << ec.message() << std::endl;
+  std::error_code dir_ec;
+  std::filesystem::create_directories(output_dir, dir_ec);
+  if (dir_ec) {
+    std::cerr << "Failed to create output directory: " << dir_ec.message() << std::endl;
     return 1;
   }
 
@@ -298,6 +341,37 @@ int main(int argc, char **argv) {
 
   std::cout << "Final plane coefficients: [" << coefficients[0] << ", " << coefficients[1]
             << ", " << coefficients[2] << ", " << coefficients[3] << "]" << std::endl;
+
+  search.setInputCloud(plane_removed_cloud);
+  search.setSearchRadius(cluster_tolerance);
+  beginStage(9, "Rebuild search index for plane-removed cloud", progress_enabled);
+  stage_start = std::chrono::high_resolution_clock::now();
+  search.buildTree();
+  stage_timings.push_back({9, "Rebuild search index for plane-removed cloud",
+                           endStage(9, "Rebuild search index for plane-removed cloud", stage_start,
+                                    progress_enabled)});
+
+  EuclideanClustering clustering;
+  clustering.setInputCloud(plane_removed_cloud);
+  clustering.setNeighborSearch(&search);
+  clustering.setClusterTolerance(cluster_tolerance);
+  clustering.setMinClusterSize(min_cluster_size);
+  clustering.setMaxClusterSize(max_cluster_size);
+
+  beginStage(10, "Euclidean clustering", progress_enabled);
+  stage_start = std::chrono::high_resolution_clock::now();
+  const std::vector<ClusterIndices> clusters = clustering.extract();
+  stage_timings.push_back({10, "Euclidean clustering",
+                           endStage(10, "Euclidean clustering", stage_start, progress_enabled)});
+
+  std::cout << "Euclidean clustering: " << clusters.size() << " clusters found" << std::endl;
+  for (std::size_t i = 0; i < clusters.size(); ++i) {
+    PointCloudSoA cluster_cloud = subsetCloud(plane_removed_cloud, clusters[i].indices);
+    std::ostringstream ss;
+    ss << "06_cluster_" << std::setw(2) << std::setfill('0') << i << ".pcd";
+    saveStage(output_dir / ss.str(), cluster_cloud, ("Cluster " + std::to_string(i)).c_str());
+  }
+
   if (progress_enabled) {
     const auto overall_end = std::chrono::high_resolution_clock::now();
     const double total_ms =

@@ -131,10 +131,13 @@ public:
   virtual ~NeighborSearch() = default;
   virtual void setInputCloud(const PointCloudSoA &cloud);
   virtual void setSearchRadius(float radius);
+  float searchRadius() const { return searchRadius_; }
   virtual void buildIndex() = 0;
   virtual std::size_t radiusSearch(int queryPointIndex, std::vector<int> &resultIndices,
                                    std::vector<float> *resultDistances = nullptr,
                                    int maxResults = 0) const = 0;
+  virtual void batchRadiusSearch(const PointCloudSoA &queries, float radius,
+                                 std::vector<std::vector<int>> &results) const;
   virtual int nearestNeighborSearch(int queryPointIndex) const;
 
 protected:
