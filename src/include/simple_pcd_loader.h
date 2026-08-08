@@ -142,18 +142,6 @@ inline bool readFloat(const unsigned char* src, int size, float& value) {
 inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) {
     std::ifstream file(file_path, std::ios::binary);
     if (!file.is_open()) {
-        std::vector<std::string> fallbacks = {
-            "data/" + file_path,
-            "../data/" + file_path,
-            "/workspace/" + file_path,
-            "/workspace/data/" + file_path
-        };
-        for (const auto& alt : fallbacks) {
-            file.open(alt, std::ios::binary);
-            if (file.is_open()) break;
-        }
-    }
-    if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << file_path << std::endl;
         return -1;
     }

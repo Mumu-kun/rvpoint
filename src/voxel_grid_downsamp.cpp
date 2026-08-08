@@ -1,55 +1,355 @@
 #include "include/rvv_pcl.h"
-
 #include <cmath>
 #include <map>
 #include <tuple>
+#include <algorithm>
+#include <vector>
+#include <numeric>
+#include <limits>
+
+#include <riscv_vector.h>
 
 namespace rvv_pcl {
 
-void VoxelGridFilter::setLeafSize(float size) { leafSize_ = size; }
+// ============================================================================
+// Internal Helpers for Fully Vectorized Voxel Grid (v2)
+// ============================================================================
+namespace {
 
-std::int64_t VoxelGridFilter::hashPointToVoxel(float x, float y, float z) const {
-  const int ix = static_cast<int>(std::floor(x / leafSize_));
-  const int iy = static_cast<int>(std::floor(y / leafSize_));
-  const int iz = static_cast<int>(std::floor(z / leafSize_));
-  return static_cast<std::int64_t>(ix) * 73856093LL +
-         static_cast<std::int64_t>(iy) * 19349663LL +
-         static_cast<std::int64_t>(iz) * 83492791LL;
+// Helper: Compute bounding box using RVV reductions (LMUL=m4)
+void compute_bbox_rvv(const PointCloudSoA& in,
+                      float& out_min_x, float& out_min_y, float& out_min_z,
+                      float& out_max_x, float& out_max_y, float& out_max_z) {
+    size_t n = in.n;
+    float min_x = std::numeric_limits<float>::max();
+    float min_y = std::numeric_limits<float>::max();
+    float min_z = std::numeric_limits<float>::max();
+    float max_x = std::numeric_limits<float>::lowest();
+    float max_y = std::numeric_limits<float>::lowest();
+    float max_z = std::numeric_limits<float>::lowest();
+
+    size_t vl_init = __riscv_vsetvl_e32m4(n);
+    vfloat32m4_t vmin_x = __riscv_vfmv_v_f_f32m4(min_x, vl_init);
+    vfloat32m4_t vmin_y = __riscv_vfmv_v_f_f32m4(min_y, vl_init);
+    vfloat32m4_t vmin_z = __riscv_vfmv_v_f_f32m4(min_z, vl_init);
+    vfloat32m4_t vmax_x = __riscv_vfmv_v_f_f32m4(max_x, vl_init);
+    vfloat32m4_t vmax_y = __riscv_vfmv_v_f_f32m4(max_y, vl_init);
+    vfloat32m4_t vmax_z = __riscv_vfmv_v_f_f32m4(max_z, vl_init);
+
+    size_t i = 0;
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m4(n - i);
+        vfloat32m4_t vx = __riscv_vle32_v_f32m4(&in.x[i], vl);
+        vfloat32m4_t vy = __riscv_vle32_v_f32m4(&in.y[i], vl);
+        vfloat32m4_t vz = __riscv_vle32_v_f32m4(&in.z[i], vl);
+
+        vmin_x = __riscv_vfmin_vv_f32m4(vmin_x, vx, vl);
+        vmin_y = __riscv_vfmin_vv_f32m4(vmin_y, vy, vl);
+        vmin_z = __riscv_vfmin_vv_f32m4(vmin_z, vz, vl);
+        vmax_x = __riscv_vfmax_vv_f32m4(vmax_x, vx, vl);
+        vmax_y = __riscv_vfmax_vv_f32m4(vmax_y, vy, vl);
+        vmax_z = __riscv_vfmax_vv_f32m4(vmax_z, vz, vl);
+
+        i += vl;
+    }
+
+    // Horizontal reductions
+    size_t vl_red = __riscv_vsetvl_e32m4(n);
+    vfloat32m1_t seed_min = __riscv_vfmv_v_f_f32m1(std::numeric_limits<float>::max(), 1);
+    vfloat32m1_t seed_max = __riscv_vfmv_v_f_f32m1(std::numeric_limits<float>::lowest(), 1);
+
+    vfloat32m1_t r_min_x = __riscv_vfredmin_vs_f32m4_f32m1(vmin_x, seed_min, vl_red);
+    vfloat32m1_t r_min_y = __riscv_vfredmin_vs_f32m4_f32m1(vmin_y, seed_min, vl_red);
+    vfloat32m1_t r_min_z = __riscv_vfredmin_vs_f32m4_f32m1(vmin_z, seed_min, vl_red);
+    vfloat32m1_t r_max_x = __riscv_vfredmax_vs_f32m4_f32m1(vmax_x, seed_max, vl_red);
+    vfloat32m1_t r_max_y = __riscv_vfredmax_vs_f32m4_f32m1(vmax_y, seed_max, vl_red);
+    vfloat32m1_t r_max_z = __riscv_vfredmax_vs_f32m4_f32m1(vmax_z, seed_max, vl_red);
+
+    __riscv_vse32_v_f32m1(&out_min_x, r_min_x, 1);
+    __riscv_vse32_v_f32m1(&out_min_y, r_min_y, 1);
+    __riscv_vse32_v_f32m1(&out_min_z, r_min_z, 1);
+    __riscv_vse32_v_f32m1(&out_max_x, r_max_x, 1);
+    __riscv_vse32_v_f32m1(&out_max_y, r_max_y, 1);
+    __riscv_vse32_v_f32m1(&out_max_z, r_max_z, 1);
 }
 
-PointXYZ VoxelGridFilter::computeVoxelAverage(const std::vector<int> &indices) const {
-  PointXYZ sum;
-  for (const int index : indices) {
-    const PointXYZ point = input_->point(static_cast<std::size_t>(index));
-    sum.x += point.x;
-    sum.y += point.y;
-    sum.z += point.z;
-  }
-
-  const float inv = 1.0f / static_cast<float>(indices.size());
-  return {sum.x * inv, sum.y * inv, sum.z * inv};
+// Helper: Vectorized floor(float)->int using RVV
+// trunc(v) truncates toward zero. floor(v) rounds toward -infinity.
+// For v >= 0: floor == trunc. For v < 0 and non-integer: floor = trunc - 1.
+// Implementation: trunc_i = vfcvt_rtz(v), trunc_f = vfcvt_f(trunc_i),
+//   correction = (v < trunc_f) ? -1 : 0, result = trunc_i + correction
+static inline vint32m4_t vfloor_i32m4(vfloat32m4_t v, size_t vl) {
+    vint32m4_t trunc_i = __riscv_vfcvt_rtz_x_f_v_i32m4(v, vl);
+    vfloat32m4_t trunc_f = __riscv_vfcvt_f_x_v_f32m4(trunc_i, vl);
+    // mask: true where v < trunc_f (i.e. truncation rounded up, need -1)
+    vbool8_t needs_fix = __riscv_vmflt_vv_f32m4_b8(v, trunc_f, vl);
+    // Subtract 1 where mask is set
+    vint32m4_t ones = __riscv_vmv_v_x_i32m4(1, vl);
+    return __riscv_vsub_vv_i32m4_mu(needs_fix, trunc_i, trunc_i, ones, vl);
 }
 
-void VoxelGridFilter::filter(PointCloudSoA &output) const {
-  output.clear();
-  if (!input_ || input_->empty()) {
-    return;
-  }
+// Helper: Compute linear voxel keys using RVV (LMUL=m4)
+// Uses the same formula as scalar: floor(coord * inv_leaf) to ensure
+// identical voxel assignment regardless of implementation.
+void compute_voxel_keys_rvv(const PointCloudSoA& in,
+                             float inv_leaf, int min_ix, int min_iy, int min_iz,
+                             int grid_x, int grid_xy,
+                             int32_t* keys, size_t n) {
+    size_t i = 0;
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m4(n - i);
 
-  std::map<std::tuple<int, int, int>, std::vector<int>> voxel_map;
-  const float inv_leaf = 1.0f / leafSize_;
-  for (std::size_t i = 0; i < input_->size(); ++i) {
-    const PointXYZ point = input_->point(i);
-    const int ix = static_cast<int>(std::floor(point.x * inv_leaf));
-    const int iy = static_cast<int>(std::floor(point.y * inv_leaf));
-    const int iz = static_cast<int>(std::floor(point.z * inv_leaf));
-    voxel_map[std::make_tuple(ix, iy, iz)].push_back(static_cast<int>(i));
-  }
+        // Load coordinates
+        vfloat32m4_t vx = __riscv_vle32_v_f32m4(&in.x[i], vl);
+        vfloat32m4_t vy = __riscv_vle32_v_f32m4(&in.y[i], vl);
+        vfloat32m4_t vz = __riscv_vle32_v_f32m4(&in.z[i], vl);
 
-  output.reserve(voxel_map.size());
-  for (const auto &entry : voxel_map) {
-    output.push_back(computeVoxelAverage(entry.second));
-  }
+        // Scale: coord * inv_leaf (same as scalar)
+        vx = __riscv_vfmul_vf_f32m4(vx, inv_leaf, vl);
+        vy = __riscv_vfmul_vf_f32m4(vy, inv_leaf, vl);
+        vz = __riscv_vfmul_vf_f32m4(vz, inv_leaf, vl);
+
+        // Vectorized floor -> int (handles negative values correctly)
+        vint32m4_t ix = vfloor_i32m4(vx, vl);
+        vint32m4_t iy = vfloor_i32m4(vy, vl);
+        vint32m4_t iz = vfloor_i32m4(vz, vl);
+
+        // Shift to 0-based indices using the global minimum voxel index
+        ix = __riscv_vsub_vx_i32m4(ix, min_ix, vl);
+        iy = __riscv_vsub_vx_i32m4(iy, min_iy, vl);
+        iz = __riscv_vsub_vx_i32m4(iz, min_iz, vl);
+
+        // Linear key = ix + iy * grid_x + iz * grid_x * grid_y
+        vint32m4_t iy_scaled = __riscv_vmul_vx_i32m4(iy, grid_x, vl);
+        vint32m4_t iz_scaled = __riscv_vmul_vx_i32m4(iz, grid_xy, vl);
+        vint32m4_t key = __riscv_vadd_vv_i32m4(ix, iy_scaled, vl);
+        key = __riscv_vadd_vv_i32m4(key, iz_scaled, vl);
+
+        __riscv_vse32_v_i32m4(keys + i, key, vl);
+        i += vl;
+    }
+}
+
+// Helper: Vectorized centroid reduction for a group of points (LMUL=m2)
+// Uses indexed gather (vluxei32) + ordered sum reduction (vfredosum)
+// LMUL=m2 chosen for compatibility with indexed loads (matching rvv_common.cpp pattern)
+void centroid_reduce_rvv(const PointCloudSoA& in,
+                         const uint32_t* order, size_t group_start,
+                         size_t group_size, PointXYZ& out) {
+    float sum_x = 0.0f, sum_y = 0.0f, sum_z = 0.0f;
+    size_t k = 0;
+
+    while (k < group_size) {
+        size_t vl = __riscv_vsetvl_e32m2(group_size - k);
+
+        // Load point indices for this chunk
+        vuint32m2_t v_idx = __riscv_vle32_v_u32m2(
+            (const uint32_t*)&order[group_start + k], vl);
+
+        // Convert element indices to byte offsets for float gather
+        vuint32m2_t v_byte_off = __riscv_vsll_vx_u32m2(v_idx, 2, vl);
+
+        vfloat32m1_t v_zero = __riscv_vfmv_v_f_f32m1(0.0f, 1);
+        float chunk_val;
+
+        // Gather x, reduce, accumulate
+        vfloat32m2_t vx = __riscv_vluxei32_v_f32m2(in.x, v_byte_off, vl);
+        vfloat32m1_t rx = __riscv_vfredosum_vs_f32m2_f32m1(vx, v_zero, vl);
+        __riscv_vse32_v_f32m1(&chunk_val, rx, 1);
+        sum_x += chunk_val;
+
+        // Gather y, reduce, accumulate
+        vfloat32m2_t vy = __riscv_vluxei32_v_f32m2(in.y, v_byte_off, vl);
+        vfloat32m1_t ry = __riscv_vfredosum_vs_f32m2_f32m1(vy, v_zero, vl);
+        __riscv_vse32_v_f32m1(&chunk_val, ry, 1);
+        sum_y += chunk_val;
+
+        // Gather z, reduce, accumulate
+        vfloat32m2_t vz = __riscv_vluxei32_v_f32m2(in.z, v_byte_off, vl);
+        vfloat32m1_t rz = __riscv_vfredosum_vs_f32m2_f32m1(vz, v_zero, vl);
+        __riscv_vse32_v_f32m1(&chunk_val, rz, 1);
+        sum_z += chunk_val;
+
+        k += vl;
+    }
+
+    float inv_count = 1.0f / (float)group_size;
+    out.x = sum_x * inv_count;
+    out.y = sum_y * inv_count;
+    out.z = sum_z * inv_count;
+}
+
+} // anonymous namespace
+
+// ============================================================================
+// Scalar Implementation
+// ============================================================================
+std::size_t voxel_grid_downsamp_sc(const PointXYZ* in, std::size_t n,
+                                   PointXYZ* out, float leaf_size) {
+    if (n == 0) return 0;
+    
+    // Key: (vx, vy, vz), Value: (Sum coordinates, Count)
+    // Using map to group points belonging to the same voxel
+    std::map<std::tuple<int, int, int>, std::pair<PointXYZ, int>> grid;
+    float inv_leaf = 1.0f / leaf_size;
+
+    for (std::size_t i = 0; i < n; ++i) {
+        int vx = std::floor(in[i].x * inv_leaf);
+        int vy = std::floor(in[i].y * inv_leaf);
+        int vz = std::floor(in[i].z * inv_leaf);
+        auto key = std::make_tuple(vx, vy, vz);
+        
+        grid[key].first.x += in[i].x;
+        grid[key].first.y += in[i].y;
+        grid[key].first.z += in[i].z;
+        grid[key].second++;
+    }
+
+    // Compute centroids and write to output
+    std::size_t count = 0;
+    for (auto& kv : grid) {
+        float f = 1.0f / kv.second.second;
+        out[count].x = kv.second.first.x * f;
+        out[count].y = kv.second.first.y * f;
+        out[count].z = kv.second.first.z * f;
+        count++;
+    }
+    return count;
+}
+
+// ============================================================================
+// RVV Implementation
+// ============================================================================
+std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
+                                    PointXYZ* out, float leaf_size) {
+    if (in.n == 0) return 0;
+
+    std::map<std::tuple<int, int, int>, std::pair<PointXYZ, int>> grid;
+    float inv_leaf = 1.0f / leaf_size;
+
+    // In a full RVV implementation, we would also vectorize the aggregation (sorting/reducing).
+    // However, hash map insertion is inherently scalar.
+    // We WILL vectorize the transformation of coordinates to voxel indices.
+    
+    // Temporary storage for indices could be allocated, but for this hybrid approach
+    // we will process in chunks (stripming) and then insert into map scalar-wise.
+    // This allows us to use RVV for the FP math (mul + floor).
+
+    size_t n = in.n;
+    size_t i = 0;
+
+    // Arrays to hold chunk results
+    // Max VLEN is usually reasonable, assume max 256 or 512 elements for buffer logic if needed,
+    // but here we just loop standard strip mining.
+
+
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+
+        // Load X, Y, Z
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&in.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&in.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&in.z[i], vl);
+
+        // Scale: val * inv_leaf
+        vfloat32m8_t vsx = __riscv_vfmul_vf_f32m8(vx, inv_leaf, vl);
+        vfloat32m8_t vsy = __riscv_vfmul_vf_f32m8(vy, inv_leaf, vl);
+        vfloat32m8_t vsz = __riscv_vfmul_vf_f32m8(vz, inv_leaf, vl);
+
+        // Floor: Uses vfcvt... but since we want integer indices:
+        // C++ std::floor returns float. RVV vfcvt_x_f_v converts float to int (truncate).
+        // Correct floor for positive/negative:
+        // Custom floor logic or just cast if we assume logical behavior. 
+        // For simplicity in this demo, we assume the conversion intrinsics available.
+        // vcvt.x.f.v (which truncates toward zero) is not exactly floor for negatives.
+        // We will stick to the scalar insertion for correctness if intricate instructions missing,
+        // BUT let's do the floating point scale in vector.
+        
+        // Storing back to analyze one by one (Hybrid)
+        // Hybrid: Store back to memory for scalar processing
+        std::vector<float> raw_sx(vl), raw_sy(vl), raw_sz(vl);
+        __riscv_vse32_v_f32m8(raw_sx.data(), vsx, vl);
+        __riscv_vse32_v_f32m8(raw_sy.data(), vsy, vl);
+        __riscv_vse32_v_f32m8(raw_sz.data(), vsz, vl);
+
+        for(size_t j=0; j<vl; ++j) {
+            // "Scalar" part of the loop (Map Insertion)
+            int idx_x = std::floor(raw_sx[j]);
+            int idx_y = std::floor(raw_sy[j]);
+            int idx_z = std::floor(raw_sz[j]);
+
+            auto key = std::make_tuple(idx_x, idx_y, idx_z);
+            grid[key].first.x += in.x[i+j];
+            grid[key].first.y += in.y[i+j];
+            grid[key].first.z += in.z[i+j];
+            grid[key].second++;
+        }
+
+        i += vl;
+    }
+
+    // Compute centroids
+    std::size_t count = 0;
+    for (auto& kv : grid) {
+        float f = 1.0f / kv.second.second;
+        out[count].x = kv.second.first.x * f;
+        out[count].y = kv.second.first.y * f;
+        out[count].z = kv.second.first.z * f;
+        count++;
+    }
+    return count;
+}
+
+// ============================================================================
+// Fully Vectorized RVV Implementation (v2) -- Sort-Based, No std::map
+// ============================================================================
+std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA& in,
+                                        PointXYZ* out, float leaf_size) {
+    if (in.n == 0) return 0;
+    const size_t n = in.n;
+    const float inv_leaf = 1.0f / leaf_size;
+
+    // Phase 1: Vectorized bounding box computation
+    float min_x, min_y, min_z, max_x, max_y, max_z;
+    compute_bbox_rvv(in, min_x, min_y, min_z, max_x, max_y, max_z);
+
+    // Compute global voxel index range using same formula as scalar: floor(coord * inv_leaf)
+    int min_ix = (int)std::floor(min_x * inv_leaf);
+    int min_iy = (int)std::floor(min_y * inv_leaf);
+    int min_iz = (int)std::floor(min_z * inv_leaf);
+    int max_ix = (int)std::floor(max_x * inv_leaf);
+    int max_iy = (int)std::floor(max_y * inv_leaf);
+    int max_iz = (int)std::floor(max_z * inv_leaf);
+
+    int grid_x = (max_ix - min_ix) + 1;
+    int grid_y = (max_iy - min_iy) + 1;
+    int grid_xy = grid_x * grid_y;
+
+    // Phase 2: Vectorized voxel key computation (uses same floor(coord*inv_leaf) as scalar)
+    std::vector<int32_t> keys(n);
+    compute_voxel_keys_rvv(in, inv_leaf, min_ix, min_iy, min_iz,
+                            grid_x, grid_xy, keys.data(), n);
+
+    // Phase 3: Sort indices by voxel key
+    std::vector<uint32_t> order(n);
+    std::iota(order.begin(), order.end(), 0u);
+    std::sort(order.begin(), order.end(),
+              [&keys](uint32_t a, uint32_t b) { return keys[a] < keys[b]; });
+
+    // Phase 4: Vectorized centroid computation per voxel group
+    size_t out_count = 0;
+    size_t group_start = 0;
+    for (size_t j = 1; j <= n; ++j) {
+        if (j == n || keys[order[j]] != keys[order[j - 1]]) {
+            size_t group_size = j - group_start;
+            centroid_reduce_rvv(in, order.data(), group_start, group_size,
+                                out[out_count]);
+            out_count++;
+            group_start = j;
+        }
+    }
+
+    return out_count;
 }
 
 } // namespace rvv_pcl
