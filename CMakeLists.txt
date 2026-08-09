@@ -43,11 +43,13 @@ list(APPEND SOURCES
     "src/statistical_outlier_removal.cpp"
     "src/normal_estimation.cpp"
     "src/ransac_plane.cpp"
-    "src/octree.cpp"
-    "src/spatial_hashing.cpp"
-    "src/radius_search.cpp"
     "src/euclidean_clustering.cpp"
-    "src/pointer_octree/pointer_octree.cpp"
+    "src/neighbor_search/octree.cpp"
+    "src/neighbor_search/spatial_hashing.cpp"
+    "src/neighbor_search/radius_search.cpp"
+    "src/neighbor_search/caravan_radius_search.cpp"
+    "src/neighbor_search/pointer_octree.cpp"
+    "src/neighbor_search/caravan_strategies.cpp"
 )
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
@@ -115,5 +117,10 @@ target_link_libraries(pipeline_export PRIVATE rvvpcl)
 
 # Ablation Benchmark Utility
 add_executable(ablation_bench src/tools/ablation_bench.cpp)
-target_include_directories(ablation_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+target_include_directories(ablation_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(ablation_bench PRIVATE rvvpcl)
+
+# Neighbor Search & 4 Caravan Strategies Benchmark Tool
+add_executable(neighbor_search_sor_bench src/tools/neighbor_search_sor_bench.cpp)
+target_include_directories(neighbor_search_sor_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(neighbor_search_sor_bench PRIVATE rvvpcl)
