@@ -1,12 +1,13 @@
 #include "euclidean_clustering.h"
+#include "profiler.h"
 #include "rvv_pcl.h"
 #include "simple_pcd_loader.h"
-
 
 #include <array>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -25,6 +26,7 @@ struct StageTiming {
   int index;
   const char *label;
   double ms;
+  std::size_t point_count;
 };
 
 struct PipelineConfig {
@@ -109,8 +111,8 @@ void printFinalBreakdown(const std::vector<StageTiming> &stages,
     const double pct = total_ms > 0.0 ? (stage.ms * 100.0 / total_ms) : 0.0;
     std::cout << "[progress] [" << stage.index << "/" << kStageCount << "] "
               << stage.label << ": " << std::fixed << std::setprecision(3)
-              << stage.ms << " ms (" << std::setprecision(2) << pct << "%)"
-              << std::endl;
+              << stage.ms << " ms (" << std::setprecision(2) << pct << "%), pts="
+              << stage.point_count << std::endl;
   }
 
   const double overhead_ms = total_ms - stages_sum_ms;
@@ -126,11 +128,40 @@ void printFinalBreakdown(const std::vector<StageTiming> &stages,
             << total_ms << " ms (100.00%)" << std::endl;
 }
 
+void saveJSONMetrics(const std::filesystem::path &out_path,
+                    const std::vector<StageTiming> &stages,
+                    double total_ms, float leaf_size, bool skip_sor,
+                    float cluster_tolerance) {
+  std::ofstream ofs(out_path);
+  if (!ofs.is_open()) return;
+
+  ofs << "{\n";
+  ofs << "  \"leaf_size\": " << leaf_size << ",\n";
+  ofs << "  \"skip_sor\": " << (skip_sor ? "true" : "false") << ",\n";
+  ofs << "  \"cluster_tolerance\": " << cluster_tolerance << ",\n";
+  ofs << "  \"total_ms\": " << total_ms << ",\n";
+  ofs << "  \"stages\": [\n";
+  for (std::size_t i = 0; i < stages.size(); ++i) {
+    const auto &st = stages[i];
+    const double pct = total_ms > 0.0 ? (st.ms * 100.0 / total_ms) : 0.0;
+    ofs << "    {\n";
+    ofs << "      \"index\": " << st.index << ",\n";
+    ofs << "      \"label\": \"" << st.label << "\",\n";
+    ofs << "      \"ms\": " << st.ms << ",\n";
+    ofs << "      \"pct\": " << pct << ",\n";
+    ofs << "      \"point_count\": " << st.point_count << "\n";
+    ofs << "    }" << (i + 1 < stages.size() ? "," : "") << "\n";
+  }
+  ofs << "  ]\n";
+  ofs << "}\n";
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
   bool progress_enabled = false;
   bool skip_sor = false;
+  bool export_json = false;
   float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
   float cluster_tolerance = kPipelineConfig.cluster_tolerance;
   int min_cluster_size = kPipelineConfig.min_cluster_size;
@@ -142,6 +173,8 @@ int main(int argc, char **argv) {
     const std::string arg = argv[i];
     if (arg == "--progress" || arg == "--timings") {
       progress_enabled = true;
+    } else if (arg == "--json") {
+      export_json = true;
     } else if (arg == "--skip-sor") {
       skip_sor = true;
     } else if (arg == "--leaf-size") {
@@ -237,11 +270,11 @@ int main(int argc, char **argv) {
               << std::endl;
     return 1;
   }
+  const std::size_t n_input = loaded_points.size();
   stage_timings.push_back(
       {1, "Load input cloud",
-       endStage(1, "Load input cloud", stage_start, progress_enabled)});
+       endStage(1, "Load input cloud", stage_start, progress_enabled), n_input});
 
-  std::size_t n_input = loaded_points.size();
   std::vector<float> ix(n_input), iy(n_input), iz(n_input);
   for (std::size_t i = 0; i < n_input; ++i) {
     ix[i] = loaded_points[i].x;
@@ -255,7 +288,7 @@ int main(int argc, char **argv) {
   saveStagePoints(output_dir / "00_input.pcd", loaded_points, "Input");
   stage_timings.push_back(
       {2, "Write input stage",
-       endStage(2, "Write input stage", stage_start, progress_enabled)});
+       endStage(2, "Write input stage", stage_start, progress_enabled), n_input});
 
   std::vector<PointXYZ> downsampled_pts(n_input);
   beginStage(3, "Downsampling", progress_enabled);
@@ -267,7 +300,7 @@ int main(int argc, char **argv) {
                   "Downsampled");
   stage_timings.push_back(
       {3, "Downsampling",
-       endStage(3, "Downsampling", stage_start, progress_enabled)});
+       endStage(3, "Downsampling", stage_start, progress_enabled), n_down});
 
   std::vector<float> dx(n_down), dy(n_down), dz(n_down);
   for (std::size_t i = 0; i < n_down; ++i) {
@@ -281,11 +314,14 @@ int main(int argc, char **argv) {
   search.setInputCloud(downsampled_cloud);
   beginStage(4, "Build search index for downsampled cloud", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
-  search.build();
+  {
+    RVPOINT_PROFILE_SCOPE("Octree::build_downsampled");
+    search.build();
+  }
   stage_timings.push_back(
       {4, "Build search index for downsampled cloud",
        endStage(4, "Build search index for downsampled cloud", stage_start,
-                progress_enabled)});
+                progress_enabled), n_down});
 
   std::vector<PointXYZ> sor_pts(n_down);
   std::size_t n_sor = n_down;
@@ -297,6 +333,7 @@ int main(int argc, char **argv) {
         << "SOR bypass enabled: using downsampled cloud without filtering."
         << std::endl;
   } else {
+    RVPOINT_PROFILE_SCOPE("SOR_rvv_execution");
     n_sor =
         sor_rvv(downsampled_cloud, sor_pts.data(), kPipelineConfig.sor_mean_k,
                 kPipelineConfig.sor_std_threshold);
@@ -305,7 +342,7 @@ int main(int argc, char **argv) {
   saveStagePoints(output_dir / "02_sor_filtered.pcd", sor_pts, "SOR");
   stage_timings.push_back({5, "Statistical outlier removal",
                            endStage(5, "Statistical outlier removal",
-                                    stage_start, progress_enabled)});
+                                    stage_start, progress_enabled), n_sor});
 
   std::vector<float> sx(n_sor), sy(n_sor), sz(n_sor);
   for (std::size_t i = 0; i < n_sor; ++i) {
@@ -318,21 +355,27 @@ int main(int argc, char **argv) {
   search.setInputCloud(sor_cloud);
   beginStage(6, "Rebuild search index for filtered cloud", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
-  search.build();
+  {
+    RVPOINT_PROFILE_SCOPE("Octree::rebuild_filtered");
+    search.build();
+  }
   stage_timings.push_back(
       {6, "Rebuild search index for filtered cloud",
        endStage(6, "Rebuild search index for filtered cloud", stage_start,
-                progress_enabled)});
+                progress_enabled), n_sor});
 
   std::vector<float> nx(n_sor), ny(n_sor), nz(n_sor);
   beginStage(7, "Normal estimation", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
-  normal_estimation_rvv(sor_cloud, search, nx.data(), ny.data(), nz.data(),
-                        kPipelineConfig.normal_k,
-                        kPipelineConfig.search_radius);
+  {
+    RVPOINT_PROFILE_SCOPE("normal_estimation_rvv");
+    normal_estimation_rvv(sor_cloud, search, nx.data(), ny.data(), nz.data(),
+                          kPipelineConfig.normal_k,
+                          kPipelineConfig.search_radius);
+  }
   stage_timings.push_back(
       {7, "Normal estimation",
-       endStage(7, "Normal estimation", stage_start, progress_enabled)});
+       endStage(7, "Normal estimation", stage_start, progress_enabled), n_sor});
 
   float model[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   std::vector<PointXYZ> inlier_pts(n_sor);
@@ -341,16 +384,23 @@ int main(int argc, char **argv) {
 
   beginStage(8, "RANSAC primitive fitting", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
-  int ransac_inliers_count =
-      ransac_plane_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
-                       kPipelineConfig.ransac_max_iterations, model);
+  int ransac_inliers_count = 0;
+  {
+    RVPOINT_PROFILE_SCOPE("ransac_plane_rvv");
+    ransac_inliers_count =
+        ransac_plane_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
+                         kPipelineConfig.ransac_max_iterations, model);
+  }
   if (ransac_inliers_count <= 0) {
     std::cerr << "RANSAC failed to fit a model." << std::endl;
     return 1;
   }
-  extract_plane_inliers_outliers_rvv(
-      sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
-      inlier_pts.data(), outlier_pts.data(), n_inliers, n_outliers);
+  {
+    RVPOINT_PROFILE_SCOPE("extract_plane_inliers_outliers_rvv");
+    extract_plane_inliers_outliers_rvv(
+        sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
+        inlier_pts.data(), outlier_pts.data(), n_inliers, n_outliers);
+  }
   inlier_pts.resize(n_inliers);
   outlier_pts.resize(n_outliers);
 
@@ -360,18 +410,141 @@ int main(int argc, char **argv) {
                   "Dominant plane removed");
   stage_timings.push_back(
       {8, "RANSAC primitive fitting",
-       endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled)});
+       endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled), n_outliers});
 
   std::cout << "Final plane coefficients: [" << model[0] << ", " << model[1]
             << ", " << model[2] << ", " << model[3] << "]" << std::endl;
+
+  // ── Stage 9: Euclidean clustering ───────────────────────────────────────
+  beginStage(9, "Euclidean clustering", progress_enabled);
+  stage_start = std::chrono::high_resolution_clock::now();
+
+  std::vector<float> ox(n_outliers), oy(n_outliers), oz(n_outliers);
+  for (std::size_t i = 0; i < n_outliers; ++i) {
+    ox[i] = outlier_pts[i].x;
+    oy[i] = outlier_pts[i].y;
+    oz[i] = outlier_pts[i].z;
+  }
+  PointCloudSoA non_ground_cloud = {ox.data(), oy.data(), oz.data(), n_outliers};
+
+  Octree non_ground_search;
+  non_ground_search.setInputCloud(non_ground_cloud);
+  {
+    RVPOINT_PROFILE_SCOPE("Octree::build_non_ground");
+    non_ground_search.build();
+  }
+
+  EuclideanClustering ec;
+  ec.setInputCloud(non_ground_cloud);
+  ec.setNeighborSearch(&non_ground_search);
+  ec.setClusterTolerance(cluster_tolerance);
+  ec.setMinClusterSize(min_cluster_size);
+  ec.setMaxClusterSize(max_cluster_size);
+
+  std::vector<ClusterIndices> clusters;
+  {
+    RVPOINT_PROFILE_SCOPE("EuclideanClustering::extract");
+    clusters = ec.extract();
+  }
+  stage_timings.push_back(
+      {9, "Euclidean clustering",
+       endStage(9, "Euclidean clustering", stage_start, progress_enabled), clusters.size()});
+
+  std::cout << "Extracted " << clusters.size() << " clusters." << std::endl;
+
+  // ── Stage 10: Export colored cluster cloud ──────────────────────────────
+  beginStage(10, "Write cluster stage", progress_enabled);
+  stage_start = std::chrono::high_resolution_clock::now();
+
+  struct RGBColor {
+    std::uint8_t r, g, b;
+  };
+
+  auto generateClusterColors = [](std::size_t count) {
+    std::vector<RGBColor> colors;
+    colors.reserve(count);
+    const float golden_ratio = 0.618033988749895f;
+    float hue = 0.35f;
+
+    for (std::size_t i = 0; i < count; ++i) {
+      hue = std::fmod(hue + golden_ratio, 1.0f);
+      float s = 0.85f;
+      float v = 0.95f;
+
+      float c = v * s;
+      float x = c * (1.0f - std::abs(std::fmod(hue * 6.0f, 2.0f) - 1.0f));
+      float m = v - c;
+
+      float r_f = 0.0f, g_f = 0.0f, b_f = 0.0f;
+      int h_i = static_cast<int>(hue * 6.0f) % 6;
+      switch (h_i) {
+        case 0: r_f = c; g_f = x; b_f = 0.0f; break;
+        case 1: r_f = x; g_f = c; b_f = 0.0f; break;
+        case 2: r_f = 0.0f; g_f = c; b_f = x; break;
+        case 3: r_f = 0.0f; g_f = x; b_f = c; break;
+        case 4: r_f = x; g_f = 0.0f; b_f = c; break;
+        case 5: r_f = c; g_f = 0.0f; b_f = x; break;
+      }
+
+      colors.push_back({
+        static_cast<std::uint8_t>((r_f + m) * 255.0f),
+        static_cast<std::uint8_t>((g_f + m) * 255.0f),
+        static_cast<std::uint8_t>((b_f + m) * 255.0f)
+      });
+    }
+    return colors;
+  };
+
+  std::vector<RGBColor> cluster_colors = generateClusterColors(clusters.size());
+  std::vector<PointXYZRGB> colored_cluster_pts;
+
+  std::size_t total_clustered_pts = 0;
+  for (const auto &cls : clusters) {
+    total_clustered_pts += cls.indices.size();
+  }
+  colored_cluster_pts.reserve(total_clustered_pts);
+
+  for (std::size_t c_idx = 0; c_idx < clusters.size(); ++c_idx) {
+    const RGBColor &col = cluster_colors[c_idx];
+    for (int pt_idx : clusters[c_idx].indices) {
+      if (pt_idx >= 0 && static_cast<std::size_t>(pt_idx) < n_outliers) {
+        colored_cluster_pts.push_back({
+            outlier_pts[pt_idx].x,
+            outlier_pts[pt_idx].y,
+            outlier_pts[pt_idx].z,
+            col.r,
+            col.g,
+            col.b
+        });
+      }
+    }
+  }
+
+  const std::filesystem::path cluster_out_path = output_dir / "06_clusters.pcd";
+  savePCDRGB(cluster_out_path.string(), colored_cluster_pts, true);
+  std::cout << "Clusters: " << colored_cluster_pts.size() << " points ("
+            << clusters.size() << " clusters) -> " << cluster_out_path.string()
+            << std::endl;
+
+  stage_timings.push_back(
+      {10, "Write cluster stage",
+       endStage(10, "Write cluster stage", stage_start, progress_enabled), total_clustered_pts});
+
+  const auto overall_end = std::chrono::high_resolution_clock::now();
+  const double total_ms =
+      std::chrono::duration<double, std::milli>(overall_end - overall_start)
+          .count();
+
   if (progress_enabled) {
-    const auto overall_end = std::chrono::high_resolution_clock::now();
-    const double total_ms =
-        std::chrono::duration<double, std::milli>(overall_end - overall_start)
-            .count();
     printFinalBreakdown(stage_timings, total_ms);
     std::cout << "[progress] Pipeline complete in " << total_ms << " ms"
               << std::endl;
   }
+
+  if (export_json || progress_enabled) {
+    saveJSONMetrics(output_dir / "pipeline_metrics.json", stage_timings,
+                    total_ms, voxel_leaf_size, skip_sor, cluster_tolerance);
+  }
   return 0;
 }
+
