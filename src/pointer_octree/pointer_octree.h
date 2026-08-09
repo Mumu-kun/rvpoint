@@ -41,6 +41,8 @@ public:
     void setMaxDepth(int d) { max_depth_ = d; }
     void setBuildEpsilon(float eps) { build_epsilon_ = eps; }
 
+    const PointerOctreeNode* getRoot() const { return root_; }
+
 private:
     PointCloudSoA cloud_;
     PointerOctreeNode* root_ = nullptr;

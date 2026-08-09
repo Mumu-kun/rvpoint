@@ -1,6 +1,7 @@
 // neighbor_search_sor_bench.cpp
 // Comparative Benchmark Suite for Plain Neighbor Search & All 4 Caravan SOR Strategies
 
+#include "caravan_pointer_octree.h"
 #include "caravan_radius_search.h"
 #include "caravan_strategies.h"
 #include "pointer_octree/pointer_octree.h"
@@ -196,6 +197,16 @@ void runSORBenchmark(const PointCloudSoA &soa,
   t1 = std::chrono::high_resolution_clock::now();
   double ms_strat4 = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
+  // 8. Caravan-PointerOctree Hybrid SOR
+  CaravanPointerOctree hybrid_octree;
+  hybrid_octree.setInputCloud(sub_soa);
+  hybrid_octree.build();
+  std::vector<PointXYZ> out_hybrid(test_n);
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_hybrid = hybrid_octree.sorFilter(out_hybrid.data(), k, alpha, search_radius);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_hybrid = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
   std::cout << "  Scalar Brute-force O(N^2):             " << std::fixed << std::setprecision(3)
             << ms_sc << " ms (" << count_sc << " inliers)" << std::endl;
   std::cout << "  RVV Brute-force O(N^2):                " << std::fixed << std::setprecision(3)
@@ -204,6 +215,9 @@ void runSORBenchmark(const PointCloudSoA &soa,
   std::cout << "  Pointer Octree SOR (Baseline):         " << std::fixed << std::setprecision(3)
             << ms_ptr << " ms (" << count_ptr << " inliers) -> "
             << std::setprecision(2) << (ms_sc / ms_ptr) << "x speedup vs scalar" << std::endl;
+  std::cout << "  Caravan-PointerOctree Hybrid SOR:      " << std::fixed << std::setprecision(3)
+            << ms_hybrid << " ms (" << count_hybrid << " inliers) -> "
+            << std::setprecision(2) << (ms_sc / ms_hybrid) << "x speedup vs scalar" << std::endl;
   std::cout << "  Strategy 1 (Grid-Caravan AABB Pruned):  " << std::fixed << std::setprecision(3)
             << ms_strat1 << " ms (" << count_strat1 << " inliers) -> "
             << std::setprecision(2) << (ms_sc / ms_strat1) << "x speedup vs scalar" << std::endl;
@@ -220,6 +234,7 @@ void runSORBenchmark(const PointCloudSoA &soa,
   results.push_back({"SOR", "Scalar_BruteForce", ms_sc, test_n, count_sc, 1.0});
   results.push_back({"SOR", "RVV_BruteForce", ms_rvv, test_n, count_rvv, ms_sc / ms_rvv});
   results.push_back({"SOR", "Pointer_Octree_SOR", ms_ptr, test_n, count_ptr, ms_sc / (ms_ptr + 1e-6)});
+  results.push_back({"SOR", "Caravan_PointerOctree_Hybrid", ms_hybrid, test_n, count_hybrid, ms_sc / (ms_hybrid + 1e-6)});
   results.push_back({"SOR", "Strategy1_Grid_Caravan", ms_strat1, test_n, count_strat1, ms_sc / (ms_strat1 + 1e-6)});
   results.push_back({"SOR", "Strategy2_SIMD_Select", ms_strat2, test_n, count_strat2, ms_sc / (ms_strat2 + 1e-6)});
   results.push_back({"SOR", "Strategy3_Coarse_Voxel", ms_strat3, test_n, count_strat3, ms_sc / (ms_strat3 + 1e-6)});

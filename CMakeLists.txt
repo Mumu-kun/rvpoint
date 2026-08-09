@@ -50,6 +50,7 @@ list(APPEND SOURCES
     "src/neighbor_search/caravan_radius_search.cpp"
     "src/neighbor_search/pointer_octree.cpp"
     "src/neighbor_search/caravan_strategies.cpp"
+    "src/neighbor_search/caravan_pointer_octree.cpp"
 )
 add_library(rvvpcl ${SOURCES})
 target_include_directories(rvvpcl PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
