@@ -195,11 +195,21 @@ void runSORAblation(const PointCloudSoA &soa,
   t1 = std::chrono::high_resolution_clock::now();
   double ms_hash = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
+  // 6. Caravan Query-Pack SOR O(N^2 / VL)
+  std::vector<PointXYZ> out_caravan(test_n);
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_caravan = sor_caravan(sub_soa, out_caravan.data(), k, alpha);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_caravan = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
   std::cout << "  Scalar Brute-force O(N^2):    " << std::fixed << std::setprecision(3)
             << ms_sc << " ms (" << count_sc << " inliers)" << std::endl;
   std::cout << "  RVV Brute-force O(N^2):       " << std::fixed << std::setprecision(3)
             << ms_rvv << " ms (" << count_rvv << " inliers) -> "
             << std::setprecision(2) << (ms_sc / ms_rvv) << "x speedup" << std::endl;
+  std::cout << "  Caravan Query-Pack SOR:       " << std::fixed << std::setprecision(3)
+            << ms_caravan << " ms (" << count_caravan << " inliers) -> "
+            << std::setprecision(2) << (ms_sc / ms_caravan) << "x speedup vs scalar" << std::endl;
   std::cout << "  Standard Octree SOR:          " << std::fixed << std::setprecision(3)
             << ms_tree << " ms (" << count_tree << " inliers) -> "
             << std::setprecision(2) << (ms_sc / ms_tree) << "x speedup vs scalar" << std::endl;
@@ -212,6 +222,7 @@ void runSORAblation(const PointCloudSoA &soa,
 
   results.push_back({"StatisticalOutlierRemoval", "Scalar_BruteForce", ms_sc, test_n, count_sc, 1.0});
   results.push_back({"StatisticalOutlierRemoval", "RVV_BruteForce", ms_rvv, test_n, count_rvv, ms_sc / ms_rvv});
+  results.push_back({"StatisticalOutlierRemoval", "Caravan_QueryPack_SOR", ms_caravan, test_n, count_caravan, ms_sc / (ms_caravan + 1e-6)});
   results.push_back({"StatisticalOutlierRemoval", "Standard_Octree_SOR", ms_tree, test_n, count_tree, ms_sc / (ms_tree + 1e-6)});
   results.push_back({"StatisticalOutlierRemoval", "Pointer_Octree_SOR", ms_ptr, test_n, count_ptr, ms_sc / (ms_ptr + 1e-6)});
   results.push_back({"StatisticalOutlierRemoval", "SpatialHash_Grid_SOR", ms_hash, test_n, count_hash, ms_sc / (ms_hash + 1e-6)});

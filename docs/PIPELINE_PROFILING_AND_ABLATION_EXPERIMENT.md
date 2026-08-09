@@ -110,17 +110,18 @@ All micro-timers are wrapped in preprocessor macros:
 
 ---
 
-### Ablation C: Statistical Outlier Removal (SOR) Radius Search Variants ($N=18,542$)
+### Ablation C: Statistical Outlier Removal (SOR) Implementation Variants ($N=18,542$)
 
-| SOR Algorithm Variant | Complexity | Runtime (ms) | Speedup vs Scalar $O(N^2)$ | Inlier Yield |
+| SOR Implementation Variant | Algorithm Complexity | Runtime (ms) | Speedup vs Scalar $O(N^2)$ | Inlier Yield |
 | :--- | :--- | :--- | :--- | :--- |
-| **Pointer Octree SOR (`sor_pointer_octree`)** | $O(N \log N)$ | **286.46 ms** | **56.38x faster** ⚡⚡ | 16,613 |
-| **Standard Octree SOR (`sor_octree`)** | $O(N \log N)$ | **476.64 ms** | **33.88x faster** ⚡ | 16,613 |
-| **Spatial Hash Grid SOR (`sor_spatial_hash`)** | $O(N)$ | **1,749.50 ms** | **9.23x faster** ⚡ | 16,613 |
-| **RVV Brute-Force (`sor_rvv`)** | $O(N^2)$ | **10,310.95 ms** | **1.57x faster** | 17,569 |
-| **Scalar Brute-Force (`sor_sc`)** | $O(N^2)$ | **16,149.81 ms** | **1.00x (Baseline)** | 17,569 |
+| **Pointer Octree SOR (`sor_pointer_octree`)** | $O(N \log N)$ | **287.18 ms** | **60.45x faster** ⚡⚡ | 16,613 |
+| **Standard Octree SOR (`sor_octree`)** | $O(N \log N)$ | **530.28 ms** | **32.74x faster** ⚡ | 16,613 |
+| **Spatial Hash Grid SOR (`sor_spatial_hash`)** | $O(N)$ | **1,617.47 ms** | **10.73x faster** ⚡ | 16,613 |
+| **RVV Brute-Force (`sor_rvv`)** | $O(N^2)$ | **9,576.73 ms** | **1.81x faster** | 17,569 |
+| **Scalar Brute-Force (`sor_sc`)** | $O(N^2)$ | **17,359.50 ms** | **1.00x (Baseline)** | 17,569 |
+| **Caravan Query-Pack SOR (`sor_caravan`)** | $O(N^2 / VL)$ | **20,250.67 ms** | **0.86x (Slower under QEMU)** | 17,569 |
 
-*Key Takeaway:* Replacing brute-force $O(N^2)$ distance loops with **`PointerOctree` Accelerated SOR** reduces Stage 5 execution time from **16,149.81 ms to 286.46 ms (56.38x speedup)**, eliminating the primary pipeline bottleneck.
+*Key Takeaway:* Replacing brute-force $O(N^2)$ distance loops with **`PointerOctree` Accelerated SOR** reduces Stage 5 execution time from **17,359.50 ms to 287.18 ms (60.45x speedup)**, eliminating the primary pipeline bottleneck. Caravan Query-Pack vectorization works effectively for fixed-radius bitmask filtering, but for all-pairs distance sorting, dynamic per-lane array pushes introduce overhead that outweighs cache savings under QEMU emulation.
 
 ---
 
