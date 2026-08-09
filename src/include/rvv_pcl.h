@@ -147,12 +147,6 @@ std::size_t sor_spatial_hash(const PointCloudSoA &in, const SpatialHash &hash, P
 std::size_t sor_pointer_octree(const PointCloudSoA &in, const PointerOctree &tree, PointXYZ *out,
                                int k, float alpha, float search_radius = 0.5f);
 
-/**
- * @brief Caravan Query-Pack Vectorized SOR (O(N^2 / VL)).
- * Broadcasts cloud points across tiles of query registers to optimize cache reads.
- */
-std::size_t sor_caravan(const PointCloudSoA &in, PointXYZ *out, int k, float alpha);
-
 // ============================================================================
 // 3) Normal Estimation
 // ============================================================================

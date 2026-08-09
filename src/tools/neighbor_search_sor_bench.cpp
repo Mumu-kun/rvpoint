@@ -176,28 +176,7 @@ void runSORBenchmark(const PointCloudSoA &soa,
   t1 = std::chrono::high_resolution_clock::now();
   double ms_strat1 = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  // 5. Strategy 2: Pure Hardware SIMD Register Selection SOR
-  std::vector<PointXYZ> out_strat2(test_n);
-  t0 = std::chrono::high_resolution_clock::now();
-  std::size_t count_strat2 = sor_caravan_simd_select(sub_soa, out_strat2.data(), k, alpha);
-  t1 = std::chrono::high_resolution_clock::now();
-  double ms_strat2 = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-  // 6. Strategy 3: Coarse Voxel Centroid Streaming SOR
-  std::vector<PointXYZ> out_strat3(test_n);
-  t0 = std::chrono::high_resolution_clock::now();
-  std::size_t count_strat3 = sor_caravan_voxel(sub_soa, out_strat3.data(), k, alpha, 0.2f);
-  t1 = std::chrono::high_resolution_clock::now();
-  double ms_strat3 = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-  // 7. Strategy 4: Fixed-Radius Bitmask Reduction SOR
-  std::vector<PointXYZ> out_strat4(test_n);
-  t0 = std::chrono::high_resolution_clock::now();
-  std::size_t count_strat4 = sor_caravan_radius_bitmask(sub_soa, out_strat4.data(), search_radius, alpha);
-  t1 = std::chrono::high_resolution_clock::now();
-  double ms_strat4 = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-  // 8. Caravan-PointerOctree Hybrid SOR
+  // 5. Caravan-PointerOctree Hybrid SOR
   CaravanPointerOctree hybrid_octree;
   hybrid_octree.setInputCloud(sub_soa);
   hybrid_octree.build();
@@ -221,24 +200,12 @@ void runSORBenchmark(const PointCloudSoA &soa,
   std::cout << "  Strategy 1 (Grid-Caravan AABB Pruned):  " << std::fixed << std::setprecision(3)
             << ms_strat1 << " ms (" << count_strat1 << " inliers) -> "
             << std::setprecision(2) << (ms_sc / ms_strat1) << "x speedup vs scalar" << std::endl;
-  std::cout << "  Strategy 2 (Hardware SIMD Select):     " << std::fixed << std::setprecision(3)
-            << ms_strat2 << " ms (" << count_strat2 << " inliers) -> "
-            << std::setprecision(2) << (ms_sc / ms_strat2) << "x speedup vs scalar" << std::endl;
-  std::cout << "  Strategy 3 (Coarse Voxel Centroid):    " << std::fixed << std::setprecision(3)
-            << ms_strat3 << " ms (" << count_strat3 << " inliers) -> "
-            << std::setprecision(2) << (ms_sc / ms_strat3) << "x speedup vs scalar" << std::endl;
-  std::cout << "  Strategy 4 (Fixed-Radius Bitmask):     " << std::fixed << std::setprecision(3)
-            << ms_strat4 << " ms (" << count_strat4 << " inliers) -> "
-            << std::setprecision(2) << (ms_sc / ms_strat4) << "x speedup vs scalar" << std::endl;
 
   results.push_back({"SOR", "Scalar_BruteForce", ms_sc, test_n, count_sc, 1.0});
   results.push_back({"SOR", "RVV_BruteForce", ms_rvv, test_n, count_rvv, ms_sc / ms_rvv});
   results.push_back({"SOR", "Pointer_Octree_SOR", ms_ptr, test_n, count_ptr, ms_sc / (ms_ptr + 1e-6)});
   results.push_back({"SOR", "Caravan_PointerOctree_Hybrid", ms_hybrid, test_n, count_hybrid, ms_sc / (ms_hybrid + 1e-6)});
   results.push_back({"SOR", "Strategy1_Grid_Caravan", ms_strat1, test_n, count_strat1, ms_sc / (ms_strat1 + 1e-6)});
-  results.push_back({"SOR", "Strategy2_SIMD_Select", ms_strat2, test_n, count_strat2, ms_sc / (ms_strat2 + 1e-6)});
-  results.push_back({"SOR", "Strategy3_Coarse_Voxel", ms_strat3, test_n, count_strat3, ms_sc / (ms_strat3 + 1e-6)});
-  results.push_back({"SOR", "Strategy4_Fixed_Radius_Bitmask", ms_strat4, test_n, count_strat4, ms_sc / (ms_strat4 + 1e-6)});
 }
 
 void saveJSONResults(const std::vector<BenchResult> &results, const std::string &out_path) {
