@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """
-export_mcap.py  —  RVPoint pipeline → Foxglove MCAP exporter
-=============================================================
+export_mcap.py  —  RVPoint Pipeline → Foxglove MCAP Timeline Exporter
+====================================================================
 
-Reads a pipeline result directory (per-stage .pcd files) and packs everything
-into a single .mcap file that opens directly in Foxglove Studio.
+Reads pipeline run outputs (per-stage .pcd files across single or multi-frame
+runs from `by_frame/`) and packs everything into a single .mcap timeline file
+for Foxglove Studio visualization.
 
-Layout inside the .mcap
-────────────────────────
-All messages share the SAME timestamp (one scan, synchronised stages):
+Usage Examples:
+───────────────
+1. Interactive Wizard (scans directory, lets you pick stages, outputs 1-line command):
+   python scripts/export_mcap.py output/pcd_compressed_pipeline -i
 
-  /stage/00_input              foxglove.PointCloud   — raw input
-  /stage/01_downsampled        foxglove.PointCloud   — after voxel grid
-  /stage/02_sor_filtered       foxglove.PointCloud   — after SOR
-  /stage/04_ransac_inliers     foxglove.PointCloud   — RANSAC ground inliers
-  /stage/05_ground_removed     foxglove.PointCloud   — objects only
-  /stage/06_clusters           foxglove.PointCloud   — all objects, coloured by cluster
-  /clusters/<NN>               foxglove.PointCloud   — one topic per cluster (toggle-able)
-  /clusters/noise              foxglove.PointCloud   — unassigned points
+2. Multi-Frame Export (all stages, 10 FPS timeline playback):
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --fps 10
+
+3. Specific Stages Only:
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --stages 00_input,05_ground_plane_removed,06_clusters
+
+4. Exclude Specific Stages:
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --exclude-stages 01_downsampled,02_sor_filtered
+
+5. Frame Slicing:
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --max-frames 5 --fps 5.0
 """
 
 import argparse
@@ -40,22 +45,11 @@ from foxglove_schemas_protobuf import PointCloud_pb2
 from foxglove_schemas_protobuf import Pose_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 
-
-# ─── constants ────────────────────────────────────────────────────────────────
-
-PIPELINE_STAGES = [
-    ("00_input", "00_input", "Raw Input"),
-    ("01_downsampled", "01_downsampled", "Voxel Downsampled"),
-    ("02_sor_filtered", "02_sor_filtered", "SOR Filtered"),
-    ("04_ransac_inliers", "04_ransac_inliers", "RANSAC Ground Inliers"),
-    ("05_ground_plane_removed", "05_ground_removed", "Ground Removed"),
-]
-
 FLOAT32 = PackedElementField_pb2.PackedElementField.FLOAT32  # 7
 UINT8 = PackedElementField_pb2.PackedElementField.UINT8  # 1
 
 
-# ─── helpers ──────────────────────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
 def now_ns() -> int:
@@ -133,7 +127,7 @@ def build_point_cloud_msg(
     msg.frame_id = frame_id
     msg.pose.CopyFrom(identity_pose())
 
-    if colors_u8 is not None:
+    if colors_u8 is not None and len(colors_u8) == len(points):
         msg.point_stride = 15
         msg.fields.extend(xyzrgb_fields())
         msg.data = pack_xyzrgb(points, colors_u8)
@@ -145,264 +139,318 @@ def build_point_cloud_msg(
     return msg
 
 
-def pcd_to_numpy(pcd_path: str) -> np.ndarray:
-    pcd = o3d.io.read_point_cloud(pcd_path)
+def load_pcd_data(pcd_path: Path):
+    pcd = o3d.io.read_point_cloud(str(pcd_path))
     if pcd.is_empty():
-        raise RuntimeError(f"Failed to load or empty cloud: {pcd_path}")
-    return np.asarray(pcd.points, dtype=np.float32)
+        return None, None
+    pts = np.asarray(pcd.points, dtype=np.float32)
+    colors = None
+    if pcd.has_colors():
+        c = np.asarray(pcd.colors)
+        if len(c) == len(pts):
+            colors = (c * 255.0).clip(0, 255).astype(np.uint8)
+    return pts, colors
 
 
-def cluster_cloud(
-    points: np.ndarray,
-    tolerance: float,
-    min_size: int,
-    max_size: int,
-):
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
+# ─── Frame & Stage Resolution ──────────────────────────────────────────────────
 
-    raw_labels = np.array(
-        pcd.cluster_dbscan(eps=tolerance, min_points=min_size, print_progress=False)
+
+def discover_frames(input_dir: Path) -> list:
+    input_dir = input_dir.resolve()
+    by_frame_dir = input_dir / "by_frame"
+
+    target_dir = by_frame_dir if by_frame_dir.is_dir() else input_dir
+
+    # Collect subdirectories
+    subdirs = sorted(
+        [d for d in target_dir.iterdir() if d.is_dir()], key=lambda p: p.name
     )
 
-    n_clusters = int(raw_labels.max()) + 1 if raw_labels.max() >= 0 else 0
-    print(
-        f"   Clustering: {n_clusters} clusters found "
-        f"({(raw_labels == -1).sum()} noise points)"
-    )
+    if subdirs:
+        return subdirs
 
-    palette = np.zeros((max(n_clusters, 1), 3), dtype=np.uint8)
-    for i in range(n_clusters):
-        hue = (i / max(n_clusters, 1)) * 360.0
-        h60 = hue / 60.0
-        sector = int(h60) % 6
-        f_val = h60 - int(h60)
-        v, s = 0.95, 0.85
-        p = v * (1 - s)
-        q = v * (1 - s * f_val)
-        t = v * (1 - s * (1 - f_val))
-        rgb_f = [(v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q)][
-            sector
+    # If no subdirectories, check if input_dir contains .pcd files directly
+    pcd_files = list(input_dir.glob("*.pcd"))
+    if pcd_files:
+        return [input_dir]
+
+    return []
+
+
+def discover_available_stages(frame_dir: Path) -> list:
+    pcd_files = sorted(list(frame_dir.glob("*.pcd")), key=lambda p: p.name)
+    return [p.stem for p in pcd_files]
+
+
+def filter_stages(
+    available_stages: list, stages_opt: str = None, exclude_stages_opt: str = None
+) -> list:
+    selected = list(available_stages)
+
+    if stages_opt:
+        wanted = [s.strip() for s in stages_opt.split(",") if s.strip()]
+        selected = [
+            s for s in selected if any(w == s or w in s for w in wanted)
         ]
-        palette[i] = [int(c * 255) for c in rgb_f]
 
-    NOISE_COLOR = np.array([40, 40, 40], dtype=np.uint8)
-    colored_all = np.full((len(points), 3), NOISE_COLOR, dtype=np.uint8)
-    clusters = {}
+    if exclude_stages_opt:
+        excluded = [s.strip() for s in exclude_stages_opt.split(",") if s.strip()]
+        selected = [
+            s for s in selected if not any(e == s or e in s for e in excluded)
+        ]
 
-    for lbl in range(n_clusters):
-        mask = raw_labels == lbl
-        cluster_pts = points[mask]
-        sz = len(cluster_pts)
-        if sz < min_size or sz > max_size:
-            continue
-        colored_all[mask] = palette[lbl]
-        clusters[lbl] = (cluster_pts, palette[lbl], mask)
-
-    return colored_all, clusters, raw_labels
+    return selected
 
 
-# ─── main export logic ────────────────────────────────────────────────────────
+# ─── Interactive Mode Wizard ───────────────────────────────────────────────────
+
+
+def run_interactive_wizard(input_dir: Path, frames: list) -> dict:
+    print(f"\n🧙 RVPoint MCAP Exporter — Interactive Setup")
+    print(f"   Target Dir : {input_dir}")
+    print(f"   Found      : {len(frames)} frame(s)\n")
+
+    sample_frame = frames[0]
+    available_stages = discover_available_stages(sample_frame)
+
+    if not available_stages:
+        print(f"❌ Error: No .pcd files found in sample frame {sample_frame}")
+        sys.exit(1)
+
+    print("Available PCD stages:")
+    for idx, stage in enumerate(available_stages, 1):
+        print(f"  [{idx}] {stage}.pcd")
+
+    print("\nEnter stage numbers to export (e.g., '1,5,6' or 'all') [all]: ", end="")
+    try:
+        user_choice = input().strip()
+    except (EOFError, KeyboardInterrupt):
+        user_choice = "all"
+
+    if user_choice and user_choice.lower() != "all":
+        selected_stems = []
+        for part in user_choice.split(","):
+            part = part.strip()
+            if part.isdigit():
+                idx = int(part) - 1
+                if 0 <= idx < len(available_stages):
+                    selected_stems.append(available_stages[idx])
+            else:
+                if part in available_stages:
+                    selected_stems.append(part)
+        stages_str = ",".join(selected_stems)
+    else:
+        stages_str = None
+        selected_stems = available_stages
+
+    print("Enter playback FPS [10.0]: ", end="")
+    try:
+        fps_choice = input().strip()
+        fps_val = float(fps_choice) if fps_choice else 10.0
+    except (ValueError, EOFError, KeyboardInterrupt):
+        fps_val = 10.0
+
+    # Build 1-line command
+    cmd_parts = ["python", "scripts/export_mcap.py", str(input_dir)]
+    if fps_val != 10.0:
+        cmd_parts.extend(["--fps", str(fps_val)])
+    if stages_str:
+        cmd_parts.extend(["--stages", stages_str])
+
+    one_liner = " ".join(cmd_parts)
+
+    print("\n" + "─" * 65)
+    print("💡 Equivalent 1-Line Command for Automation:")
+    print(f"   {one_liner}")
+    print("─" * 65 + "\n")
+
+    return {
+        "fps": fps_val,
+        "stages": stages_str,
+        "selected_stems": selected_stems,
+    }
+
+
+# ─── Main Export Logic ────────────────────────────────────────────────────────
 
 
 def export(
-    results_dir: str,
-    output_path: str,
-    cluster_tolerance: float,
-    min_cluster: int,
-    max_cluster: int,
-    frame_id: str,
-    timestamp_ns: int,
-    num_frames: int = 1,
-    fps: float = 1.0,
+    input_dir: str,
+    output_path: str = None,
+    fps: float = 10.0,
+    frame_id: str = "lidar",
+    stages: str = None,
+    exclude_stages: str = None,
+    start_frame: int = 0,
+    max_frames: int = None,
+    interactive: bool = False,
 ) -> None:
-    results_dir = Path(results_dir).resolve()
-    output_path = Path(output_path).resolve()
+    input_dir = Path(input_dir).resolve()
+    frames = discover_frames(input_dir)
+
+    if not frames:
+        print(f"❌ Error: No frame directories or PCD files found in '{input_dir}'.")
+        sys.exit(1)
+
+    if interactive or (not stages and sys.stdin.isatty() and "-i" in sys.argv):
+        wizard_res = run_interactive_wizard(input_dir, frames)
+        fps = wizard_res["fps"]
+        stages = wizard_res["stages"]
+
+    # Slice frames
+    sliced_frames = frames[start_frame:]
+    if max_frames and max_frames > 0:
+        sliced_frames = sliced_frames[:max_frames]
+
+    # Resolve output path
+    if not output_path:
+        output_path = input_dir / "pipeline.mcap"
+    else:
+        output_path = Path(output_path).resolve()
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n📦 RVPoint → MCAP Exporter")
-    print(f"   Source : {results_dir}")
-    print(f"   Output : {output_path}")
-    print(f"   Frames : {num_frames} @ {fps} FPS\n")
+    # Determine stages to export
+    available_stages = discover_available_stages(sliced_frames[0])
+    selected_stages = filter_stages(available_stages, stages, exclude_stages)
+
+    if not selected_stages:
+        print("❌ Error: No stages matched your selection filters.")
+        sys.exit(1)
+
+    print(f"📦 RVPoint → Foxglove MCAP Timeline Exporter")
+    print(f"   Input      : {input_dir}")
+    print(f"   Output     : {output_path}")
+    print(f"   Frames     : {len(sliced_frames)} frame(s) @ {fps:.1f} FPS")
+    print(f"   Stages ({len(selected_stages)}) : {', '.join(selected_stages)}\n")
 
     temp_path = output_path.with_suffix(".mcap.tmp")
     frame_dt_ns = int(1_000_000_000 / max(fps, 0.001))
+    base_time = now_ns()
+
+    total_msgs_written = 0
 
     with open(temp_path, "wb") as f_out:
         with McapWriter(f_out) as writer:
-            # Pre-load PCD datasets
-            stage_data = []
-            for stem, topic_suffix, label in PIPELINE_STAGES:
-                pcd_path = results_dir / f"{stem}.pcd"
-                if pcd_path.exists():
-                    stage_data.append(
-                        (stem, topic_suffix, label, pcd_to_numpy(str(pcd_path)))
-                    )
-                else:
-                    print(f"   ⚠️  Skipping {stem}.pcd (not found)")
-
-            cluster_source = results_dir / "05_ground_plane_removed.pcd"
-            has_clusters = cluster_source.exists()
-            clusters = {}
-            colored_all = None
-            ground_pts = None
-
-            if has_clusters:
-                print(
-                    f"   🔬 Running Euclidean clustering "
-                    f"(tol={cluster_tolerance}m, min={min_cluster}, max={max_cluster})"
-                )
-                ground_pts = pcd_to_numpy(str(cluster_source))
-                colored_all, clusters, raw_labels = cluster_cloud(
-                    ground_pts, cluster_tolerance, min_cluster, max_cluster
-                )
-
-            base_time = timestamp_ns
-
-            for frame_idx in range(num_frames):
+            for frame_idx, frame_dir in enumerate(sliced_frames):
                 cur_time = base_time + frame_idx * frame_dt_ns
 
-                # 1. Pipeline stage topics
-                for stem, topic_suffix, label, points in stage_data:
-                    msg = build_point_cloud_msg(points, cur_time, frame_id)
+                for stage_stem in selected_stages:
+                    pcd_path = frame_dir / f"{stage_stem}.pcd"
+                    if not pcd_path.exists():
+                        continue
+
+                    pts, colors = load_pcd_data(pcd_path)
+                    if pts is None or len(pts) == 0:
+                        continue
+
+                    topic = f"/stage/{stage_stem}"
+                    msg = build_point_cloud_msg(
+                        points=pts,
+                        timestamp_ns=cur_time,
+                        frame_id=frame_id,
+                        colors_u8=colors,
+                    )
+
                     writer.write_message(
-                        topic=f"/stage/{topic_suffix}",
+                        topic=topic,
                         message=msg,
                         log_time=cur_time,
                         publish_time=cur_time,
                     )
+                    total_msgs_written += 1
 
-                if has_clusters and ground_pts is not None:
-                    # /stage/06_clusters
-                    msg_all = build_point_cloud_msg(
-                        ground_pts, cur_time, frame_id, colors_u8=colored_all
-                    )
-                    writer.write_message(
-                        topic="/stage/06_clusters",
-                        message=msg_all,
-                        log_time=cur_time,
-                        publish_time=cur_time,
-                    )
-
-                    # /clusters/<NN>
-                    noise_mask = np.ones(len(ground_pts), dtype=bool)
-                    for lbl, (pts, color, mask) in sorted(clusters.items()):
-                        topic = f"/clusters/{lbl:02d}"
-                        clr = np.tile(color, (len(pts), 1))
-                        msg_c = build_point_cloud_msg(
-                            pts, cur_time, frame_id, colors_u8=clr
-                        )
-                        writer.write_message(
-                            topic=topic,
-                            message=msg_c,
-                            log_time=cur_time,
-                            publish_time=cur_time,
-                        )
-                        noise_mask[mask] = False
-
-                    # /clusters/noise
-                    noise_pts = ground_pts[noise_mask]
-                    if len(noise_pts) > 0:
-                        noise_clr = colored_all[noise_mask]
-                        msg_noise = build_point_cloud_msg(
-                            noise_pts, cur_time, frame_id, colors_u8=noise_clr
-                        )
-                        writer.write_message(
-                            topic="/clusters/noise",
-                            message=msg_noise,
-                            log_time=cur_time,
-                            publish_time=cur_time,
-                        )
-
-            print(
-                f"   📥 Wrote {len(stage_data)} stage topics & {len(clusters)} cluster topics across {num_frames} frame(s)."
-            )
-
-    # Atomically replace output_path after McapWriter finishes writing trailing magic bytes
     temp_path.replace(output_path)
 
     size_mb = output_path.stat().st_size / 1_048_576
-    print(f"\n✅ Done — {output_path.name}  ({size_mb:.2f} MB)")
-    print(f"\n🦊 Open in Foxglove Studio:")
+    duration_s = (len(sliced_frames) - 1) / max(fps, 0.001) if len(sliced_frames) > 1 else 0.0
+
+    print(f"✅ Success — Wrote {total_msgs_written} messages across {len(sliced_frames)} frame(s)")
+    print(f"   File       : {output_path.name} ({size_mb:.2f} MB)")
+    print(f"   Timeline   : {duration_s:.1f} seconds playback\n")
+    print(f"🦊 Open in Foxglove Studio:")
     print(f"   https://studio.foxglove.dev  →  Open local file  →  {output_path}\n")
 
 
-# ─── CLI ─────────────────────────────────────────────────────────────────────
+# ─── CLI Entrypoint ───────────────────────────────────────────────────────────
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Export RVPoint pipeline PCD stages to a Foxglove-compatible .mcap file.",
+        description="Export RVPoint PCD pipeline stages to a Foxglove MCAP timeline file.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Interactive mode wizard:
+  python scripts/export_mcap.py output/pcd_compressed_pipeline -i
+
+  # Export 20-frame sequence at 10 FPS:
+  python scripts/export_mcap.py output/pcd_compressed_pipeline --fps 10
+
+  # Export specific stages only:
+  python scripts/export_mcap.py output/pcd_compressed_pipeline --stages 00_input,05_ground_plane_removed,06_clusters
+""",
     )
     parser.add_argument(
-        "results_dir",
-        help="Path to a pipeline result directory (contains 00_input.pcd, etc.)",
+        "input_dir",
+        help="Pipeline output directory (contains by_frame/ or PCD files)",
     )
     parser.add_argument(
         "--output",
         "-o",
         default=None,
-        help="Output .mcap file path. Default: <results_dir>/pipeline.mcap",
-    )
-    parser.add_argument(
-        "--cluster-tolerance",
-        type=float,
-        default=0.15,
-        metavar="METRES",
-        help="Euclidean cluster tolerance in metres (default: 0.15)",
-    )
-    parser.add_argument(
-        "--min-cluster",
-        type=int,
-        default=50,
-        metavar="N",
-        help="Minimum points per cluster (default: 50)",
-    )
-    parser.add_argument(
-        "--max-cluster",
-        type=int,
-        default=100_000,
-        metavar="N",
-        help="Maximum points per cluster (default: 100000)",
-    )
-    parser.add_argument(
-        "--frame-id",
-        default="lidar",
-        help="Coordinate frame ID for all point cloud messages (default: lidar)",
-    )
-    parser.add_argument(
-        "--frames",
-        "-n",
-        type=int,
-        default=1,
-        help="Number of timeline frames to write (default: 1 for single snapshot)",
+        help="Output .mcap file path. Default: <input_dir>/pipeline.mcap",
     )
     parser.add_argument(
         "--fps",
         type=float,
-        default=1.0,
-        help="Frame rate (FPS) for multi-frame playback (default: 1.0)",
+        default=10.0,
+        help="Playback frame rate (FPS) for multi-frame timeline (default: 10.0)",
+    )
+    parser.add_argument(
+        "--frame-id",
+        default="lidar",
+        help="Coordinate frame ID for point cloud messages (default: lidar)",
+    )
+    parser.add_argument(
+        "--stages",
+        help="Comma-separated stage stems to export (e.g., '00_input,05_ground_plane_removed,06_clusters')",
+    )
+    parser.add_argument(
+        "--exclude-stages",
+        help="Comma-separated stage stems to exclude",
+    )
+    parser.add_argument(
+        "--start-frame",
+        type=int,
+        default=0,
+        help="Index of first frame to export (default: 0)",
+    )
+    parser.add_argument(
+        "--max-frames",
+        type=int,
+        default=None,
+        help="Maximum number of frames to export",
+    )
+    parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Run interactive setup wizard",
     )
 
     args = parser.parse_args()
 
-    if not os.path.isdir(args.results_dir):
-        print(f"❌ Error: '{args.results_dir}' is not a directory.")
-        sys.exit(1)
-
-    output_path = args.output or os.path.join(args.results_dir, "pipeline.mcap")
-
     export(
-        results_dir=args.results_dir,
-        output_path=output_path,
-        cluster_tolerance=args.cluster_tolerance,
-        min_cluster=args.min_cluster,
-        max_cluster=args.max_cluster,
-        frame_id=args.frame_id,
-        timestamp_ns=now_ns(),
-        num_frames=args.frames,
+        input_dir=args.input_dir,
+        output_path=args.output,
         fps=args.fps,
+        frame_id=args.frame_id,
+        stages=args.stages,
+        exclude_stages=args.exclude_stages,
+        start_frame=args.start_frame,
+        max_frames=args.max_frames,
+        interactive=args.interactive,
     )
 
 

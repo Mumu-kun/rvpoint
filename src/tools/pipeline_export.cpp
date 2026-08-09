@@ -1,4 +1,5 @@
 #include "euclidean_clustering.h"
+#include "pointer_octree/pointer_octree.h"
 #include "profiler.h"
 #include "rvv_pcl.h"
 #include "simple_pcd_loader.h"
@@ -333,10 +334,13 @@ int main(int argc, char **argv) {
         << "SOR bypass enabled: using downsampled cloud without filtering."
         << std::endl;
   } else {
-    RVPOINT_PROFILE_SCOPE("SOR_rvv_execution");
-    n_sor =
-        sor_rvv(downsampled_cloud, sor_pts.data(), kPipelineConfig.sor_mean_k,
-                kPipelineConfig.sor_std_threshold);
+    RVPOINT_PROFILE_SCOPE("SOR_pointer_octree_execution");
+    PointerOctree sor_octree;
+    sor_octree.setInputCloud(downsampled_cloud);
+    sor_octree.build();
+    n_sor = sor_pointer_octree(downsampled_cloud, sor_octree, sor_pts.data(),
+                               kPipelineConfig.sor_mean_k,
+                               kPipelineConfig.sor_std_threshold);
     sor_pts.resize(n_sor);
   }
   saveStagePoints(output_dir / "02_sor_filtered.pcd", sor_pts, "SOR");
