@@ -112,3 +112,8 @@ endforeach()
 add_executable(pipeline_export src/tools/pipeline_export.cpp)
 target_include_directories(pipeline_export PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 target_link_libraries(pipeline_export PRIVATE rvvpcl)
+
+# Ablation Benchmark Utility
+add_executable(ablation_bench src/tools/ablation_bench.cpp)
+target_include_directories(ablation_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+target_link_libraries(ablation_bench PRIVATE rvvpcl)
