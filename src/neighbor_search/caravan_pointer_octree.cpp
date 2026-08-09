@@ -1,11 +1,12 @@
 // caravan_pointer_octree.cpp
-// Implementation of Caravan-PointerOctree Hybrid Algorithm
+// Implementation of Caravan-PointerOctree Hybrid Algorithm with Morton Space-Filling Curve Query Sorting
 
 #include "caravan_pointer_octree.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <numeric>
 #include <vector>
 
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
@@ -34,14 +35,32 @@ static inline bool tileOverlapsNode(const PointerOctreeNode *node,
   return true;
 }
 
+// 3D Morton Z-order curve bit interleaving
+static inline uint32_t expandBits(uint32_t v) {
+  v = (v | (v << 16)) & 0x030000FF;
+  v = (v | (v <<  8)) & 0x0300F00F;
+  v = (v | (v <<  4)) & 0x030C30C3;
+  v = (v | (v <<  2)) & 0x09249249;
+  return v;
+}
+
+static inline uint32_t morton3D(float x, float y, float z,
+                                float min_x, float min_y, float min_z,
+                                float inv_range) {
+  uint32_t ix = std::clamp(static_cast<uint32_t>((x - min_x) * inv_range * 1023.0f), 0u, 1023u);
+  uint32_t iy = std::clamp(static_cast<uint32_t>((y - min_y) * inv_range * 1023.0f), 0u, 1023u);
+  uint32_t iz = std::clamp(static_cast<uint32_t>((z - min_z) * inv_range * 1023.0f), 0u, 1023u);
+  return expandBits(ix) | (expandBits(iy) << 1) | (expandBits(iz) << 2);
+}
+
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
 
-static void caravanLeafTileKernel(
+static void caravanLeafTileKernelIndexed(
     const PointerOctreeNode *leaf,
-    const float *qx, const float *qy, const float *qz,
+    const float *tile_qx, const float *tile_qy, const float *tile_qz,
+    const size_t *tile_q_indices,
     size_t vl,
     float r_sq,
-    size_t q_offset,
     std::vector<std::vector<int32_t>> &results
 ) {
   const size_t leaf_n = leaf->indices.size();
@@ -52,9 +71,9 @@ static void caravanLeafTileKernel(
   const float *const lz = leaf->leaf_z.data();
   const int *const l_indices = leaf->indices.data();
 
-  vfloat32m1_t vqx = __riscv_vle32_v_f32m1(qx, vl);
-  vfloat32m1_t vqy = __riscv_vle32_v_f32m1(qy, vl);
-  vfloat32m1_t vqz = __riscv_vle32_v_f32m1(qz, vl);
+  vfloat32m1_t vqx = __riscv_vle32_v_f32m1(tile_qx, vl);
+  vfloat32m1_t vqy = __riscv_vle32_v_f32m1(tile_qy, vl);
+  vfloat32m1_t vqz = __riscv_vle32_v_f32m1(tile_qz, vl);
 
   for (size_t p = 0; p < leaf_n; ++p) {
     float px = lx[p];
@@ -77,7 +96,7 @@ static void caravanLeafTileKernel(
 
     for (size_t lane = 0; lane < vl; ++lane) {
       if ((mask_bytes[lane >> 3] >> (lane & 7)) & 1u) {
-        results[q_offset + lane].push_back(pt_idx);
+        results[tile_q_indices[lane]].push_back(pt_idx);
       }
     }
   }
@@ -102,29 +121,72 @@ void CaravanPointerOctree::batchRadiusSearch(
   const PointerOctreeNode *root = ptr_octree_.getRoot();
   if (!root) return;
 
-  const float *const qx = queries.x;
-  const float *const qy = queries.y;
-  const float *const qz = queries.z;
+  // 1. Morton Z-Order Query Space-Filling Curve Sorting
+  float min_x = std::numeric_limits<float>::max();
+  float min_y = std::numeric_limits<float>::max();
+  float min_z = std::numeric_limits<float>::max();
+  float max_x = -std::numeric_limits<float>::max();
+  float max_y = -std::numeric_limits<float>::max();
+  float max_z = -std::numeric_limits<float>::max();
 
+  for (size_t i = 0; i < num_queries; ++i) {
+    min_x = std::min(min_x, queries.x[i]);
+    min_y = std::min(min_y, queries.y[i]);
+    min_z = std::min(min_z, queries.z[i]);
+    max_x = std::max(max_x, queries.x[i]);
+    max_y = std::max(max_y, queries.y[i]);
+    max_z = std::max(max_z, queries.z[i]);
+  }
+
+  float range = std::max({max_x - min_x, max_y - min_y, max_z - min_z, 1e-5f});
+  float inv_range = 1.0f / range;
+
+  std::vector<uint32_t> morton_codes(num_queries);
+  for (size_t i = 0; i < num_queries; ++i) {
+    morton_codes[i] = morton3D(queries.x[i], queries.y[i], queries.z[i], min_x, min_y, min_z, inv_range);
+  }
+
+  std::vector<size_t> sorted_order(num_queries);
+  std::iota(sorted_order.begin(), sorted_order.end(), 0);
+  std::sort(sorted_order.begin(), sorted_order.end(), [&](size_t a, size_t b) {
+    return morton_codes[a] < morton_codes[b];
+  });
+
+  // 2. Process Queries in Spatially Coherent Morton Tiles
   size_t q = 0;
   while (q < num_queries) {
     size_t vl = std::min(static_cast<size_t>(16), num_queries - q);
 
-    // 1. Compute Tile AABB
-    float min_qx = qx[q], max_qx = qx[q];
-    float min_qy = qy[q], max_qy = qy[q];
-    float min_qz = qz[q], max_qz = qz[q];
+    float tile_qx[16], tile_qy[16], tile_qz[16];
+    size_t tile_indices[16];
 
-    for (size_t lane = 1; lane < vl; ++lane) {
-      min_qx = std::min(min_qx, qx[q + lane]);
-      max_qx = std::max(max_qx, qx[q + lane]);
-      min_qy = std::min(min_qy, qy[q + lane]);
-      max_qy = std::max(max_qy, qy[q + lane]);
-      min_qz = std::min(min_qz, qz[q + lane]);
-      max_qz = std::max(max_qz, qz[q + lane]);
+    float min_qx = std::numeric_limits<float>::max();
+    float max_qx = -std::numeric_limits<float>::max();
+    float min_qy = std::numeric_limits<float>::max();
+    float max_qy = -std::numeric_limits<float>::max();
+    float min_qz = std::numeric_limits<float>::max();
+    float max_qz = -std::numeric_limits<float>::max();
+
+    for (size_t lane = 0; lane < vl; ++lane) {
+      size_t orig_idx = sorted_order[q + lane];
+      tile_indices[lane] = orig_idx;
+      float x = queries.x[orig_idx];
+      float y = queries.y[orig_idx];
+      float z = queries.z[orig_idx];
+
+      tile_qx[lane] = x;
+      tile_qy[lane] = y;
+      tile_qz[lane] = z;
+
+      min_qx = std::min(min_qx, x);
+      max_qx = std::max(max_qx, x);
+      min_qy = std::min(min_qy, y);
+      max_qy = std::max(max_qy, y);
+      min_qz = std::min(min_qz, z);
+      max_qz = std::max(max_qz, z);
     }
 
-    // 2. Tile AABB Pruned PointerOctree Traversal
+    // 3. Tile AABB Pruned PointerOctree Traversal
     const PointerOctreeNode *stack[64];
     int stack_ptr = 0;
     stack[stack_ptr++] = root;
@@ -138,16 +200,17 @@ void CaravanPointerOctree::batchRadiusSearch(
 
       if (curr->is_leaf) {
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
-        caravanLeafTileKernel(curr, qx + q, qy + q, qz + q, vl, r_sq, q, results);
+        caravanLeafTileKernelIndexed(curr, tile_qx, tile_qy, tile_qz, tile_indices, vl, r_sq, results);
 #else
         for (size_t lane = 0; lane < vl; ++lane) {
-          float cqx = qx[q + lane], cqy = qy[q + lane], cqz = qz[q + lane];
+          size_t orig_idx = tile_indices[lane];
+          float cqx = tile_qx[lane], cqy = tile_qy[lane], cqz = tile_qz[lane];
           for (size_t p = 0; p < curr->indices.size(); ++p) {
             float dx = curr->leaf_x[p] - cqx;
             float dy = curr->leaf_y[p] - cqy;
             float dz = curr->leaf_z[p] - cqz;
             if (dx * dx + dy * dy + dz * dz <= r_sq) {
-              results[q + lane].push_back(curr->indices[p]);
+              results[orig_idx].push_back(curr->indices[p]);
             }
           }
         }
