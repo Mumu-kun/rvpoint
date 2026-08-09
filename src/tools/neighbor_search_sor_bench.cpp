@@ -3,7 +3,6 @@
 
 #include "caravan_pointer_octree.h"
 #include "caravan_radius_search.h"
-#include "caravan_strategies.h"
 #include "pointer_octree/pointer_octree.h"
 #include "profiler.h"
 #include "rvv_pcl.h"

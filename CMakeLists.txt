@@ -49,7 +49,6 @@ list(APPEND SOURCES
     "src/neighbor_search/radius_search.cpp"
     "src/neighbor_search/caravan_radius_search.cpp"
     "src/neighbor_search/pointer_octree.cpp"
-    "src/neighbor_search/caravan_strategies.cpp"
     "src/neighbor_search/caravan_pointer_octree.cpp"
 )
 add_library(rvvpcl ${SOURCES})
