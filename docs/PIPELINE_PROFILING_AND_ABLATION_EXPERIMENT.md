@@ -114,15 +114,16 @@ All micro-timers are wrapped in preprocessor macros:
 
 | SOR Implementation Variant | Algorithm Complexity | Runtime (ms) | Speedup vs Scalar $O(N^2)$ | Inlier Yield |
 | :--- | :--- | :--- | :--- | :--- |
-| **Pointer Octree SOR (`sor_pointer_octree`)** | $O(N \log N)$ | **293.55 ms** | **54.07x faster** ⚡⚡ | 16,613 |
-| **Strategy 1 (Grid-Caravan AABB Pruned)** | $O(N_{\text{local}} \cdot Q / VL)$ | **1,582.71 ms** | **10.03x faster** ⚡ | 16,613 |
+| **Pointer Octree SOR (`sor_pointer_octree`)** | $O(N \log N)$ | **300.70 ms** | **52.43x faster** ⚡⚡ | 16,613 |
+| **Caravan-PointerOctree Hybrid (`CaravanPointerOctree`)** | $O(N_{\text{local}} \cdot Q / VL)$ | **875.90 ms** | **18.00x faster** ⚡⚡ | 17,946 |
+| **Strategy 1 (Grid-Caravan AABB Pruned)** | $O(N_{\text{local}} \cdot Q / VL)$ | **1,560.34 ms** | **10.10x faster** ⚡ | 16,613 |
 | **Standard Octree SOR (`sor_octree`)** | $O(N \log N)$ | **497.44 ms** | **31.91x faster** ⚡ | 16,613 |
 | **Spatial Hash Grid SOR (`sor_spatial_hash`)** | $O(N)$ | **1,735.54 ms** | **9.15x faster** ⚡ | 16,613 |
-| **RVV Brute-Force (`sor_rvv`)** | $O(N^2)$ | **10,123.74 ms** | **1.57x faster** | 17,569 |
-| **Scalar Brute-Force (`sor_sc`)** | $O(N^2)$ | **15,873.78 ms** | **1.00x (Baseline)** | 17,569 |
-| **Strategy 2 (Hardware SIMD Select)** | $O(N \cdot Q \cdot K / VL)$ | **22,525.33 ms** | **0.70x** | 17,569 |
-| **Strategy 3 (Coarse Voxel Centroid)** | $O(N_{\text{voxels}} \cdot Q / VL)$ | **22,637.09 ms** | **0.70x** | 17,569 |
-| **Strategy 4 (Fixed-Radius Bitmask)** | $O(N \cdot Q / VL)$ | **44,643.81 ms** | **0.36x** | 17,291 |
+| **RVV Brute-Force (`sor_rvv`)** | $O(N^2)$ | **10,189.91 ms** | **1.55x faster** | 17,569 |
+| **Scalar Brute-Force (`sor_sc`)** | $O(N^2)$ | **15,765.34 ms** | **1.00x (Baseline)** | 17,569 |
+| **Strategy 2 (Hardware SIMD Select)** | $O(N \cdot Q \cdot K / VL)$ | **22,671.25 ms** | **0.70x** | 17,569 |
+| **Strategy 3 (Coarse Voxel Centroid)** | $O(N_{\text{voxels}} \cdot Q / VL)$ | **22,521.71 ms** | **0.70x** | 17,569 |
+| **Strategy 4 (Fixed-Radius Bitmask)** | $O(N \cdot Q / VL)$ | **44,748.53 ms** | **0.35x** | 17,291 |
 
 *Key Takeaway:* Replacing brute-force $O(N^2)$ distance loops with **`PointerOctree` Accelerated SOR** reduces Stage 5 execution time from **17,359.50 ms to 287.18 ms (60.45x speedup)**, eliminating the primary pipeline bottleneck. Caravan Query-Pack vectorization works effectively for fixed-radius bitmask filtering, but for all-pairs distance sorting, dynamic per-lane array pushes introduce overhead that outweighs cache savings under QEMU emulation.
 
