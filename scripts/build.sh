@@ -139,6 +139,23 @@ build_backend() {
     fi
 
     echo "Build complete for $b_name backend. Binaries in: ${b_dir}/bin/${b_name}/"
+
+    # Sync compile_commands.json for host IDE (e.g., Windows clangd / IntelliSense)
+    if [ -f "${b_dir}/compile_commands.json" ]; then
+        mkdir -p "${PROJECT_ROOT}/build"
+        local wsl_root="${PROJECT_ROOT}"
+        local host_root=""
+        if command -v wslpath &>/dev/null; then
+            host_root="$(wslpath -m "${wsl_root}" 2>/dev/null || echo "")"
+        fi
+
+        if [ -n "$host_root" ] && [ -n "$wsl_root" ]; then
+            sed -e "s|${wsl_root}|${host_root}|g" -e "s|\"directory\": \"[^\"]*\"|\"directory\": \"${host_root}\"|g" "${b_dir}/compile_commands.json" > "${PROJECT_ROOT}/build/compile_commands.json"
+        else
+            cp "${b_dir}/compile_commands.json" "${PROJECT_ROOT}/build/compile_commands.json"
+        fi
+        echo "Exported IntelliSense compilation database to: ${PROJECT_ROOT}/build/compile_commands.json"
+    fi
 }
 
 case "$BACKEND" in

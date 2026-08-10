@@ -78,7 +78,7 @@ echo "==> Building pipeline_export ($BACKEND)..."
 BY_FRAME_DIR="${OUTPUT_DIR}/by_frame"
 BY_STAGE_DIR="${OUTPUT_DIR}/by_stage"
 
-STAGES=("00_input" "01_downsampled" "02_sor_filtered" "04_ransac_inliers" "05_ground_plane_removed")
+STAGES=("00_input" "01_downsampled" "02_sor_filtered" "04_ransac_inliers" "05_ground_plane_removed" "06_clusters")
 
 for stage in "${STAGES[@]}"; do
     mkdir -p "${BY_STAGE_DIR}/${stage}"

@@ -69,7 +69,7 @@ void EuclideanClustering::setMaxClusterSize(int max_size) {
     maxClusterSize_ = max_size;
 }
 
-void EuclideanClustering::setNeighborSearch(NeighborSearch *search) {
+void EuclideanClustering::setNeighborSearch(const Octree *search) {
     searcher_ = search;
 }
 
@@ -90,10 +90,10 @@ void EuclideanClustering::radiusQueryUnvisited(
 ) const {
     if (!cloud_) return;
 
-    const std::size_t  n  = cloud_->size();
-    const float *const px = cloud_->xData();
-    const float *const py = cloud_->yData();
-    const float *const pz = cloud_->zData();
+    const std::size_t  n  = cloud_->n;
+    const float *const px = cloud_->x;
+    const float *const py = cloud_->y;
+    const float *const pz = cloud_->z;
 
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
 
@@ -176,14 +176,14 @@ void EuclideanClustering::radiusQueryUnvisited(
 std::vector<ClusterIndices> EuclideanClustering::extract() const {
     std::vector<ClusterIndices> result;
 
-    if (!cloud_ || cloud_->empty()) {
+    if (!cloud_ || cloud_->n == 0) {
         return result;
     }
 
-    const std::size_t  n      = cloud_->size();
-    const float *const px     = cloud_->xData();
-    const float *const py     = cloud_->yData();
-    const float *const pz     = cloud_->zData();
+    const std::size_t  n      = cloud_->n;
+    const float *const px     = cloud_->x;
+    const float *const py     = cloud_->y;
+    const float *const pz     = cloud_->z;
     const float        tol_sq = clusterTolerance_ * clusterTolerance_;
 
     // visited[i] == true  →  point i is already assigned to a cluster
@@ -195,10 +195,6 @@ std::vector<ClusterIndices> EuclideanClustering::extract() const {
 
     // BFS queue
     std::queue<int> bfs_queue;
-
-    if (searcher_) {
-        searcher_->setSearchRadius(clusterTolerance_);
-    }
 
     for (std::size_t seed = 0; seed < n; ++seed) {
         if (visited[seed]) continue;
@@ -220,8 +216,10 @@ std::vector<ClusterIndices> EuclideanClustering::extract() const {
             // Find unvisited neighbours of 'current'
             neighbors.clear();
             if (searcher_) {
+                PointXYZ q{px[current], py[current], pz[current]};
                 std::vector<int> raw_neighbors;
-                searcher_->radiusSearch(current, raw_neighbors);
+                std::vector<float> dists;
+                searcher_->radiusSearch(q, clusterTolerance_, raw_neighbors, dists);
                 for (const int nb : raw_neighbors) {
                     if (nb >= 0 && static_cast<std::size_t>(nb) < n && !visited[static_cast<std::size_t>(nb)]) {
                         neighbors.push_back(nb);

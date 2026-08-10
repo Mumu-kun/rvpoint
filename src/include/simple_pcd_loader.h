@@ -327,4 +327,62 @@ inline void savePCD(const std::string& filename, const std::vector<PointXYZ>& po
     std::cout << "Saved " << points.size() << " points to " << filename << std::endl;
 }
 
+struct PointXYZRGB {
+    float x;
+    float y;
+    float z;
+    std::uint8_t r;
+    std::uint8_t g;
+    std::uint8_t b;
+};
+
+inline void savePCDRGB(const std::string& filename, const std::vector<PointXYZRGB>& points,
+                       bool binary = false) {
+    std::ofstream file(filename, binary ? (std::ios::binary | std::ios::out) : std::ios::out);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
+        return;
+    }
+    
+    file << "# .PCD v.7 - Point Cloud Data file format\n";
+    file << "VERSION .7\n";
+    file << "FIELDS x y z rgb\n";
+    file << "SIZE 4 4 4 4\n";
+    file << "TYPE F F F F\n";
+    file << "COUNT 1 1 1 1\n";
+    file << "WIDTH " << points.size() << "\n";
+    file << "HEIGHT 1\n";
+    file << "VIEWPOINT 0 0 0 1 0 0 0\n";
+    file << "POINTS " << points.size() << "\n";
+    file << "DATA " << (binary ? "binary" : "ascii") << "\n";
+
+    if (binary) {
+        for (const auto& p : points) {
+            std::uint32_t rgb_int = (static_cast<std::uint32_t>(p.r) << 16) |
+                                    (static_cast<std::uint32_t>(p.g) << 8) |
+                                    static_cast<std::uint32_t>(p.b);
+            float rgb_float;
+            std::memcpy(&rgb_float, &rgb_int, sizeof(float));
+
+            file.write(reinterpret_cast<const char*>(&p.x), sizeof(float));
+            file.write(reinterpret_cast<const char*>(&p.y), sizeof(float));
+            file.write(reinterpret_cast<const char*>(&p.z), sizeof(float));
+            file.write(reinterpret_cast<const char*>(&rgb_float), sizeof(float));
+        }
+    } else {
+        for (const auto& p : points) {
+            std::uint32_t rgb_int = (static_cast<std::uint32_t>(p.r) << 16) |
+                                    (static_cast<std::uint32_t>(p.g) << 8) |
+                                    static_cast<std::uint32_t>(p.b);
+            float rgb_float;
+            std::memcpy(&rgb_float, &rgb_int, sizeof(float));
+            file << p.x << " " << p.y << " " << p.z << " " << rgb_float << "\n";
+        }
+    }
+    
+    file.close();
+    std::cout << "Saved " << points.size() << " colored points to " << filename << std::endl;
+}
+
 } // namespace rvv_pcl
+
