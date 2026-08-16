@@ -50,9 +50,11 @@ list(APPEND SOURCES
     "src/neighbor_search/caravan_radius_search.cpp"
     "src/neighbor_search/pointer_octree.cpp"
     "src/neighbor_search/caravan_pointer_octree.cpp"
+    "src/registration/icp_registration.cpp"
+    "src/registration/tracking_pipeline.cpp"
 )
 add_library(rvvpcl ${SOURCES})
-target_include_directories(rvvpcl PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(rvvpcl PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/registration")
 target_compile_options(rvvpcl PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
 if(RVV_PCL_ENABLE_RVV)
     target_compile_definitions(rvvpcl PUBLIC RVV_PCL_USE_RVV=1)
@@ -124,3 +126,8 @@ target_link_libraries(ablation_bench PRIVATE rvvpcl)
 add_executable(neighbor_search_sor_bench src/tools/neighbor_search_sor_bench.cpp)
 target_include_directories(neighbor_search_sor_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(neighbor_search_sor_bench PRIVATE rvvpcl)
+
+# Tracking Mode Benchmark Tool
+add_executable(tracking_mode_bench tests/benchmark/tracking_mode_bench.cpp)
+target_include_directories(tracking_mode_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/registration")
+target_link_libraries(tracking_mode_bench PRIVATE rvvpcl)

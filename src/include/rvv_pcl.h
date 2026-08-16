@@ -524,6 +524,28 @@ public:
                            std::vector<int> &indices, std::vector<float> &dists,
                            int max_nn = 0) const;
 
+  /**
+   * @brief Incrementally insert new points into the existing hash grid.
+   *
+   * Used by tracking mode (Stage 9) to avoid full rebuild each frame.
+   * Points are hashed into the existing grid structure.
+   *
+   * @param cloud  Point cloud containing the new points (SoA).
+   * @param start_idx  Starting index in the cloud to insert from.
+   * @param count  Number of points to insert.
+   */
+  void insertPoints(const PointCloudSoA &cloud, std::size_t start_idx,
+                    std::size_t count);
+
+  /**
+   * @brief Remove points at specified indices from the hash grid.
+   *
+   * Used by tracking mode (Stage 9) for incremental index updates.
+   *
+   * @param indices  Vector of point indices to remove.
+   */
+  void removePoints(const std::vector<int> &indices);
+
   /** @brief Set custom hash primes (for tuning). */
   void setHashPrimes(int64_t p1, int64_t p2) {
     p1_ = p1;

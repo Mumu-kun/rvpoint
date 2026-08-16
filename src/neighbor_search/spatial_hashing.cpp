@@ -168,4 +168,43 @@ std::size_t SpatialHash::radiusSearch(const PointXYZ& query, float radius,
     return indices.size();
 }
 
+// ============================================================================
+// Incremental Insert — used by Tracking Mode Stage 9
+// ============================================================================
+void SpatialHash::insertPoints(const PointCloudSoA &cloud,
+                                std::size_t start_idx, std::size_t count) {
+    for (std::size_t i = 0; i < count; ++i) {
+        std::size_t idx = start_idx + i;
+        if (idx >= cloud.n) break;
+
+        int ix, iy, iz;
+        getCellIndices(cloud.x[idx], cloud.y[idx], cloud.z[idx], ix, iy, iz);
+        int64_t hash = hashCell(ix, iy, iz);
+        grid_[hash].push_back(static_cast<int>(idx));
+    }
+}
+
+// ============================================================================
+// Incremental Remove — used by Tracking Mode Stage 9
+// ============================================================================
+void SpatialHash::removePoints(const std::vector<int> &indices) {
+    // Build a set of indices to remove for O(1) lookup
+    std::unordered_map<int, bool> to_remove;
+    for (int idx : indices) {
+        to_remove[idx] = true;
+    }
+
+    // Iterate over all cells and remove matching indices
+    for (auto &kv : grid_) {
+        auto &cell = kv.second;
+        cell.erase(
+            std::remove_if(cell.begin(), cell.end(),
+                           [&to_remove](int idx) {
+                               return to_remove.count(idx) > 0;
+                           }),
+            cell.end());
+    }
+}
+
 } // namespace rvv_pcl
+
