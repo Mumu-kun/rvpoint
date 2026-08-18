@@ -1,7 +1,7 @@
 var searchData=
 [
-  ['0_20features_0',['RVV 1.0 Features',['../instruction_manual.html#rvv-10-features',1,'']]],
-  ['04_1',['&lt;tt&gt;mkswap -q&lt;/tt&gt; flag does not exist on Ubuntu 22.04',['../md_guides_2session__2026-04-07.html#mkswap--q-flag-does-not-exist-on-ubuntu-2204',1,'']]],
-  ['04_2007_2',['04 07',['../md_guides_2session__2026-04-07.html',1,'Session Log: 2026-04-07'],['../md_guides_2AGENT.html#whats-done-as-of-2026-04-07',1,'What&apos;s Done (as of 2026-04-07)']]],
-  ['07_3',['07',['../md_guides_2session__2026-04-07.html',1,'Session Log: 2026-04-07'],['../md_guides_2AGENT.html#whats-done-as-of-2026-04-07',1,'What&apos;s Done (as of 2026-04-07)']]]
+  ['_24_20mathbb_20r_203_20rightarrow_20mathbb_20r_202_24_0',['A. Orthogonal Projection ($\mathbb{R}^3 \rightarrow \mathbb{R}^2$)',['../md_docs_2projection.html#a-orthogonal-projection-mathbbr3-rightarrow-mathbbr2',1,'']]],
+  ['_2450_20000_24_20matrix_20eigen_20decompositions_1',['B. Eliminating $50,000$ Matrix Eigen-Decompositions',['../md_docs_2projection.html#b-eliminating-50000-matrix-eigen-decompositions',1,'']]],
+  ['_24n_20114_20278_20to_2018_20542_24_2',['Ablation A: Voxel Grid Downsampling ($N=114,278 \to 18,542$)',['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html#ablation-a-voxel-grid-downsampling-n114278-to-18542',1,'']]],
+  ['_24n_2018_20542_24_3',['$n 18 542$',['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html#ablation-b-spatial-neighbor-search-methods-n18542',1,'Ablation B: Spatial Neighbor Search Methods ($N=18,542$)'],['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html#ablation-c-statistical-outlier-removal-sor-implementation-variants--4-caravan-strategies-n18542',1,'Ablation C: Statistical Outlier Removal (SOR) Implementation Variants &amp; 4 Caravan Strategies ($N=18,542$)']]]
 ];

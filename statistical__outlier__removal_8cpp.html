@@ -81,6 +81,7 @@ $(function() {
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><code>#include &quot;<a class="el" href="rvv__pcl_8h_source.html">include/rvv_pcl.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="pointer__octree_8h_source.html">pointer_octree/pointer_octree.h</a>&quot;</code><br />
 <code>#include &lt;algorithm&gt;</code><br />
 <code>#include &lt;cmath&gt;</code><br />
 <code>#include &lt;vector&gt;</code><br />
@@ -99,6 +100,15 @@ Functions</h2></td></tr>
 <tr class="memitem:a10fef2e1c9e7aec2b93d045a7ac1fbad" id="r_a10fef2e1c9e7aec2b93d045a7ac1fbad"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a10fef2e1c9e7aec2b93d045a7ac1fbad">rvv_pcl::sor_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha)</td></tr>
 <tr class="memdesc:a10fef2e1c9e7aec2b93d045a7ac1fbad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Statistical Outlier Removal (RVV Optimized).  <br /></td></tr>
 <tr class="separator:a10fef2e1c9e7aec2b93d045a7ac1fbad"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a51b5cb32a6bad0fb8eb39a5ea8df05e2" id="r_a51b5cb32a6bad0fb8eb39a5ea8df05e2"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a51b5cb32a6bad0fb8eb39a5ea8df05e2">rvv_pcl::sor_octree</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, const <a class="el" href="classrvv__pcl_1_1Octree.html">Octree</a> &amp;tree, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha, float search_radius=0.5f)</td></tr>
+<tr class="memdesc:a51b5cb32a6bad0fb8eb39a5ea8df05e2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Index-Accelerated SOR using <a class="el" href="classrvv__pcl_1_1Octree.html" title="Octree Data Structure for Spatial Indexing.">Octree</a> (O(N log N)).  <br /></td></tr>
+<tr class="separator:a51b5cb32a6bad0fb8eb39a5ea8df05e2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acaaf6338c8d633849a34e1244fcbc0b8" id="r_acaaf6338c8d633849a34e1244fcbc0b8"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#acaaf6338c8d633849a34e1244fcbc0b8">rvv_pcl::sor_spatial_hash</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, const <a class="el" href="classrvv__pcl_1_1SpatialHash.html">SpatialHash</a> &amp;hash, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha, float search_radius=0.5f)</td></tr>
+<tr class="memdesc:acaaf6338c8d633849a34e1244fcbc0b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Index-Accelerated SOR using <a class="el" href="classrvv__pcl_1_1SpatialHash.html" title="Spatial Hash Grid for Fast Neighbor Search.">SpatialHash</a> (O(N)).  <br /></td></tr>
+<tr class="separator:acaaf6338c8d633849a34e1244fcbc0b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5bde591375b5dad1052e67e3f8ebfc50" id="r_a5bde591375b5dad1052e67e3f8ebfc50"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a5bde591375b5dad1052e67e3f8ebfc50">rvv_pcl::sor_pointer_octree</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, const <a class="el" href="classrvv__pcl_1_1PointerOctree.html">PointerOctree</a> &amp;tree, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha, float search_radius=0.5f)</td></tr>
+<tr class="memdesc:a5bde591375b5dad1052e67e3f8ebfc50"><td class="mdescLeft">&#160;</td><td class="mdescRight">Index-Accelerated SOR using <a class="el" href="classrvv__pcl_1_1PointerOctree.html">PointerOctree</a> (O(N log N)).  <br /></td></tr>
+<tr class="separator:a5bde591375b5dad1052e67e3f8ebfc50"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 <!-- start footer part -->

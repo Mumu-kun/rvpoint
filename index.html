@@ -73,28 +73,29 @@ $(function() {
   <div class="headertitle"><div class="title">RVPoint: RISC-V Vector Optimized Point Cloud Library </div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><p><a class="anchor" id="md_README"></a> <b>RVPoint</b> is a specialized Point Cloud Library (PCL) built for <b>RISC-V</b> architectures, leveraging <b>RVV</b> (RISC-V Vector Extension) intrinsics to accelerate core 3D processing algorithms.</p>
-<p>Optimized for <b>RV64GCV</b> (targeting <code>v1.0</code> vector spec).</p>
+<div class="textblock"><p><a class="anchor" id="md_README"></a> <b>RVPoint</b> is a specialized Point Cloud Library (PCL) built for <b>RISC-V</b> architectures, leveraging <b>RVGe</b> (RISC-V Vector Extension) intrinsics to accelerate core 3D processing algorithms.</p>
+<p>Optimized for <b>RV64GCV</b> (targeting <code>v0.10+</code> vector specs).</p>
 <blockquote class="doxtable">
-<p>&zwj;<b><a href="https://mumu-kun.github.io/rvpoint/">Online Code Documentation</a></b> </p>
+<p>&zwj;📘 <b><a href="https://mumu-kun.github.io/rvpoint/">Online Code Documentation</a></b> </p>
 </blockquote>
 <h1><a class="anchor" id="documentation--resources"></a>
 Documentation &amp; Resources</h1>
+<p>Explore these guides for a deeper understanding of the codebase and its performance:</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">Guide   </th><th class="markdownTableHeadNone">Description    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><a class="el" href="instruction_manual.html">**Instruction Manual**</a>   </td><td class="markdownTableBodyNone"><b>The Master Guide</b>. API documentation, Team SOPs, and Intrinsic Naming conventions.    </td></tr>
+<td class="markdownTableBodyNone"><a class="el" href="instruction_manual.html">**Instruction Manual**</a>   </td><td class="markdownTableBodyNone"><b>The Master Guide</b>. Contains API documentation, Team SOPs, and Intrinsic Naming conventions.    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><a class="el" href="pipeline_demo.html">**Pipeline Demo**</a>   </td><td class="markdownTableBodyNone"><b>Quick-start</b>. Walkthrough of the optimized Octree/SpatialHash pipeline.    </td></tr>
+<td class="markdownTableBodyNone">**Pipeline Demo**   </td><td class="markdownTableBodyNone"><b>Recommended for Quick-start</b>. Detailed walkthrough of the optimized Octree/SpatialHash pipeline.    </td></tr>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">**Performance Report**   </td><td class="markdownTableBodyNone">Benchmarks comparing different spatial indexing methods.    </td></tr>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone"><a class="el" href="vector_theory.html">**Vector Theory**</a>   </td><td class="markdownTableBodyNone">Geometric logic behind the RVV implementations.   </td></tr>
 </table>
-<h1><a class="anchor" id="key-features"></a>
-Key Features</h1>
-<p>5 core point cloud processing algorithms, each with an optimized <b>RVV</b> path alongside a standard Scalar reference.</p>
+<h1><a class="anchor" id="autotoc_md-key-features"></a>
+🚀 Key Features</h1>
+<p>This library implements 5 core point cloud processing algorithms, each with a highly optimized <b>RVV</b> path alongside a standard Scalar reference path.</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadLeft">Algorithm   </th><th class="markdownTableHeadLeft">Function Name   </th><th class="markdownTableHeadLeft">RVV Optimization    </th></tr>
@@ -111,146 +112,189 @@ Key Features</h1>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyLeft"><b>Spatial Hashing</b>   </td><td class="markdownTableBodyLeft"><code>SpatialHash::radiusSearch</code>   </td><td class="markdownTableBodyLeft">O(1) cell lookup with RVV fused gather-filter candidate processing.   </td></tr>
 </table>
-<h1><a class="anchor" id="setup"></a>
-Setup</h1>
-<h2><a class="anchor" id="prerequisites-1"></a>
+<h1><a class="anchor" id="️-installation--setup"></a>
+🛠️ Installation &amp; Setup</h1>
+<h2><a class="anchor" id="prerequisites"></a>
 Prerequisites</h2>
 <ul>
 <li><b>Docker Desktop</b> (or Docker Engine)</li>
-<li><b>VS Code</b> with "Dev Containers" extension (optional, for IDE integration)</li>
+<li><b>VS Code</b> with "Dev Containers" extension.</li>
 </ul>
-<h2><a class="anchor" id="dev-container-recommended"></a>
-Dev Container (Recommended)</h2>
+<h2><a class="anchor" id="quick-start-recommended"></a>
+Quick Start (Recommended)</h2>
 <ol type="1">
-<li>Clone and open: <div class="fragment"><div class="line">git clone https://github.com/Mumu-kun/rvpoint.git</div>
-<div class="line">cd rvpoint</div>
-<div class="line">code .</div>
-</div><!-- fragment --></li>
-<li>Click **"Reopen in Container"** when prompted in VS Code.</li>
-<li>The container provides: <b>GCC 14</b> (Linux + bare-metal toolchains), <b>QEMU 9.2</b>, <b>Spike v1.1.0</b>, <b>CMake</b>, and all dependencies.</li>
+<li><b>Clone the Repository</b>: <code>bash git clone <a href="https://github.com/Mumu-kun/rvpoint.git">https://github.com/Mumu-kun/rvpoint.git</a> cd rvpoint </code></li>
+<li><b>Open in Dev Container</b>:<ul>
+<li>Open VS Code (<code>code .</code>).</li>
+<li>Click "Reopen in Container" when prompted.</li>
+<li><em>This automatically sets up the GCC 13+ (or GCC 14 if configured) RISC-V Toolchain, QEMU, CMake, and all dependencies.</em></li>
+</ul>
+</li>
 </ol>
-<h2><a class="anchor" id="docker-manual"></a>
-Docker (Manual)</h2>
-<p><b>Build the image:</b> </p><div class="fragment"><div class="line">docker build -f .devcontainer/Dockerfile -t rvpoint .</div>
-</div><!-- fragment --><p><b>Run interactively:</b> </p><div class="fragment"><div class="line">docker run -it --rm -v $(pwd):/workspace -w /workspace rvpoint /bin/bash</div>
-</div><!-- fragment --><p><b>Run a single command:</b> </p><div class="fragment"><div class="line">docker run --rm -v $(pwd):/workspace -w /workspace rvpoint bash scripts/run.sh test</div>
-</div><!-- fragment --><h2><a class="anchor" id="custom-toolchain-path"></a>
+<h2><a class="anchor" id="running-with-docker-manual"></a>
+Running with Docker (Manual)</h2>
+<p>If you prefer to run Docker commands manually in your terminal, use these commands:</p>
+<p><b>Option 1: Open Already Built Image</b> (Requires an existing image tagged as <code>rvpoint-built</code>) </p><div class="fragment"><div class="line">docker run -it --rm -v $(pwd):/workspace -w /workspace rvpoint-built /bin/bash</div>
+</div><!-- fragment --><p><b>Option 2: Clean Build &amp; Run (Simulate New User)</b> Test the build process from scratch:</p>
+<ol type="1">
+<li><b>Build the Image</b>: <div class="fragment"><div class="line">docker build -f .devcontainer/Dockerfile -t rvpoint-clean-test .</div>
+</div><!-- fragment --></li>
+<li><b>Run the Clean Image</b>: <div class="fragment"><div class="line">docker run -it --rm -v $(pwd):/workspace -w /workspace rvpoint-clean-test /bin/bash</div>
+</div><!-- fragment --></li>
+</ol>
+<h2><a class="anchor" id="custom-toolchain-path"></a>
 Custom Toolchain Path</h2>
-<p>If you installed the toolchain outside the container: </p><div class="fragment"><div class="line">export RISCV_PATH=/path/to/riscv</div>
-</div><!-- fragment --><h1><a class="anchor" id="building"></a>
-Building</h1>
-<p>A central build script handles CMake configuration and compilation with caching:</p>
-<div class="fragment"><div class="line">scripts/build.sh                          # default: linux toolchain</div>
-<div class="line">scripts/build.sh --toolchain elf          # bare-metal toolchain</div>
-<div class="line">scripts/build.sh --clean                  # force full reconfigure</div>
-<div class="line">scripts/build.sh --clean --toolchain elf  # clean + specific toolchain</div>
-</div><!-- fragment --><ul>
-<li>Skips CMake configure if already configured (fast incremental builds)</li>
-<li>Auto-detects toolchain switches and reconfigures when needed</li>
-<li>Outputs binaries to <code>bin/</code></li>
+<p>If you installed the toolchain in a custom location, set the <code>RISCV_PATH</code> environment variable before running scripts or building: </p><div class="fragment"><div class="line">export RISCV_PATH=/path/to/riscv</div>
+</div><!-- fragment --><h2><a class="anchor" id="wsl2-setup-ubuntu-2404"></a>
+WSL2 Setup (Ubuntu 24.04)</h2>
+<p>For native WSL2 development without Docker:</p>
+<div class="fragment"><div class="line"># From Git Bash (as Administrator)</div>
+<div class="line">./env/setup.sh</div>
+</div><!-- fragment --><p>This installs:</p><ul>
+<li>Ubuntu 24.04 WSL2</li>
+<li>RISC-V GCC 14 toolchain (ELF + glibc)</li>
+<li>QEMU 9.2 user-mode for RISC-V emulation (or system package if available)</li>
 </ul>
-<h1><a class="anchor" id="running-tests-1"></a>
-Running Tests</h1>
-<p>Use <code>scripts/run.sh</code> to build and run tests or benchmarks:</p>
-<div class="fragment"><div class="line"># Run all tests</div>
-<div class="line">scripts/run.sh test</div>
-<div class="line"> </div>
-<div class="line"># Run specific tests (prefix &quot;test_&quot; is optional)</div>
-<div class="line">scripts/run.sh test voxel_grid sor ransac</div>
-<div class="line"> </div>
-<div class="line"># List all available targets</div>
-<div class="line">scripts/run.sh --list</div>
-</div><!-- fragment --><h2><a class="anchor" id="available-tests"></a>
-Available tests</h2>
-<table class="markdownTable">
-<tr class="markdownTableHead">
-<th class="markdownTableHeadNone">Test   </th><th class="markdownTableHeadNone">Algorithm    </th></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><code>test_scalar</code>   </td><td class="markdownTableBodyNone">Basic scalar operations    </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><code>test_vector</code>   </td><td class="markdownTableBodyNone">Basic vector operations    </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><code>rvv_test</code>   </td><td class="markdownTableBodyNone">RVV feature verification    </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><code>test_voxel_grid</code>   </td><td class="markdownTableBodyNone">Voxel Grid Downsampling    </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><code>test_sor</code>   </td><td class="markdownTableBodyNone">Statistical Outlier Removal    </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><code>test_normal</code>   </td><td class="markdownTableBodyNone">Normal Estimation    </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><code>test_radius</code>   </td><td class="markdownTableBodyNone">Radius Search    </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><code>test_ransac</code>   </td><td class="markdownTableBodyNone">RANSAC Plane Fitting    </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><code>test_octree</code>   </td><td class="markdownTableBodyNone">Octree spatial index    </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><code>test_spatial_hash_comparison</code>   </td><td class="markdownTableBodyNone">Spatial Hash vs Octree    </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><code>test_pipeline_walkthrough</code>   </td><td class="markdownTableBodyNone">Full PCL pipeline   </td></tr>
-</table>
-<h1><a class="anchor" id="benchmarking-1"></a>
-Benchmarking</h1>
-<h2><a class="anchor" id="rdinstret-benchmark-via-runsh"></a>
-rdinstret Benchmark (via &lt;tt&gt;run.sh&lt;/tt&gt;)</h2>
-<p>Runs all algorithms inside QEMU, counting instructions via the <code>rdinstret</code> CSR: </p><div class="fragment"><div class="line">scripts/run.sh bench</div>
-</div><!-- fragment --><p> Outputs a formatted table to stdout and saves a timestamped report to <code>results/</code>.</p>
-<h2><a class="anchor" id="qemu-trace-benchmark"></a>
-QEMU Trace Benchmark</h2>
-<p>Counts Translation Block executions using QEMU's <code>-one-insn-per-tb</code> tracing: </p><div class="fragment"><div class="line">scripts/run_trace_benchmark.sh</div>
-</div><!-- fragment --><p> Saves results to <code>results/report_sc_rvv_qemu.txt</code>.</p>
-<h1><a class="anchor" id="full-verification"></a>
-Full Verification</h1>
-<p>Runs a clean build and all algorithm tests: </p><div class="fragment"><div class="line">scripts/verify_container.sh</div>
-</div><!-- fragment --><h1><a class="anchor" id="project-structure-1"></a>
-Project Structure</h1>
+<p>Then inside WSL2: </p><div class="fragment"><div class="line">source env/activate.sh</div>
+<div class="line">scripts/verify_container.sh</div>
+</div><!-- fragment --><h1><a class="anchor" id="️-building--testing"></a>
+🏗️ Building &amp; Testing</h1>
+<p>We provide scripts for building and verifying all algorithms.</p>
+<h2><a class="anchor" id="run-full-verification"></a>
+Run Full Verification</h2>
+<div class="fragment"><div class="line">scripts/verify_container.sh</div>
+</div><!-- fragment --><p> This script performs:</p><ol type="1">
+<li><b>CMake Configuration</b> (Targeting <code>rv64gcv</code>)</li>
+<li><b>Compilation</b></li>
+<li><b>QEMU Emulation Tests</b> (Runs 7 core tests: scalar, vector, voxel_grid, sor, normal, radius, ransac)</li>
+</ol>
+<h2><a class="anchor" id="manual-build"></a>
+Manual Build</h2>
+<p>If you want to build manually: </p><div class="fragment"><div class="line">mkdir build</div>
+<div class="line">cd build</div>
+<div class="line">cmake .. -DCMAKE_TOOLCHAIN_FILE=../src/cmake/riscv.cmake # (Or rely on env vars set by container)</div>
+<div class="line">make</div>
+</div><!-- fragment --><h2><a class="anchor" id="running-individual-tests"></a>
+Running Individual Tests</h2>
+<p>After building, you can run specific tests using QEMU: </p><div class="fragment"><div class="line"># Example: Run RANSAC test</div>
+<div class="line">/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_ransac</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md-project-structure"></a>
+📂 Project Structure</h1>
 <div class="fragment"><div class="line">.</div>
-<div class="line">├── CMakeLists.txt              # Build configuration</div>
-<div class="line">├── cmake/</div>
-<div class="line">│   ├── riscv.cmake             # Bare-metal (elf) toolchain</div>
-<div class="line">│   └── riscv_linux.cmake       # Linux (glibc) toolchain</div>
 <div class="line">├── src/</div>
-<div class="line">│   ├── include/</div>
-<div class="line">│   │   ├── rvv_pcl.h           # Public API header</div>
-<div class="line">│   │   └── simple_pcd_loader.h # PCD file loader</div>
-<div class="line">│   ├── voxel_grid_downsamp.cpp</div>
-<div class="line">│   ├── statistical_outlier_removal.cpp</div>
-<div class="line">│   ├── normal_estimation.cpp</div>
-<div class="line">│   ├── radius_search.cpp</div>
-<div class="line">│   ├── ransac_plane.cpp</div>
-<div class="line">│   ├── octree.cpp</div>
-<div class="line">│   ├── spatial_hashing.cpp</div>
-<div class="line">│   └── rvv_common.cpp          # Shared RVV kernels</div>
-<div class="line">├── tests/                      # Test and benchmark sources</div>
+<div class="line">│   ├── include/rvv_pcl.h       # Public API Header</div>
+<div class="line">│   ├── rvv_common.cpp          # Reusable RVV Kernels (Distance, etc.)</div>
+<div class="line">│   ├── voxel_grid_downsamp.cpp # Voxel Grid Implementation</div>
+<div class="line">│   ├── statistical_outlier...  # SOR Implementation</div>
+<div class="line">│   ├── normal_estimation.cpp   # Normal Estimation Implementation</div>
+<div class="line">│   ├── radius_search.cpp       # Radius Search Implementation</div>
+<div class="line">│   ├── octree.cpp              # Octree spatial index</div>
+<div class="line">│   ├── spatial_hashing.cpp     # RVV Optimized Hash Grid</div>
+<div class="line">│   └── ransac_plane.cpp        # RANSAC Implementation</div>
+<div class="line">├── tests/                      # Unit Tests (C++)</div>
 <div class="line">├── scripts/</div>
-<div class="line">│   ├── build.sh                # Central build script (cached)</div>
-<div class="line">│   ├── run.sh                  # Test and benchmark runner</div>
-<div class="line">│   ├── run_trace_benchmark.sh  # QEMU trace-based benchmark</div>
-<div class="line">│   ├── verify_container.sh     # Full verification suite</div>
-<div class="line">│   ├── setup_git_hooks.sh      # Git pre-push hook setup</div>
-<div class="line">│   ├── download_datasets.sh    # Download bunny.pcd dataset</div>
-<div class="line">│   └── visualize_result.py     # 3D point cloud visualization</div>
-<div class="line">├── .devcontainer/              # Docker environment config</div>
+<div class="line">│   ├── bench                   # gem5 benchmark wrapper</div>
+<div class="line">│   ├── build.sh                # Build wrapper</div>
+<div class="line">│   ├── export_pipeline.sh      # Pipeline execution exporter</div>
+<div class="line">│   ├── pipeline_render.py      # Open3D PCD renderer &amp; viewer</div>
+<div class="line">│   ├── run.sh                  # Test runner</div>
+<div class="line">│   ├── setup_git_hooks.sh      # Git hook installer</div>
+<div class="line">│   ├── verify_container.sh     # Master CI/CD script</div>
+<div class="line">│   └── lib/</div>
+<div class="line">│       └── common.sh           # Shared functions</div>
+<div class="line">├── .devcontainer/              # Docker Environment Config</div>
 <div class="line">└── .github/workflows/          # GitHub Actions CI</div>
-</div><!-- fragment --><h1><a class="anchor" id="toolchain"></a>
-Toolchain</h1>
-<p>The container ships with <b>GCC 14</b> (2025.01.20 nightly) providing two toolchain variants:</p>
-<table class="markdownTable">
-<tr class="markdownTableHead">
-<th class="markdownTableHeadNone">Toolchain   </th><th class="markdownTableHeadNone">Compiler Prefix   </th><th class="markdownTableHeadNone">Use Case    </th></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>Linux (default)</b>   </td><td class="markdownTableBodyNone"><code>riscv64-unknown-linux-gnu-</code>   </td><td class="markdownTableBodyNone">Full application builds, file I/O, benchmarks    </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><b>Bare-metal</b>   </td><td class="markdownTableBodyNone"><code>riscv64-unknown-elf-</code>   </td><td class="markdownTableBodyNone">Minimal verification, no OS dependencies   </td></tr>
-</table>
-<p>Both use <code>-march=rv64gcv -mabi=lp64d</code> and support RVV 1.0 intrinsics, fractional LMUL, tuple types, and auto-vectorization.</p>
-<h1><a class="anchor" id="cicd"></a>
-CI/CD</h1>
-<ul>
-<li><b>GitHub Actions</b>: Compiles and runs all tests on every <code>push</code> and <code>pull_request</code>.</li>
-<li><b>Local Git Hooks</b>: <code>pre-push</code> hook available via <code>bash scripts/setup_git_hooks.sh</code>.</li>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md-cicd-pipeline"></a>
+🤖 CI/CD Pipeline</h1>
+<p>This repository is protected by a robust CI/CD pipeline:</p><ul>
+<li><b>GitHub Actions</b>: Automatically compiles and runs all tests on every <code>push</code> and <code>pull_request</code> using a fresh Ubuntu+RISC-V environment.</li>
+<li><b>Local Git Hooks</b>: A <code>pre-push</code> hook is available to prevent pushing broken code.<ul>
+<li>Enable with: <code>bash scripts/setup_git_hooks.sh</code></li>
 </ul>
-<h1><a class="anchor" id="license"></a>
-License</h1>
+</li>
+</ul>
+<h1><a class="anchor" id="autotoc_md-benchmarking"></a>
+📊 Benchmarking</h1>
+<p>We now provide a gem5-based cycle benchmark for scalar-versus-RVV comparison. The benchmark keeps the implementation mode fixed at build time, runs one kernel per invocation, and reports cycle counts from gem5 stats.</p>
+<h2><a class="anchor" id="running-the-benchmark"></a>
+Running the Benchmark</h2>
+<p>Run one benchmark case with: </p><div class="fragment"><div class="line">./scripts/bench &lt;mode&gt; &lt;kernel&gt; &lt;size&gt;</div>
+</div><!-- fragment --><p> Where:</p><ul>
+<li><code>mode</code> is <code>scalar</code> or <code>rvv</code></li>
+<li><code>kernel</code> is <code>l2</code>, <code>reduction</code>, <code>filter</code>, <code>radius</code>, or <code>normal</code></li>
+<li><code>size</code> is one of <code>1k</code>, <code>10k</code>, <code>100k</code>, or a raw point count</li>
+</ul>
+<p>The wrapper rebuilds the correct backend, runs the benchmark under gem5, parses the cycle stat, and prints:</p>
+<div class="fragment"><div class="line">&lt;mode&gt; &lt;kernel&gt; &lt;size&gt; &lt;cycles&gt;</div>
+</div><!-- fragment --><h2><a class="anchor" id="notes"></a>
+Notes</h2>
+<ul>
+<li>The benchmark uses SoA layouts only: <code>x[]</code>, <code>y[]</code>, <code>z[]</code>.</li>
+<li>Scalar builds use <code>-O3</code> with <code>rv64gc</code>.</li>
+<li>RVV builds use <code>-O3 -march=rv64gcv</code> and vector-length-agnostic loops.</li>
+<li>The gem5 launcher expects <code>GEM5_CONFIG</code> to point at your SE config script.</li>
+</ul>
+<h2><a class="anchor" id="verify-without-cmake-manual-compilation"></a>
+Verify without CMake (Manual Compilation)</h2>
+<p>You can manually compile and verify each function against its scalar counterpart using individual commands.</p>
+<p><b>Individual commands:</b></p>
+<p><em>Voxel Grid:</em> </p><div class="fragment"><div class="line">/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/voxel_grid_downsamp.cpp tests/test_voxel_grid.cpp -o test_voxel_rvv_manual</div>
+<div class="line">qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_voxel_rvv_manual</div>
+</div><!-- fragment --><p><em>RANSAC Plane:</em> </p><div class="fragment"><div class="line">/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/ransac_plane.cpp tests/test_ransac.cpp -o test_ransac_rvv_manual</div>
+<div class="line">qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_ransac_rvv_manual</div>
+</div><!-- fragment --><p><em>Radius Search:</em> </p><div class="fragment"><div class="line">/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/radius_search.cpp tests/test_radius.cpp -o test_radius_rvv_manual</div>
+<div class="line">qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_radius_rvv_manual</div>
+</div><!-- fragment --><p><em>Statistical Outlier Removal:</em> </p><div class="fragment"><div class="line">/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/statistical_outlier_removal.cpp tests/test_sor.cpp -o test_sor_rvv_manual</div>
+<div class="line">qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_sor_rvv_manual</div>
+</div><!-- fragment --><h1><a class="anchor" id="autotoc_md-gcc-14-upgrade--linux-toolchain"></a>
+⚡ GCC 14 Upgrade &amp; Linux Toolchain</h1>
+<p>We have upgraded the toolchain to <b>GCC 14</b> (supports RVV 1.0, Auto-vectorization, Tuple types). We now provide <b>two</b> toolchains in the container:</p><ol type="1">
+<li><b>Embedded/ELF</b> (<code>riscv64-unknown-elf-</code>): Default, for bare-metal/simulated verification.</li>
+<li><b>Linux/Glibc</b> (<code>riscv64-unknown-linux-gnu-</code>): For building full Linux applications.</li>
+</ol>
+<h2><a class="anchor" id="how-to-use"></a>
+How to use</h2>
+<ol type="1">
+<li><b>Rebuild Dev Container</b>:<ul>
+<li>Command Palette (<code>Ctrl+Shift+P</code>) -&gt; <code>Dev Containers: Rebuild Container</code>.</li>
+<li><em>This will automatically install both GCC 14 toolchains.</em></li>
+</ul>
+</li>
+<li><b>Verify Setup</b>: <code>bash scripts/verify_container.sh </code> <em>This runs tests for both toolchains.</em></li>
+</ol>
+<h2><a class="anchor" id="building-for-linux"></a>
+Building for Linux</h2>
+<p>To build using the Linux (glibc) toolchain, use the specialized CMake file: </p><div class="fragment"><div class="line">mkdir build_linux</div>
+<div class="line">cd build_linux</div>
+<div class="line">cmake .. -DCMAKE_TOOLCHAIN_FILE=../src/cmake/riscv_linux.cmake</div>
+<div class="line">make</div>
+</div><!-- fragment --><h2><a class="anchor" id="detailed-verification-steps-manual"></a>
+Detailed Verification Steps (Manual)</h2>
+<p>If you want to verify specific GCC 14 capabilities manually, run these commands:</p>
+<p><b>1. Verify Toolchain Version &amp; Environment</b> </p><div class="fragment"><div class="line">echo $RISCV_PATH  # Should output /opt/riscv (or your custom path)</div>
+<div class="line">riscv64-unknown-elf-gcc --version</div>
+</div><!-- fragment --><p> *(If RISCV_PATH is empty, run <code>export RISCV_PATH=/opt/riscv</code> first)*</p>
+<p><b>2. Verify New RVV 1.0 Features (Fractional LMUL)</b> </p><div class="fragment"><div class="line"># Compile</div>
+<div class="line">$RISCV_PATH/bin/riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o tests/test_rvv_features tests/test_rvv_features.c</div>
+<div class="line"># Run (Expect &quot;vl=2&quot; for mf2)</div>
+<div class="line">qemu-riscv64 -cpu rv64,v=true,vlen=128 tests/test_rvv_features</div>
+</div><!-- fragment --><p><b>3. Verify Tuple Types &amp; Segmented Operations</b> </p><div class="fragment"><div class="line"># Compile</div>
+<div class="line">$RISCV_PATH/bin/riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o tests/test_tuples tests/test_tuples.c</div>
+<div class="line"># Run</div>
+<div class="line">qemu-riscv64 -cpu rv64,v=true,vlen=128 tests/test_tuples</div>
+</div><!-- fragment --><p><b>4. Verify Auto-Vectorization</b> </p><div class="fragment"><div class="line"># Compile to assembly</div>
+<div class="line">$RISCV_PATH/bin/riscv64-unknown-elf-gcc -O3 -march=rv64gcv -mabi=lp64d -S -o tests/test_autovec.s tests/test_autovec.c</div>
+<div class="line"># Check for vector instructions (should show &#39;vle32.v&#39;, &#39;vadd.vv&#39;, etc.)</div>
+<div class="line">grep -E &quot;vle|vadd|vse&quot; tests/test_autovec.s</div>
+</div><!-- fragment --><h2><a class="anchor" id="new-features-enabled"></a>
+New Features Enabled</h2>
+<ul>
+<li><b>Auto-Vectorization</b>: <code>-O3 -march=rv64gcv</code> now automatically vectorizes standard loops.</li>
+<li><b>RVV 1.0 Intrinsics</b>: Full support for fractional LMUL (<code>mf2</code>) and Tuple types (<code>vfloat32m1x2_t</code>).</li>
+<li><b>Tests</b>: See <code>tests/test_rvv_features.c</code> and <code>tests/test_tuples.c</code> for examples.</li>
+</ul>
+<h1><a class="anchor" id="autotoc_md-license"></a>
+📄 License</h1>
 <p>[MIT](LICENSE) </p>
 </div></div><!-- PageDoc -->
 </div><!-- contents -->

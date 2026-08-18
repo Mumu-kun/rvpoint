@@ -1,4 +1,32 @@
 var searchData=
 [
-  ['test_5ftuples_0',['test_tuples',['../test__tuples_8c.html#a731553bd209edadb53a76cafaaaaa5af',1,'test_tuples.c']]]
+  ['savepcd_0',['savePCD',['../namespacervv__pcl.html#a8c14b4e55a663b61179a570c0ec7fcef',1,'rvv_pcl']]],
+  ['savepcdrgb_1',['savePCDRGB',['../namespacervv__pcl.html#adb41d632dacd51d705751ef4c2b0b5bc',1,'rvv_pcl']]],
+  ['searchrecursive_2',['searchRecursive',['../classSIMDOctree8Wide.html#a09e5d46a326a636748a30472b975d858',1,'SIMDOctree8Wide']]],
+  ['segment_3',['segment',['../classBenchmarkScalar25D.html#af79d54c0268f074532fb33e9f2e90036',1,'BenchmarkScalar25D']]],
+  ['segmentground_4',['segmentGround',['../classSweepTurboGrid.html#ad4edbc2ca77ba63ef65c5d46918745a7',1,'SweepTurboGrid']]],
+  ['segmentobstacles_5',['segmentObstacles',['../classBenchmarkFusedRVV.html#a4be6fd2882a0c8947fc871a5e4ecfda3',1,'BenchmarkFusedRVV']]],
+  ['serve_5flocal_6',['serve_local',['../namespaceserve__mcap.html#ab765f5181efd048aa005ba3699b6f5f1',1,'serve_mcap']]],
+  ['setbuildepsilon_7',['setbuildepsilon',['../classrvv__pcl_1_1PointerOctree.html#abfac44079cf7734475cf10d3483b2b65',1,'rvv_pcl::PointerOctree::setBuildEpsilon()'],['../classrvv__pcl_1_1Octree.html#a0fb9ac6ecaf5822aa10f4c8e7c89701f',1,'rvv_pcl::Octree::setBuildEpsilon()']]],
+  ['setclustertolerance_8',['setClusterTolerance',['../classrvv__pcl_1_1EuclideanClustering.html#a0d9b56e4c283a088ba2c5f1141fe606c',1,'rvv_pcl::EuclideanClustering']]],
+  ['sethashprimes_9',['setHashPrimes',['../classrvv__pcl_1_1SpatialHash.html#a03f5b2ec370557f10d31261d69b902ea',1,'rvv_pcl::SpatialHash']]],
+  ['setinputcloud_10',['setinputcloud',['../classrvv__pcl_1_1PointerOctree.html#a29b289790d88cec70ba0b11bf066442b',1,'rvv_pcl::PointerOctree::setInputCloud()'],['../classrvv__pcl_1_1SpatialHash.html#a3bbba309026c48c337cd535e7c9b17b6',1,'rvv_pcl::SpatialHash::setInputCloud()'],['../classrvv__pcl_1_1Octree.html#aa607901983d3865078eeca2228260b27',1,'rvv_pcl::Octree::setInputCloud()'],['../classrvv__pcl_1_1EuclideanClustering.html#af86f172d8e4b2ade3d2782233dfd1676',1,'rvv_pcl::EuclideanClustering::setInputCloud()'],['../classrvv__pcl_1_1CaravanRadiusSearch.html#a6a5212079bd396902b14dfba4ff69ffd',1,'rvv_pcl::CaravanRadiusSearch::setInputCloud()'],['../classrvv__pcl_1_1CaravanPointerOctree.html#ae7e3d6da9113ff28c8dc5b07b5551fae',1,'rvv_pcl::CaravanPointerOctree::setInputCloud()']]],
+  ['setmaxclustersize_11',['setMaxClusterSize',['../classrvv__pcl_1_1EuclideanClustering.html#adb58b2501233ed2f386828f4761e254d',1,'rvv_pcl::EuclideanClustering']]],
+  ['setmaxdepth_12',['setmaxdepth',['../classrvv__pcl_1_1Octree.html#ad88650c2708174d17c74dbafffbdeb45',1,'rvv_pcl::Octree::setMaxDepth()'],['../classrvv__pcl_1_1PointerOctree.html#aaa48b4d845e43a8960ba513fc21ab4bb',1,'rvv_pcl::PointerOctree::setMaxDepth()']]],
+  ['setmaxpointsperleaf_13',['setmaxpointsperleaf',['../classrvv__pcl_1_1Octree.html#af5bba9b1fbe08da029bded7a47b69a1a',1,'rvv_pcl::Octree::setMaxPointsPerLeaf()'],['../classrvv__pcl_1_1PointerOctree.html#aebbaf45f296c6ca44de4c0d8e368d10f',1,'rvv_pcl::PointerOctree::setMaxPointsPerLeaf()']]],
+  ['setminclustersize_14',['setMinClusterSize',['../classrvv__pcl_1_1EuclideanClustering.html#a504f93403bc9e92bfa4ba606b2ef1eb1',1,'rvv_pcl::EuclideanClustering']]],
+  ['setneighborsearch_15',['setneighborsearch',['../classrvv__pcl_1_1EuclideanClustering.html#af0a3894a2cae1d406b994c4a67a1ca2b',1,'rvv_pcl::EuclideanClustering::setNeighborSearch(const PointerOctree *search)'],['../classrvv__pcl_1_1EuclideanClustering.html#a8ef65c7a148ea107591e9af367143c49',1,'rvv_pcl::EuclideanClustering::setNeighborSearch(const Octree *search)']]],
+  ['simdoctree8wide_16',['SIMDOctree8Wide',['../classSIMDOctree8Wide.html#a8933bc3bfd3f5bd3c8b0cfe3ef26f576',1,'SIMDOctree8Wide']]],
+  ['simple_5feigen3x3_5fsmallest_17',['simple_eigen3x3_smallest',['../namespacervv__pcl.html#ac196c9ab0cbb077b7b7cc78ac9a07d67',1,'rvv_pcl']]],
+  ['sor_5fgrid_5fcaravan_18',['sor_grid_caravan',['../namespacervv__pcl.html#ae83e3649ed3dec8e31b21dda36a1b61f',1,'rvv_pcl']]],
+  ['sor_5foctree_19',['sor_octree',['../namespacervv__pcl.html#a51b5cb32a6bad0fb8eb39a5ea8df05e2',1,'rvv_pcl']]],
+  ['sor_5fpointer_5foctree_20',['sor_pointer_octree',['../namespacervv__pcl.html#a5bde591375b5dad1052e67e3f8ebfc50',1,'rvv_pcl']]],
+  ['sor_5frvv_21',['sor_rvv',['../namespacervv__pcl.html#a10fef2e1c9e7aec2b93d045a7ac1fbad',1,'rvv_pcl']]],
+  ['sor_5fsc_22',['sor_sc',['../namespacervv__pcl.html#a311c448d07adeb6a74fcea87f25c1f3c',1,'rvv_pcl']]],
+  ['sor_5fspatial_5fhash_23',['sor_spatial_hash',['../namespacervv__pcl.html#acaaf6338c8d633849a34e1244fcbc0b8',1,'rvv_pcl']]],
+  ['sorfilter_24',['sorFilter',['../classrvv__pcl_1_1CaravanPointerOctree.html#a2f824eabd809883d53bfd1a4cf3c74d0',1,'rvv_pcl::CaravanPointerOctree']]],
+  ['spatialhash_25',['SpatialHash',['../classrvv__pcl_1_1SpatialHash.html#a5c29a96155ecf8bdd83a8b2a1febe975',1,'rvv_pcl::SpatialHash']]],
+  ['splitby3_26',['splitBy3',['../test__all__3d__branching__approaches_8cpp.html#a599ba77a8e32c7dfa9859238cb5752f2',1,'test_all_3d_branching_approaches.cpp']]],
+  ['start_27',['start',['../classTimer.html#a3a8b5272198d029779dc9302a54305a8',1,'Timer']]],
+  ['sweepturbogrid_28',['SweepTurboGrid',['../classSweepTurboGrid.html#a0f486dfde5a2ced0af30a5b6169501f2',1,'SweepTurboGrid']]]
 ];

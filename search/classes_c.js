@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['vectorizedtraversaloctree_0',['VectorizedTraversalOctree',['../classrvv__pcl_1_1VectorizedTraversalOctree.html',1,'rvv_pcl']]],
-  ['vectorizedtraversaloctreenode_1',['VectorizedTraversalOctreeNode',['../structrvv__pcl_1_1VectorizedTraversalOctreeNode.html',1,'rvv_pcl']]]
+  ['voxelhash3d_0',['VoxelHash3D',['../structVoxelHash3D.html',1,'']]],
+  ['voxelhashfunc_1',['VoxelHashFunc',['../structVoxelHashFunc.html',1,'']]]
 ];

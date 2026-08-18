@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['demo_0',['Pipeline Demo */',['../pipeline_demo.html',1,'']]],
-  ['deprecated_20list_1',['Deprecated List',['../deprecated.html',1,'']]]
+  ['environment_20setup_0',['RVPoint Docker Environment Setup',['../md_docs_2setup.html',1,'']]],
+  ['experiment_20report_1',['RVPoint Pipeline Profiling &amp; Implementation Ablation Experiment Report',['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html',1,'']]]
 ];

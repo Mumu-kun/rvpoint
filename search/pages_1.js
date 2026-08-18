@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['2026_2004_2007_0',['Session Log: 2026-04-07',['../md_guides_2session__2026-04-07.html',1,'']]]
+  ['bottleneck_20analysis_20report_0',['Pipeline Performance Profiling &amp; Bottleneck Analysis Report',['../md_docs_2reports_22026-08-10-pipeline-profiling-analysis.html',1,'']]]
 ];

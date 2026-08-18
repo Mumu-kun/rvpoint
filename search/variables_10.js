@@ -1,19 +1,6 @@
 var searchData=
 [
-  ['range_0',['range',['../namespacegem5__se.html#adc3b8972e89467519ec4f6a970f40897',1,'gem5_se']]],
-  ['ransac_5fiters_1',['ransac_iters',['../structPipelineParams.html#acc5bc203e0ebbfeb88072dda8fd9b4f3',1,'PipelineParams']]],
-  ['ransac_5fthresh_2',['ransac_thresh',['../structPipelineParams.html#ae5d6c62c6b9b6b4372b46d6bc01cf101',1,'PipelineParams']]],
-  ['required_3',['required',['../namespacegem5__se.html#a0c057905d230004def4d2f3a535bd644',1,'gem5_se']]],
-  ['reserve_5ffactor_5f_4',['reserve_factor_',['../classrvv__pcl_1_1SpatialHash.html#a78c3475b8ede584848f0c4e8f468bdb9',1,'rvv_pcl::SpatialHash']]],
-  ['response_5flatency_5',['response_latency',['../namespacegem5__se.html#a101c48aaf322154761a5c2457925829e',1,'gem5_se']]],
-  ['right_6',['right',['../structrvv__pcl_1_1KdTreeNode.html#a1ff3c0928ca285cee38439b73201cedb',1,'rvv_pcl::KdTreeNode']]],
-  ['root_7',['root',['../namespacegem5__se.html#a51a7c849ad773eea39483ce8838be700',1,'gem5_se']]],
-  ['root_5f_8',['root_',['../classrvv__pcl_1_1PacketPointerOctree.html#a11bd9f854c43764477f46e066723c59a',1,'rvv_pcl::PacketPointerOctree::root_'],['../classrvv__pcl_1_1PointerOctree.html#a4ca0b78814c1740412ac10cfd0fb0d79',1,'rvv_pcl::PointerOctree::root_'],['../classrvv__pcl_1_1VectorizedTraversalOctree.html#ac9aec8dc405b2971425af5bdeee83f31',1,'rvv_pcl::VectorizedTraversalOctree::root_'],['../classrvv__pcl_1_1MortonPointerOctree.html#ab54b259c31b6c4a968c6dbf112366590',1,'rvv_pcl::MortonPointerOctree::root_'],['../classrvv__pcl_1_1KdTree.html#ac60e0d8594bc303c2ba924b40ae5d582',1,'rvv_pcl::KdTree::root_'],['../classrvv__pcl_1_1Octree.html#a457b60f76b8b8d07a172b32866cecc71',1,'rvv_pcl::Octree::root_'],['../classrvv__pcl_1_1CustomPointerOctree.html#a6af95e7bc6825e56304ee0966e9ebcac',1,'rvv_pcl::CustomPointerOctree::root_']]],
-  ['rv_5fextract_9',['rv_extract',['../structPipelineResult.html#a807cd2b75e21f756e8a06fb468b3bd58',1,'PipelineResult']]],
-  ['rv_5fnormal_10',['rv_normal',['../structPipelineResult.html#a466714c56c74a340bfeb1425ba404ee0',1,'PipelineResult']]],
-  ['rv_5foctree_11',['rv_octree',['../structPipelineResult.html#a80b61cb88d85cabb1c1d6d5159fc2ce4',1,'PipelineResult']]],
-  ['rv_5fransac_12',['rv_ransac',['../structPipelineResult.html#abbbb87f699fe1d778d86743a2e36c0d9',1,'PipelineResult']]],
-  ['rv_5fsor_13',['rv_sor',['../structPipelineResult.html#acbfcfdb5eabf0072e1e7671ef8fc9cf1',1,'PipelineResult']]],
-  ['rv_5fvoxel_14',['rv_voxel',['../structPipelineResult.html#ad909249bc370cec2ac99ae003bc0dc86',1,'PipelineResult']]],
-  ['rvv_5finst_15',['rvv_inst',['../structBenchmarkData.html#a5d6405af190857520bba171063afc3a9',1,'BenchmarkData']]]
+  ['searcher_5f_0',['searcher_',['../classrvv__pcl_1_1EuclideanClustering.html#a2949073074614c34b5ca9c70979538be',1,'rvv_pcl::EuclideanClustering']]],
+  ['sizes_1',['sizes',['../structrvv__pcl_1_1detail_1_1PCDHeader.html#a92476cba379721fc551f708cbd3c9491',1,'rvv_pcl::detail::PCDHeader']]],
+  ['start_2',['start',['../structInstructionTimer.html#a7168bb762d280110c7b13e5f9b159f48',1,'InstructionTimer']]]
 ];

@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['dualstream_0',['DualStream',['../structDualStream.html',1,'']]]
+  ['disjointset3d_0',['DisjointSet3D',['../structDisjointSet3D.html',1,'']]]
 ];

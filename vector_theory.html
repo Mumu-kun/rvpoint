@@ -77,13 +77,13 @@ $(function() {
 RISC-V Vector (RVV) Implementation Guide</h1>
 <p>This document explains the vector operations used in the project, specifically focusing on the <code>get_dist_sq_rvv</code> function found in <code><a class="el" href="rvv__common_8cpp.html">src/rvv_common.cpp</a></code>.</p>
 <hr  />
-<h3><a class="anchor" id="️-project-navigation-1"></a>
+<h3><a class="anchor" id="️-project-navigation-2"></a>
 🗺️ Project Navigation</h3>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">Document   </th><th class="markdownTableHeadNone">Purpose    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><a class="el" href="pipeline_demo.html">**Pipeline Demo**</a>   </td><td class="markdownTableBodyNone">Quick-start guide for the optimized Octree/SpatialHash pipeline.    </td></tr>
+<td class="markdownTableBodyNone">**Pipeline Demo**   </td><td class="markdownTableBodyNone">Quick-start guide for the optimized Octree/SpatialHash pipeline.    </td></tr>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone"><a class="el" href="instruction_manual.html">**Instruction Manual**</a>   </td><td class="markdownTableBodyNone"><b>The Master Guide</b>. API docs, Team SOPs, and naming conventions.    </td></tr>
 <tr class="markdownTableRowOdd">
@@ -172,7 +172,7 @@ Integration in SOR</h2>
 <h2><a class="anchor" id="advanced-optimization-fused-gather-filter"></a>
 Advanced Optimization: Fused Gather-Filter</h2>
 <p>In the newer spatial search implementations (<code>Octree</code> and <code>SpatialHash</code>), we use a <b>Fused Gather-Filter Kernel</b> (<code>get_inds_in_radius_rvv</code>). This is the most complex RVV operation in our library.</p>
-<h3><a class="anchor" id="the-problem"></a>
+<h3><a class="anchor" id="the-problem-1"></a>
 The Problem</h3>
 <p>Finding neighbors within a radius of a query point from a small subset of candidate indices (e.g., points within a specific Octree leaf or Hash cell).</p>
 <h3><a class="anchor" id="the-solution-vluxei32-indexed-load"></a>

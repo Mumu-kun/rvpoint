@@ -96,13 +96,13 @@ Table of Contents</h2>
 <li><a class="el" href="instruction_manual.html#quick-reference">Quick Reference</a></li>
 </ol>
 <hr  />
-<h2><a class="anchor" id="️-project-navigation"></a>
+<h2><a class="anchor" id="️-project-navigation-1"></a>
 🗺️ Project Navigation</h2>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">Document   </th><th class="markdownTableHeadNone">Purpose    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><a class="el" href="pipeline_demo.html">**Pipeline Demo**</a>   </td><td class="markdownTableBodyNone">Quick-start guide for the optimized Octree/SpatialHash pipeline.    </td></tr>
+<td class="markdownTableBodyNone">**Pipeline Demo**   </td><td class="markdownTableBodyNone">Quick-start guide for the optimized Octree/SpatialHash pipeline.    </td></tr>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">**Performance Report**   </td><td class="markdownTableBodyNone">Detailed benchmarks for spatial indexing optimizations.    </td></tr>
 <tr class="markdownTableRowOdd">
@@ -310,8 +310,8 @@ Command Breakdown</h3>
 <li>Contains: Scalar + RVV implementations</li>
 <li>Generates: Two code paths in same binary</li>
 </ul>
-<p>**<code><a class="el" href="test__voxel__grid_8cpp.html">tests/test_voxel_grid.cpp</a></code>**</p><ul>
-<li>Contains: <code><a class="el" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code>, test logic, verification</li>
+<p>**<code>tests/test_voxel_grid.cpp</code>**</p><ul>
+<li>Contains: <code><a class="el" href="test__scalar_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code>, test logic, verification</li>
 <li>Entry point: Program execution starts here</li>
 </ul>
 <h4><a class="anchor" id="autotoc_md6--o-test_voxel_rvv---output-filename"></a>
@@ -342,7 +342,7 @@ Stage 1: Preprocessing</h4>
 <div class="line">  <span class="keyword">struct </span>PointXYZ { <span class="keywordtype">float</span> <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#a8152bc0ca1af1fca7af2e9cfa109c3b1">x</a>, <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb">y</a>, <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5">z</a>; };</div>
 <div class="line">  <span class="comment">// ... 100+ lines from header</span></div>
 <div class="line">}</div>
-<div class="ttc" id="anamespacervv__pcl_html"><div class="ttname"><a href="namespacervv__pcl.html">rvv_pcl</a></div><div class="ttdoc">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library.</div><div class="ttdef"><b>Definition</b> custom_pointer_octree.cpp:7</div></div>
+<div class="ttc" id="anamespacervv__pcl_html"><div class="ttname"><a href="namespacervv__pcl.html">rvv_pcl</a></div><div class="ttdoc">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library.</div><div class="ttdef"><b>Definition</b> benchmark_kernels.cpp:8</div></div>
 <div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_a33da344ee6bf3aa17ca495a83f2e37b5"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5">rvv_pcl::PointXYZ::z</a></div><div class="ttdeci">float z</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
 <div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_a8152bc0ca1af1fca7af2e9cfa109c3b1"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#a8152bc0ca1af1fca7af2e9cfa109c3b1">rvv_pcl::PointXYZ::x</a></div><div class="ttdeci">float x</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
 <div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_ae75d9a71891478b54dfe1cae48c2edcb"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb">rvv_pcl::PointXYZ::y</a></div><div class="ttdeci">float y</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
@@ -541,7 +541,7 @@ QEMU Execution Command Breakdown</h3>
 </div><!-- fragment --><p><b>What QEMU does with it:</b></p><ol type="1">
 <li><b>Parse ELF headers</b> - Understand file structure</li>
 <li><b>Load sections</b> - Code, data, BSS into emulated memory</li>
-<li><b>Set entry point</b> - Usually <code>_start</code>, which calls <code><a class="el" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code></li>
+<li><b>Set entry point</b> - Usually <code>_start</code>, which calls <code><a class="el" href="test__scalar_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code></li>
 <li><b>Initialize registers</b> - Program counter, stack pointer, etc.</li>
 <li><b>Start execution</b> - Begin instruction-by-instruction emulation</li>
 </ol>
@@ -801,25 +801,24 @@ Step-by-Step Execution: Voxel Grid Test</h3>
 <p>Let's trace execution of <code>test_voxel_rvv</code> line by line.</p>
 <h4><a class="anchor" id="program-start"></a>
 Program Start</h4>
-<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
-<div class="line">    <span class="keyword">const</span> <span class="keywordtype">size_t</span> <a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a> = 1000;</div>
+<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="test__scalar_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
+<div class="line">    <span class="keyword">const</span> <span class="keywordtype">size_t</span> N = 1000;</div>
 <div class="line">    <span class="keyword">const</span> <span class="keywordtype">float</span> LEAF = 0.5f;</div>
-<div class="ttc" id="abenchmark_8cpp_html_adf99ea743b5dadbe8dc48388c0d7fa94"><div class="ttname"><a href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a></div><div class="ttdeci">const size_t N</div><div class="ttdef"><b>Definition</b> benchmark.cpp:38</div></div>
-<div class="ttc" id="averify_8cpp_html_ae66f6b31b5ad750f1fe042a706a4e3d4"><div class="ttname"><a href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a></div><div class="ttdeci">int main()</div><div class="ttdef"><b>Definition</b> verify.cpp:94</div></div>
+<div class="ttc" id="atest__scalar_8c_html_ae66f6b31b5ad750f1fe042a706a4e3d4"><div class="ttname"><a href="test__scalar_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a></div><div class="ttdeci">int main()</div><div class="ttdef"><b>Definition</b> test_scalar.c:3</div></div>
 </div><!-- fragment --><p><b>QEMU:</b></p><ul>
-<li>Sets PC (program counter) to <code><a class="el" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code> address</li>
+<li>Sets PC (program counter) to <code><a class="el" href="test__scalar_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main()</a></code> address</li>
 <li>Allocates stack frame</li>
 <li>Stores constants in registers</li>
 </ul>
 <h4><a class="anchor" id="data-generation"></a>
 Data Generation</h4>
-<div class="fragment"><div class="line">std::vector&lt;float&gt; x(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>), y(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>), z(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>);</div>
-<div class="line">std::vector&lt;PointXYZ&gt; input_aos(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>);</div>
+<div class="fragment"><div class="line">std::vector&lt;float&gt; x(N), y(N), z(N);</div>
+<div class="line">std::vector&lt;PointXYZ&gt; input_aos(N);</div>
 <div class="line"> </div>
 <div class="line">std::mt19937 gen(42);</div>
 <div class="line">std::uniform_real_distribution&lt;float&gt; dist(0.0f, 10.0f);</div>
 <div class="line"> </div>
-<div class="line"><span class="keywordflow">for</span>(<span class="keywordtype">size_t</span> i=0; i&lt;<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>; ++i) {</div>
+<div class="line"><span class="keywordflow">for</span>(<span class="keywordtype">size_t</span> i=0; i&lt;N; ++i) {</div>
 <div class="line">    x[i] = dist(gen);</div>
 <div class="line">    y[i] = dist(gen);</div>
 <div class="line">    z[i] = dist(gen);</div>
@@ -840,7 +839,7 @@ Data Generation</h4>
 <div class="line">             (1000 structs, 12KB, interleaved XYZ)</div>
 </div><!-- fragment --><h4><a class="anchor" id="create-soa-structure"></a>
 Create SoA Structure</h4>
-<div class="fragment"><div class="line">PointCloudSoA input_soa = {x.data(), y.data(), z.data(), <a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>};</div>
+<div class="fragment"><div class="line">PointCloudSoA input_soa = {x.data(), y.data(), z.data(), N};</div>
 </div><!-- fragment --><p><b>Memory (just pointers!):</b> </p><div class="fragment"><div class="line">input_soa:</div>
 <div class="line">  .x → 0x12340000  (pointer to x[0])</div>
 <div class="line">  .y → 0x12341000  (pointer to y[0])</div>
@@ -850,7 +849,7 @@ Create SoA Structure</h4>
 <h4><a class="anchor" id="scalar-execution"></a>
 Scalar Execution</h4>
 <div class="fragment"><div class="line"><span class="keywordtype">size_t</span> count_sc = voxel_grid_downsamp_sc(</div>
-<div class="line">    input_aos.data(), <a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>, out_sc.data(), LEAF</div>
+<div class="line">    input_aos.data(), N, out_sc.data(), LEAF</div>
 <div class="line">);</div>
 </div><!-- fragment --><p><b>Inside function (<a class="el" href="voxel__grid__downsamp_8cpp.html">voxel_grid_downsamp.cpp</a>:12):</b></p>
 <div class="fragment"><div class="line"><span class="keywordtype">float</span> inv_leaf = 1.0f / leaf_size;  <span class="comment">// = 2.0</span></div>
@@ -1086,16 +1085,16 @@ Testing &amp; Verification</h2>
 <h3><a class="anchor" id="test-pattern"></a>
 Test Pattern</h3>
 <p>Every algorithm test follows this structure:</p>
-<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="verify_8cpp.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
+<div class="fragment"><div class="line"><span class="keywordtype">int</span> <a class="code hl_function" href="test__scalar_8c.html#ae66f6b31b5ad750f1fe042a706a4e3d4">main</a>() {</div>
 <div class="line">    <span class="comment">// 1. Generate test data</span></div>
-<div class="line">    std::vector&lt;float&gt; x(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>), y(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>), z(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>);</div>
-<div class="line">    std::vector&lt;PointXYZ&gt; input_aos(<a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>);</div>
+<div class="line">    std::vector&lt;float&gt; x(N), y(N), z(N);</div>
+<div class="line">    std::vector&lt;PointXYZ&gt; input_aos(N);</div>
 <div class="line">    <span class="comment">// ... random generation ...</span></div>
 <div class="line">    </div>
-<div class="line">    PointCloudSoA input_soa = {x.data(), y.data(), z.data(), <a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>};</div>
+<div class="line">    PointCloudSoA input_soa = {x.data(), y.data(), z.data(), N};</div>
 <div class="line">    </div>
 <div class="line">    <span class="comment">// 2. Run scalar version</span></div>
-<div class="line">    <span class="keywordtype">size_t</span> count_sc = algorithm_sc(input_aos.data(), <a class="code hl_variable" href="benchmark_8cpp.html#adf99ea743b5dadbe8dc48388c0d7fa94">N</a>, out_sc.data(), params);</div>
+<div class="line">    <span class="keywordtype">size_t</span> count_sc = algorithm_sc(input_aos.data(), N, out_sc.data(), params);</div>
 <div class="line">    </div>
 <div class="line">    <span class="comment">// 3. Run RVV version</span></div>
 <div class="line">    <span class="keywordtype">size_t</span> count_rvv = algorithm_rvv(input_soa, out_rvv.data(), params);</div>
@@ -1130,7 +1129,7 @@ Running Tests</h3>
 </div><!-- fragment --><p><b>All tests:</b> </p><div class="fragment"><div class="line">scripts/verify_container.sh</div>
 </div><!-- fragment --><h3><a class="anchor" id="benchmarking"></a>
 Benchmarking</h3>
-<div class="fragment"><div class="line">scripts/run_trace_benchmark.sh</div>
+<div class="fragment"><div class="line">scripts/bench &lt;mode&gt; &lt;kernel&gt; &lt;size&gt;</div>
 </div><!-- fragment --><p><b>What it measures:</b></p><ul>
 <li>Instruction count (not runtime!)</li>
 <li>Uses QEMU tracing to count translation blocks</li>
@@ -1232,7 +1231,7 @@ Spatial Indexing</h3>
 &lt;strong&gt;Class &lt;tt&gt;Octree&lt;/tt&gt;&lt;/strong&gt;</h4>
 <p>A hierarchical tree structure for multidimensional spatial partitioning.</p><ul>
 <li><code>setInputCloud(const PointCloudSoA&amp; cloud)</code>: Attach the point cloud to the tree.</li>
-<li><code><a class="el" href="build_8cpp.html#a76db41697daff46008717b584b49d27c">build()</a></code>: Construct the tree structure recursively.</li>
+<li><code>build()</code>: Construct the tree structure recursively.</li>
 <li><code>radiusSearch(...)</code>: Perform efficient neighbor search using tree traversal.</li>
 <li><b>Configuration</b>:<ul>
 <li><code>setMaxPointsPerLeaf(n)</code>: Sets the maximum points before splitting a node. Default: <code>64</code>.</li>
@@ -1245,7 +1244,7 @@ Spatial Indexing</h3>
 &lt;strong&gt;Class &lt;tt&gt;SpatialHash&lt;/tt&gt;&lt;/strong&gt;</h4>
 <p>A high-performance hash grid optimized for uniform or near-uniform datasets. Built specifically for RVV 1.0 hardware.</p><ul>
 <li><code>setInputCloud(const PointCloudSoA&amp; cloud, float cell_size)</code>: Attach cloud and define grid resolution.</li>
-<li><code><a class="el" href="build_8cpp.html#a76db41697daff46008717b584b49d27c">build()</a></code>: Map points to hash cells using vectorized bounding box kernels.</li>
+<li><code>build()</code>: Map points to hash cells using vectorized bounding box kernels.</li>
 <li><code>radiusSearch(...)</code>: Fast neighbor discovery using O(1) cell lookups and RVV fused gather-filter kernels.</li>
 <li><b>Configuration</b>:<ul>
 <li><code>setCellSizeEpsilon(eps)</code>: Scales the cell overlap margin. Default: <code>0.01</code>.</li>
@@ -1330,7 +1329,7 @@ File Organization</h3>
 <div class="line">│   └── test_&lt;algorithm&gt;.cpp    → Test programs</div>
 <div class="line">├── scripts/</div>
 <div class="line">│   ├── verify_container.sh     → Full test suite</div>
-<div class="line">│   └── run_trace_benchmark.sh  → Performance analysis</div>
+<div class="line">│   ├── bench                   → gem5 cycle benchmark</div>
 <div class="line">├── CMakeLists.txt              → Build configuration</div>
 <div class="line">└── cmake/riscv.cmake           → Toolchain file</div>
 </div><!-- fragment --><h3><a class="anchor" id="debugging-tips"></a>

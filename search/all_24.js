@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['⚡_0',['RVV Vector Execution ⚡',['../instruction_manual.html#rvv-vector-execution-',1,'']]]
+  ['z_0',['z',['../structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5',1,'rvv_pcl::PointXYZ::z'],['../structrvv__pcl_1_1PointCloudSoA.html#aad49db8a838cdb53faf195caded1c011',1,'rvv_pcl::PointCloudSoA::z'],['../structrvv__pcl_1_1PointXYZRGB.html#a41bf9f6f2f212a385ee23648d100428e',1,'rvv_pcl::PointXYZRGB::z'],['../structCompactSparse3DGridBench_1_1Entry.html#abb2f0d67fba8eac2b4b435e6071f0071',1,'CompactSparse3DGridBench::Entry::z'],['../structSoABuffer.html#a5935c06fcd628fdd9017953330f82118',1,'SoABuffer::z'],['../structFusedVectorLeaf.html#a09e51e6ab7efc1b66f843f4194bdd53e',1,'FusedVectorLeaf::z'],['../structVoxelHash3D.html#abb0f579c34af16ff049faadec93460cd',1,'VoxelHash3D::z']]],
+  ['zero_20overhead_20compile_20time_20toggle_20tt_20src_20include_20profiler_20h_20tt_1',['Zero-Overhead Compile-Time Toggle (&lt;tt&gt;src/include/profiler.h&lt;/tt&gt;)',['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html#zero-overhead-compile-time-toggle-srcincludeprofilerh',1,'']]]
 ];

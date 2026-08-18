@@ -1,7 +1,5 @@
 var searchData=
 [
-  ['active_5fmask_0',['active_mask',['../structrvv__pcl_1_1TraversalItem.html#a2b1df52cf5dd447ff713f6e320d53ef4',1,'rvv_pcl::TraversalItem']]],
-  ['aos_1',['aos',['../structCloudData.html#a1fadd15c76ede456f89f9b7ed630be2a',1,'CloudData']]],
-  ['args_2',['args',['../namespacegem5__se.html#aa90ec32e000cd5205d3cf9ad264eacc7',1,'gem5_se']]],
-  ['assoc_3',['assoc',['../namespacegem5__se.html#ab35e7d9f500b84e35ee1cbd8a21041c3',1,'gem5_se']]]
+  ['b_0',['b',['../structrvv__pcl_1_1PointXYZRGB.html#acfb77917067ee1b3e3f9da77ba419f34',1,'rvv_pcl::PointXYZRGB::b'],['../structPlane3D.html#a887c467c5e8b9329c9e2cb026bcc0869',1,'Plane3D::b']]],
+  ['build_5fepsilon_5f_1',['build_epsilon_',['../classrvv__pcl_1_1Octree.html#ace0933d9bb09408d94c589932b657042',1,'rvv_pcl::Octree::build_epsilon_'],['../classrvv__pcl_1_1PointerOctree.html#acf3669e73c85d282f289517f7946e6ff',1,'rvv_pcl::PointerOctree::build_epsilon_']]]
 ];
