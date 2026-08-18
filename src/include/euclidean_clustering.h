@@ -36,6 +36,11 @@
 
 namespace rvv_pcl {
 
+class PointerOctree;
+class SpatialHash;
+class CaravanPointerOctree;
+class CaravanRadiusSearch;
+
 // ─── ClusterIndices ───────────────────────────────────────────────────────────
 /// Thin wrapper that holds the point indices belonging to one cluster.
 struct ClusterIndices {
@@ -73,6 +78,10 @@ public:
 
     /// Optional neighbor search structure for accelerated queries.
     void setNeighborSearch(const Octree *search);
+    void setNeighborSearch(const PointerOctree *search);
+    void setNeighborSearch(const SpatialHash *search);
+    void setNeighborSearch(const CaravanPointerOctree *search);
+    void setNeighborSearch(const CaravanRadiusSearch *search);
 
     // ── Accessors ─────────────────────────────────────────────────────────────
     float clusterTolerance()  const { return clusterTolerance_; }
@@ -96,16 +105,20 @@ private:
     void radiusQueryUnvisited(
         float qx, float qy, float qz,
         float tol_sq,
-        const std::vector<bool> &visited,
-        std::vector<int>        &out
+        const std::vector<uint8_t> &visited,
+        std::vector<int>           &out
     ) const;
 
     // ── State ─────────────────────────────────────────────────────────────────
-    const PointCloudSoA *cloud_            = nullptr;
-    const Octree        *searcher_         = nullptr;
-    float                clusterTolerance_ = 0.05f;
-    int                  minClusterSize_   = 1;
-    int                  maxClusterSize_   = std::numeric_limits<int>::max();
+    const PointCloudSoA        *cloud_                    = nullptr;
+    const Octree               *searcher_                 = nullptr;
+    const PointerOctree        *pointer_searcher_         = nullptr;
+    const SpatialHash          *spatial_searcher_         = nullptr;
+    const CaravanPointerOctree *caravan_pointer_searcher_ = nullptr;
+    const CaravanRadiusSearch  *caravan_searcher_         = nullptr;
+    float                       clusterTolerance_         = 0.05f;
+    int                         minClusterSize_           = 1;
+    int                         maxClusterSize_           = std::numeric_limits<int>::max();
 };
 
 } // namespace rvv_pcl

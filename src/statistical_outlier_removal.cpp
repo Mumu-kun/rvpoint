@@ -294,4 +294,40 @@ std::size_t sor_pointer_octree(const PointCloudSoA &in, const PointerOctree &tre
   return filter_by_mean_dists(in, mean_dists, out, alpha);
 }
 
+std::size_t sor_hybrid_spatial_hash_pointer_octree(
+    const PointCloudSoA &in, const SpatialHash &hash, const PointerOctree &tree,
+    PointXYZ *out, int k, float alpha, float search_radius, int min_cell_pts) {
+  if (in.n == 0) return 0;
+  std::vector<float> mean_dists(in.n);
+
+  for (size_t i = 0; i < in.n; ++i) {
+    PointXYZ query = {in.x[i], in.y[i], in.z[i]};
+    std::vector<int> nbr_indices;
+    std::vector<float> nbr_dists;
+
+    std::size_t hash_cnt = hash.radiusSearch(query, search_radius, nbr_indices, nbr_dists);
+    if (hash_cnt < static_cast<std::size_t>(min_cell_pts)) {
+      mean_dists[i] = search_radius * 2.0f;
+      continue;
+    }
+
+    nbr_indices.clear();
+    nbr_dists.clear();
+    tree.radiusSearch(query, search_radius, nbr_indices, nbr_dists);
+
+    if (nbr_dists.size() > 1) {
+      std::sort(nbr_dists.begin(), nbr_dists.end());
+      float sum = 0.0f;
+      int valid_k = std::min(k, static_cast<int>(nbr_dists.size()) - 1);
+      for (int j = 1; j <= valid_k; ++j) {
+        sum += std::sqrt(nbr_dists[j]);
+      }
+      mean_dists[i] = sum / valid_k;
+    } else {
+      mean_dists[i] = search_radius;
+    }
+  }
+  return filter_by_mean_dists(in, mean_dists, out, alpha);
+}
+
 } // namespace rvv_pcl

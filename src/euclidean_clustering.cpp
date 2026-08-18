@@ -37,6 +37,9 @@
 // the per-step cost but is not required for basic correctness.
 
 #include "include/euclidean_clustering.h"
+#include "pointer_octree/pointer_octree.h"
+#include "caravan_pointer_octree.h"
+#include "caravan_radius_search.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,6 +74,42 @@ void EuclideanClustering::setMaxClusterSize(int max_size) {
 
 void EuclideanClustering::setNeighborSearch(const Octree *search) {
     searcher_ = search;
+    pointer_searcher_ = nullptr;
+    spatial_searcher_ = nullptr;
+    caravan_pointer_searcher_ = nullptr;
+    caravan_searcher_ = nullptr;
+}
+
+void EuclideanClustering::setNeighborSearch(const PointerOctree *search) {
+    pointer_searcher_ = search;
+    searcher_ = nullptr;
+    spatial_searcher_ = nullptr;
+    caravan_pointer_searcher_ = nullptr;
+    caravan_searcher_ = nullptr;
+}
+
+void EuclideanClustering::setNeighborSearch(const SpatialHash *search) {
+    spatial_searcher_ = search;
+    searcher_ = nullptr;
+    pointer_searcher_ = nullptr;
+    caravan_pointer_searcher_ = nullptr;
+    caravan_searcher_ = nullptr;
+}
+
+void EuclideanClustering::setNeighborSearch(const CaravanPointerOctree *search) {
+    caravan_pointer_searcher_ = search;
+    searcher_ = nullptr;
+    pointer_searcher_ = nullptr;
+    spatial_searcher_ = nullptr;
+    caravan_searcher_ = nullptr;
+}
+
+void EuclideanClustering::setNeighborSearch(const CaravanRadiusSearch *search) {
+    caravan_searcher_ = search;
+    searcher_ = nullptr;
+    pointer_searcher_ = nullptr;
+    spatial_searcher_ = nullptr;
+    caravan_pointer_searcher_ = nullptr;
 }
 
 // ─── radiusQueryUnvisited ─────────────────────────────────────────────────────
@@ -78,15 +117,12 @@ void EuclideanClustering::setNeighborSearch(const Octree *search) {
 // Find all cloud indices within tol_sq of (qx,qy,qz) that have not yet been
 // assigned to a cluster (visited[i] == false).  Matched indices are appended
 // to @p out.
-//
-// Both paths share the same signature; the compiler selects the correct one
-// via the preprocessor guard.
 
 void EuclideanClustering::radiusQueryUnvisited(
     float qx, float qy, float qz,
     float tol_sq,
-    const std::vector<bool> &visited,
-    std::vector<int>        &out
+    const std::vector<uint8_t> &visited,
+    std::vector<int>           &out
 ) const {
     if (!cloud_) return;
 
@@ -97,41 +133,27 @@ void EuclideanClustering::radiusQueryUnvisited(
 
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
 
-    // ── RVV path ─────────────────────────────────────────────────────────────
-    // Use m8 LMUL so a single vsetvl grants the largest possible VL (up to
-    // 8×VLEN/32 elements).  This mirrors the style used in the single-query
-    // radiusSearch() in caravan_radius_search.cpp.
-
     std::size_t i = 0;
     while (i < n) {
         const std::size_t vl = __riscv_vsetvl_e32m8(n - i);
 
-        // Load lane coordinates
         vfloat32m8_t vx = __riscv_vle32_v_f32m8(px + i, vl);
         vfloat32m8_t vy = __riscv_vle32_v_f32m8(py + i, vl);
         vfloat32m8_t vz = __riscv_vle32_v_f32m8(pz + i, vl);
 
-        // dx = px - qx  (scalar broadcast subtraction)
         vfloat32m8_t dx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
         vfloat32m8_t dy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
         vfloat32m8_t dz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
 
-        // d2 = dx² + dy² + dz²  (fused multiply-accumulate)
         vfloat32m8_t d2 = __riscv_vfmul_vv_f32m8(dx, dx, vl);
         d2 = __riscv_vfmacc_vv_f32m8(d2, dy, dy, vl);
         d2 = __riscv_vfmacc_vv_f32m8(d2, dz, dz, vl);
 
-        // mask: d2 <= tol_sq
-        // For m8 lmul, e32 element width → ratio = 4 → b4 mask type.
         vbool4_t mask = __riscv_vmfle_vf_f32m8_b4(d2, tol_sq, vl);
 
-        // Materialise mask as packed bits into a byte buffer.
-        // Each byte holds 8 lane bits; max 64 lanes for b4 at VLEN=256.
-        // ceil(VL / 8) bytes are written.
-        uint8_t mask_bytes[64]; // ≥ ceil(VLEN_max_lanes / 8) = 64 bytes
+        alignas(16) uint8_t mask_bytes[64];
         __riscv_vsm_v_b4(mask_bytes, mask, vl);
 
-        // Scalar scatter: test each bit, skip visited points
         for (std::size_t lane = 0; lane < vl; ++lane) {
             if ((mask_bytes[lane >> 3] >> (lane & 7u)) & 1u) {
                 const int idx = static_cast<int>(i + lane);
@@ -146,7 +168,6 @@ void EuclideanClustering::radiusQueryUnvisited(
 
 #else
 
-    // ── Scalar fallback path ──────────────────────────────────────────────────
     for (std::size_t i = 0; i < n; ++i) {
         if (visited[i]) continue;
         const float dx = px[i] - qx;
@@ -161,17 +182,6 @@ void EuclideanClustering::radiusQueryUnvisited(
 }
 
 // ─── extract ─────────────────────────────────────────────────────────────────
-//
-// BFS flood-fill cluster extraction.
-//
-// For each unvisited seed we:
-//   1. Start a new cluster.
-//   2. Push the seed into the BFS queue.
-//   3. While the queue is non-empty:
-//      a. Pop the front index.
-//      b. Find all unvisited neighbours within clusterTolerance_.
-//      c. Mark each neighbour as visited, add it to the cluster and queue.
-//   4. Accept the cluster if minClusterSize_ ≤ |cluster| ≤ maxClusterSize_.
 
 std::vector<ClusterIndices> EuclideanClustering::extract() const {
     std::vector<ClusterIndices> result;
@@ -186,12 +196,18 @@ std::vector<ClusterIndices> EuclideanClustering::extract() const {
     const float *const pz     = cloud_->z;
     const float        tol_sq = clusterTolerance_ * clusterTolerance_;
 
-    // visited[i] == true  →  point i is already assigned to a cluster
-    std::vector<bool> visited(n, false);
+    // visited[i] == 1  →  point i is already assigned to a cluster
+    std::vector<uint8_t> visited(n, 0);
 
-    // Temporary buffer reused across BFS steps to avoid repeated allocations
+    // Reusable buffers across BFS steps to eliminate heap allocation bottlenecks
     std::vector<int> neighbors;
     neighbors.reserve(256);
+
+    std::vector<int> raw_neighbors;
+    raw_neighbors.reserve(256);
+
+    std::vector<float> dists;
+    dists.reserve(256);
 
     // BFS queue
     std::queue<int> bfs_queue;
@@ -199,12 +215,10 @@ std::vector<ClusterIndices> EuclideanClustering::extract() const {
     for (std::size_t seed = 0; seed < n; ++seed) {
         if (visited[seed]) continue;
 
-        // ── New cluster ───────────────────────────────────────────────────────
         ClusterIndices cluster;
         cluster.indices.reserve(64);
 
-        // Mark seed and enqueue
-        visited[seed] = true;
+        visited[seed] = 1;
         bfs_queue.push(static_cast<int>(seed));
 
         while (!bfs_queue.empty()) {
@@ -213,12 +227,21 @@ std::vector<ClusterIndices> EuclideanClustering::extract() const {
 
             cluster.indices.push_back(current);
 
-            // Find unvisited neighbours of 'current'
             neighbors.clear();
-            if (searcher_) {
+            if (pointer_searcher_) {
+                raw_neighbors.clear();
+                dists.clear();
                 PointXYZ q{px[current], py[current], pz[current]};
-                std::vector<int> raw_neighbors;
-                std::vector<float> dists;
+                pointer_searcher_->radiusSearch(q, clusterTolerance_, raw_neighbors, dists);
+                for (const int nb : raw_neighbors) {
+                    if (nb >= 0 && static_cast<std::size_t>(nb) < n && !visited[static_cast<std::size_t>(nb)]) {
+                        neighbors.push_back(nb);
+                    }
+                }
+            } else if (searcher_) {
+                raw_neighbors.clear();
+                dists.clear();
+                PointXYZ q{px[current], py[current], pz[current]};
                 searcher_->radiusSearch(q, clusterTolerance_, raw_neighbors, dists);
                 for (const int nb : raw_neighbors) {
                     if (nb >= 0 && static_cast<std::size_t>(nb) < n && !visited[static_cast<std::size_t>(nb)]) {
@@ -232,15 +255,12 @@ std::vector<ClusterIndices> EuclideanClustering::extract() const {
                 );
             }
 
-            // Mark all found neighbours as visited immediately to prevent
-            // them from being queued multiple times from different BFS fronts.
             for (const int nb : neighbors) {
-                visited[static_cast<std::size_t>(nb)] = true;
+                visited[static_cast<std::size_t>(nb)] = 1;
                 bfs_queue.push(nb);
             }
         }
 
-        // ── Size filter ───────────────────────────────────────────────────────
         const int sz = static_cast<int>(cluster.indices.size());
         if (sz >= minClusterSize_ && sz <= maxClusterSize_) {
             std::sort(cluster.indices.begin(), cluster.indices.end());

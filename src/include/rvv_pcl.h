@@ -147,6 +147,14 @@ std::size_t sor_spatial_hash(const PointCloudSoA &in, const SpatialHash &hash, P
 std::size_t sor_pointer_octree(const PointCloudSoA &in, const PointerOctree &tree, PointXYZ *out,
                                int k, float alpha, float search_radius = 0.5f);
 
+/**
+ * @brief Hybrid SOR combining SpatialHash cell pre-filtering with PointerOctree K-NN.
+ */
+std::size_t sor_hybrid_spatial_hash_pointer_octree(
+    const PointCloudSoA &in, const SpatialHash &hash, const PointerOctree &tree,
+    PointXYZ *out, int k, float alpha, float search_radius = 0.5f,
+    int min_cell_pts = 2);
+
 // ============================================================================
 // 3) Normal Estimation
 // ============================================================================
@@ -211,6 +219,14 @@ void normal_estimation_rvv(const PointCloudSoA &in, const Octree &octree,
  * build()).
  */
 void normal_estimation_rvv(const PointCloudSoA &in, const SpatialHash &hash,
+                           float *nx, float *ny, float *nz, int k, float radius,
+                           float vp_x = 0, float vp_y = 0, float vp_z = 0,
+                           int eigen_iters = 4);
+
+/**
+ * @brief Normal Estimation (RVV + PointerOctree).
+ */
+void normal_estimation_rvv(const PointCloudSoA &in, const PointerOctree &tree,
                            float *nx, float *ny, float *nz, int k, float radius,
                            float vp_x = 0, float vp_y = 0, float vp_z = 0,
                            int eigen_iters = 4);

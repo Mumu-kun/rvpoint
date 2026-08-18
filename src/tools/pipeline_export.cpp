@@ -431,10 +431,10 @@ int main(int argc, char **argv) {
   }
   PointCloudSoA non_ground_cloud = {ox.data(), oy.data(), oz.data(), n_outliers};
 
-  Octree non_ground_search;
+  PointerOctree non_ground_search;
   non_ground_search.setInputCloud(non_ground_cloud);
   {
-    RVPOINT_PROFILE_SCOPE("Octree::build_non_ground");
+    RVPOINT_PROFILE_SCOPE("PointerOctree::build_non_ground");
     non_ground_search.build();
   }
 

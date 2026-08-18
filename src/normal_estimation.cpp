@@ -1,4 +1,5 @@
 #include "include/rvv_pcl.h"
+#include "pointer_octree/pointer_octree.h"
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -232,6 +233,34 @@ void normal_estimation_rvv(const PointCloudSoA& in,
         PointXYZ query = {in.x[i], in.y[i], in.z[i]};
 
         hash.radiusSearch(query, radius, indices, dists);
+
+        if (indices.size() < 3) { nx[i] = ny[i] = nz[i] = 0; continue; }
+
+        float cov[3][3], centroid[3];
+        compute_covariance_rvv(in, indices, cov, centroid);
+
+        float n_x, n_y, n_z;
+        eigen_decomposition_rvv(cov, n_x, n_y, n_z, eigen_iters);
+        flip_normal_rvv(query, vp_x, vp_y, vp_z, n_x, n_y, n_z);
+
+        nx[i] = n_x; ny[i] = n_y; nz[i] = n_z;
+    }
+}
+
+void normal_estimation_rvv(const PointCloudSoA& in,
+                           const PointerOctree& tree,
+                           float* nx, float* ny, float* nz, int k, float radius,
+                           float vp_x, float vp_y, float vp_z, int eigen_iters) {
+    if (in.n == 0) return;
+
+    std::vector<int>   indices;
+    std::vector<float> dists;
+    indices.reserve(k * 2);
+
+    for (size_t i = 0; i < in.n; ++i) {
+        PointXYZ query = {in.x[i], in.y[i], in.z[i]};
+
+        tree.radiusSearch(query, radius, indices, dists);
 
         if (indices.size() < 3) { nx[i] = ny[i] = nz[i] = 0; continue; }
 

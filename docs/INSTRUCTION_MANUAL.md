@@ -107,7 +107,7 @@ tests/
 
 ---
 
-## Target Hardware: Banana Pi BPI-F3
+## Target Hardware: Orange Pi RV2
 
 **SoC:** SpacemiT K1 (8-core RISC-V)  
 **Architecture:** RISC-V 64GCVB (RVA22 + RVV 1.0)  
@@ -124,7 +124,7 @@ tests/
 
 ### Compiler Selection: Linux vs Bare Metal
 
-**For Banana Pi BPI-F3 (Linux):**
+**For Orange Pi RV2 (Linux):**
 Use the **Linux GNU** toolchain. This allows standard file I/O, networking, and OS features.
 ```bash
 riscv64-linux-gnu-g++ -mnative ... # (On board)

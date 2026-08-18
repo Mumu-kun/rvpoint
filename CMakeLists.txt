@@ -124,3 +124,8 @@ target_link_libraries(ablation_bench PRIVATE rvvpcl)
 add_executable(neighbor_search_sor_bench src/tools/neighbor_search_sor_bench.cpp)
 target_include_directories(neighbor_search_sor_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(neighbor_search_sor_bench PRIVATE rvvpcl)
+
+# Stage-by-Stage Scalar vs. Vector Pipeline Comparison Tool
+add_executable(pipeline_stage_comparison src/tools/pipeline_stage_comparison.cpp)
+target_include_directories(pipeline_stage_comparison PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_stage_comparison PRIVATE rvvpcl)

@@ -113,7 +113,7 @@ static int g_failed = 0;
 // ─── test cases ───────────────────────────────────────────────────────────────
 
 static void test_empty_cloud() {
-    PointCloudSoA cloud; // empty
+    PointCloudSoA cloud{}; // empty
     EuclideanClustering ec;
     ec.setInputCloud(cloud);
     ec.setClusterTolerance(0.1f);
@@ -386,20 +386,20 @@ static void test_against_naive_random() {
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 int main() {
-    std::cout << "=== EuclideanClustering Unit Tests ===\n\n";
+    std::cout << "=== EuclideanClustering Unit Tests ===\n\n" << std::flush;
 
-    test_empty_cloud();
-    test_single_point();
-    test_two_separated_blobs();
-    test_size_filter_min();
-    test_size_filter_max();
-    test_all_one_cluster();
-    test_indices_sorted();
-    test_tolerance_boundary();
-    test_against_naive_random();
+    test_empty_cloud(); std::cout << std::flush;
+    test_single_point(); std::cout << std::flush;
+    test_two_separated_blobs(); std::cout << std::flush;
+    test_size_filter_min(); std::cout << std::flush;
+    test_size_filter_max(); std::cout << std::flush;
+    test_all_one_cluster(); std::cout << std::flush;
+    test_indices_sorted(); std::cout << std::flush;
+    test_tolerance_boundary(); std::cout << std::flush;
+    test_against_naive_random(); std::cout << std::flush;
 
     std::cout << "\n------------------------------------------\n";
-    std::cout << "Results: " << g_passed << " passed, " << g_failed << " failed.\n";
+    std::cout << "Results: " << g_passed << " passed, " << g_failed << " failed.\n" << std::flush;
 
     return (g_failed == 0) ? 0 : 1;
 }

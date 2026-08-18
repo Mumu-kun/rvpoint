@@ -40,3 +40,6 @@ wsl/
 env/.wsl/
 .venv/
 AGENTS.md
+DESIGN.md
+/data
+.clangd
