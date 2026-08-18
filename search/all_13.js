@@ -8,7 +8,7 @@ var searchData=
   ['hardware_20vector_20mask_20compression_20tt_20_5f_5friscv_5fvcompress_5fvm_5ff32m8_20tt_5',['C. Hardware Vector Mask Compression (&lt;tt&gt;__riscv_vcompress_vm_f32m8&lt;/tt&gt;)',['../md_docs_2projection.html#c-hardware-vector-mask-compression-__riscv_vcompress_vm_f32m8',1,'']]],
   ['hardware_3a_20banana_20pi_20bpi_20f3_6',['Target Hardware: Banana Pi BPI-F3',['../instruction_manual.html#target-hardware-banana-pi-bpi-f3',1,'']]],
   ['hash_7',['hash',['../classFusedHashLeafOctree.html#aa4dda3f02a9431e7434d8e2939d08f14',1,'FusedHashLeafOctree']]],
-  ['hashcell_8',['hashCell',['../classrvv__pcl_1_1SpatialHash.html#a787ec796412b06a6148b77b765fd4007',1,'rvv_pcl::SpatialHash']]],
+  ['hashcell_8',['hashCell',['../classrvpoint_1_1SpatialHash.html#a0f109a0fabcd97319c7e987e2d09a235',1,'rvpoint::SpatialHash']]],
   ['head_9',['head',['../structCompactSparse3DGridBench_1_1Entry.html#a2c692d98b79b7cc6993f4f8c35191ee3',1,'CompactSparse3DGridBench::Entry']]],
   ['helper_20kernels_20rvv_20only_10',['Helper Kernels (RVV Only)',['../instruction_manual.html#helper-kernels-rvv-only',1,'']]],
   ['hierarchical_20octree_20pipeline_3a_11',['3. Run Original Hierarchical Octree Pipeline:',['../md_docs_2projection.html#autotoc_md3-run-original-hierarchical-octree-pipeline',1,'']]],

@@ -5,5 +5,7 @@ var searchData=
   ['setup_2emd_2',['setup.md',['../setup_8md.html',1,'']]],
   ['simple_5fpcd_5floader_2eh_3',['simple_pcd_loader.h',['../simple__pcd__loader_8h.html',1,'']]],
   ['spatial_5fhashing_2ecpp_4',['spatial_hashing.cpp',['../spatial__hashing_8cpp.html',1,'']]],
-  ['statistical_5foutlier_5fremoval_2ecpp_5',['statistical_outlier_removal.cpp',['../statistical__outlier__removal_8cpp.html',1,'']]]
+  ['spatial_5fhashing_2eh_5',['spatial_hashing.h',['../spatial__hashing_8h.html',1,'']]],
+  ['statistical_5foutlier_5fremoval_2ecpp_6',['statistical_outlier_removal.cpp',['../statistical__outlier__removal_8cpp.html',1,'']]],
+  ['statistical_5foutlier_5fremoval_2eh_7',['statistical_outlier_removal.h',['../statistical__outlier__removal_8h.html',1,'']]]
 ];

@@ -9,7 +9,7 @@ var searchData=
   ['pipeline_5fprofiling_5fand_5fablation_5fexperiment_2emd_6',['PIPELINE_PROFILING_AND_ABLATION_EXPERIMENT.md',['../PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT_8md.html',1,'']]],
   ['pipeline_5frvv_5fturbo_2ecpp_7',['pipeline_rvv_turbo.cpp',['../pipeline__rvv__turbo_8cpp.html',1,'']]],
   ['pipeline_5frvv_5fultra_5ffast_2ecpp_8',['pipeline_rvv_ultra_fast.cpp',['../pipeline__rvv__ultra__fast_8cpp.html',1,'']]],
-  ['point_5fcloud_2ecpp_9',['point_cloud.cpp',['../point__cloud_8cpp.html',1,'']]],
+  ['point_5ftypes_2eh_9',['point_types.h',['../point__types_8h.html',1,'']]],
   ['pointer_5foctree_2ecpp_10',['pointer_octree.cpp',['../pointer__octree_8cpp.html',1,'']]],
   ['pointer_5foctree_2eh_11',['pointer_octree.h',['../pointer__octree_8h.html',1,'']]],
   ['profile_5fpipeline_2epy_12',['profile_pipeline.py',['../profile__pipeline_8py.html',1,'']]],

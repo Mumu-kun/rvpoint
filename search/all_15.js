@@ -2,8 +2,8 @@ var searchData=
 [
   ['kcapacity_0',['kcapacity',['../classCompactSparse3DGridBench.html#afe7af07093dc12dbb78f403ca4484c95',1,'CompactSparse3DGridBench::kCapacity'],['../classFusedHashLeafOctree.html#a7a6834d5e979cfc2b6a0e40a76248272',1,'FusedHashLeafOctree::kCapacity']]],
   ['kdtree_5fvs_5fpointer_5foctree_5fbench_2ecpp_1',['kdtree_vs_pointer_octree_bench.cpp',['../kdtree__vs__pointer__octree__bench_8cpp.html',1,'']]],
-  ['kernel_2',['kernel',['../md_docs_2plans_22026-08-10-caravan-pointer-octree-design.html#c-caravan-leaf-vector-kernel',1,'C. Caravan Leaf Vector Kernel'],['../namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526',1,'rvv_pcl::bench::Kernel']]],
-  ['kernelname_3',['kernelName',['../namespacervv__pcl_1_1bench.html#ae480fb9c6be831a0eceba33c6c9b9032',1,'rvv_pcl::bench']]],
+  ['kernel_2',['kernel',['../md_docs_2plans_22026-08-10-caravan-pointer-octree-design.html#c-caravan-leaf-vector-kernel',1,'C. Caravan Leaf Vector Kernel'],['../namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8',1,'rvpoint::bench::Kernel']]],
+  ['kernelname_3',['kernelName',['../namespacervpoint_1_1bench.html#a39ef1fef0d9d65cfe50e517bfd127ca8',1,'rvpoint::bench']]],
   ['kernels_20rvv_20only_4',['Helper Kernels (RVV Only)',['../instruction_manual.html#helper-kernels-rvv-only',1,'']]],
   ['key_20features_5',['🚀 Key Features',['../index.html#autotoc_md-key-features',1,'']]],
   ['key_20rvv_20concepts_6',['Key RVV Concepts',['../vector_theory.html#key-rvv-concepts',1,'']]],

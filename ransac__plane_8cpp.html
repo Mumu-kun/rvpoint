@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.9.8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>RVPoint: src/ransac_plane.cpp File Reference</title>
+<title>RVPoint: src/segmentation/ransac_plane.cpp File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -70,7 +70,7 @@ $(function() {
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li>  </ul>
+<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="dir_0785fea4a6264962505be6fcfc9ca9f1.html">segmentation</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
@@ -80,7 +80,7 @@ $(function() {
   <div class="headertitle"><div class="title">ransac_plane.cpp File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &quot;<a class="el" href="rvv__pcl_8h_source.html">include/rvv_pcl.h</a>&quot;</code><br />
+<div class="textblock"><code>#include &quot;<a class="el" href="ransac__plane_8h_source.html">segmentation/ransac_plane.h</a>&quot;</code><br />
 <code>#include &lt;vector&gt;</code><br />
 <code>#include &lt;cmath&gt;</code><br />
 <code>#include &lt;cstdlib&gt;</code><br />
@@ -90,27 +90,26 @@ $(function() {
 </div><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
-<tr class="memitem:namespacervv__pcl" id="r_namespacervv__pcl"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></td></tr>
-<tr class="memdesc:namespacervv__pcl"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library. <br /></td></tr>
+<tr class="memitem:namespacervpoint" id="r_namespacervpoint"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html">rvpoint</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a49aabf3b9bce6f29ba27088b44f9f700" id="r_a49aabf3b9bce6f29ba27088b44f9f700"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a49aabf3b9bce6f29ba27088b44f9f700">rvv_pcl::ransac_plane_sc</a> (const <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *cloud, std::size_t n, float dist_thresh, int max_iters, float *model, float collinear_thresh=1e-6f, float probability=0.99f)</td></tr>
-<tr class="memdesc:a49aabf3b9bce6f29ba27088b44f9f700"><td class="mdescLeft">&#160;</td><td class="mdescRight">RANSAC Plane Fitting (Scalar Reference).  <br /></td></tr>
-<tr class="separator:a49aabf3b9bce6f29ba27088b44f9f700"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8e1853593c78c7cd881b80969e6709a4" id="r_a8e1853593c78c7cd881b80969e6709a4"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a8e1853593c78c7cd881b80969e6709a4">rvv_pcl::ransac_plane_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, float dist_thresh, int max_iters, float *model, float collinear_thresh=1e-6f, float probability=0.99f)</td></tr>
-<tr class="memdesc:a8e1853593c78c7cd881b80969e6709a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">RANSAC Plane Fitting (RVV Optimized).  <br /></td></tr>
-<tr class="separator:a8e1853593c78c7cd881b80969e6709a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7037e3ddad1e97e2ad4da67d709fa533" id="r_a7037e3ddad1e97e2ad4da67d709fa533"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a7037e3ddad1e97e2ad4da67d709fa533">rvv_pcl::extract_plane_inliers_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, const float *model, float dist_thresh, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *inliers)</td></tr>
-<tr class="memdesc:a7037e3ddad1e97e2ad4da67d709fa533"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extract Plane Inliers (RVV Optimized).  <br /></td></tr>
-<tr class="separator:a7037e3ddad1e97e2ad4da67d709fa533"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a270e4b7dfd954cec2f063cedc0e73bd5" id="r_a270e4b7dfd954cec2f063cedc0e73bd5"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a270e4b7dfd954cec2f063cedc0e73bd5">rvv_pcl::extract_plane_outliers_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, const float *model, float dist_thresh, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *outliers)</td></tr>
-<tr class="memdesc:a270e4b7dfd954cec2f063cedc0e73bd5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extract Plane Outliers (RVV Optimized).  <br /></td></tr>
-<tr class="separator:a270e4b7dfd954cec2f063cedc0e73bd5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a88c2472ce35c12d47d44a38d94042bf3" id="r_a88c2472ce35c12d47d44a38d94042bf3"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a88c2472ce35c12d47d44a38d94042bf3">rvv_pcl::extract_plane_inliers_outliers_rvv</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, const float *model, float dist_thresh, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *inliers, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *outliers, std::size_t &amp;n_inliers, std::size_t &amp;n_outliers)</td></tr>
-<tr class="memdesc:a88c2472ce35c12d47d44a38d94042bf3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extract Both Inliers and Outliers in Single Pass (RVV Optimized).  <br /></td></tr>
-<tr class="separator:a88c2472ce35c12d47d44a38d94042bf3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a96cba5fecf34b4c3a532b469eceb9335" id="r_a96cba5fecf34b4c3a532b469eceb9335"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#a96cba5fecf34b4c3a532b469eceb9335">rvpoint::ransac_plane_sc</a> (const <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> *cloud, std::size_t n, float dist_thresh, int max_iters, float *model, float collinear_thresh=1e-6f, float probability=0.99f)</td></tr>
+<tr class="memdesc:a96cba5fecf34b4c3a532b469eceb9335"><td class="mdescLeft">&#160;</td><td class="mdescRight">RANSAC Plane Fitting (Scalar Reference).  <br /></td></tr>
+<tr class="separator:a96cba5fecf34b4c3a532b469eceb9335"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae33d000b9988b1ab2d5471696b8339ba" id="r_ae33d000b9988b1ab2d5471696b8339ba"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#ae33d000b9988b1ab2d5471696b8339ba">rvpoint::ransac_plane_rvv</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, float dist_thresh, int max_iters, float *model, float collinear_thresh=1e-6f, float probability=0.99f)</td></tr>
+<tr class="memdesc:ae33d000b9988b1ab2d5471696b8339ba"><td class="mdescLeft">&#160;</td><td class="mdescRight">RANSAC Plane Fitting (RVV Optimized).  <br /></td></tr>
+<tr class="separator:ae33d000b9988b1ab2d5471696b8339ba"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8e78abf64fad47457a9da903006ec32f" id="r_a8e78abf64fad47457a9da903006ec32f"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#a8e78abf64fad47457a9da903006ec32f">rvpoint::extract_plane_inliers_rvv</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, const float *model, float dist_thresh, <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> *inliers)</td></tr>
+<tr class="memdesc:a8e78abf64fad47457a9da903006ec32f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extract Plane Inliers (RVV Optimized).  <br /></td></tr>
+<tr class="separator:a8e78abf64fad47457a9da903006ec32f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a757b2e177f3e877b5991d6b60b49862f" id="r_a757b2e177f3e877b5991d6b60b49862f"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#a757b2e177f3e877b5991d6b60b49862f">rvpoint::extract_plane_outliers_rvv</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, const float *model, float dist_thresh, <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> *outliers)</td></tr>
+<tr class="memdesc:a757b2e177f3e877b5991d6b60b49862f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extract Plane Outliers (RVV Optimized).  <br /></td></tr>
+<tr class="separator:a757b2e177f3e877b5991d6b60b49862f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae07b56b8009f8580f81c900098e5500a" id="r_ae07b56b8009f8580f81c900098e5500a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#ae07b56b8009f8580f81c900098e5500a">rvpoint::extract_plane_inliers_outliers_rvv</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud, const float *model, float dist_thresh, <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> *inliers, <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> *outliers, std::size_t &amp;n_inliers, std::size_t &amp;n_outliers)</td></tr>
+<tr class="memdesc:ae07b56b8009f8580f81c900098e5500a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extract Both Inliers and Outliers in Single Pass (RVV Optimized).  <br /></td></tr>
+<tr class="separator:ae07b56b8009f8580f81c900098e5500a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 <!-- start footer part -->

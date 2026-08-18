@@ -19,7 +19,7 @@ var searchData=
   ['indexed_20gather_20tt_20_5f_5friscv_5fvluxei32_5fv_5ff32m8_20tt_16',['B. Vector Indexed Gather (&lt;tt&gt;__riscv_vluxei32_v_f32m8&lt;/tt&gt;)',['../md_docs_2projection.html#b-vector-indexed-gather-__riscv_vluxei32_v_f32m8',1,'']]],
   ['indexed_20load_17',['The Solution: &lt;tt&gt;vluxei32&lt;/tt&gt; (Indexed Load)',['../vector_theory.html#the-solution-vluxei32-indexed-load',1,'']]],
   ['indexing_18',['Spatial Indexing',['../instruction_manual.html#spatial-indexing',1,'']]],
-  ['indices_19',['indices',['../structFusedVectorLeaf.html#a8fb8f24e6c3def4887f47f4d4b289107',1,'FusedVectorLeaf::indices'],['../structrvv__pcl_1_1PointerOctreeNode.html#a383f2f80a01cf51bc3773ef966042a0c',1,'rvv_pcl::PointerOctreeNode::indices'],['../structrvv__pcl_1_1OctreeNode.html#a28c02748d58d247cd0f5cb248f1420f6',1,'rvv_pcl::OctreeNode::indices'],['../structrvv__pcl_1_1ClusterIndices.html#aa1c609dd612213489d5b95ef94b60075',1,'rvv_pcl::ClusterIndices::indices']]],
+  ['indices_19',['indices',['../structFusedVectorLeaf.html#a8fb8f24e6c3def4887f47f4d4b289107',1,'FusedVectorLeaf::indices'],['../structrvpoint_1_1ClusterIndices.html#a63d57d5cd73400462652dee44c25c6b4',1,'rvpoint::ClusterIndices::indices'],['../structrvpoint_1_1PointerOctreeNode.html#a929c31fc77d717fa643b470cdd3b1bb0',1,'rvpoint::PointerOctreeNode::indices'],['../structrvpoint_1_1OctreeNode.html#adb153886c1727cd7e168789e8cb89f69',1,'rvpoint::OctreeNode::indices']]],
   ['individual_20tests_20',['Running Individual Tests',['../index.html#running-individual-tests',1,'']]],
   ['infrastructure_20diagnostic_20design_21',['2. Infrastructure &amp; Diagnostic Design',['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html#autotoc_md2-infrastructure--diagnostic-design',1,'']]],
   ['ingestrawstream_22',['ingestRawStream',['../classFusedRVV25DEngine.html#aa2dc59ce6216204e799ee5db6311e35d',1,'FusedRVV25DEngine']]],
@@ -57,7 +57,7 @@ var searchData=
   ['inv_5fleaf_5f_54',['inv_leaf_',['../classFusedHashLeafOctree.html#acae6f8c3760d1e1b7d93d82bc6dc8e52',1,'FusedHashLeafOctree']]],
   ['inv_5fscale_5f_55',['inv_scale_',['../classLinearMortonOctree.html#acdf09c79d3b6daa33dc058bed13e3c39',1,'LinearMortonOctree']]],
   ['is_20better_56',['Why this is better',['../vector_theory.html#why-this-is-better',1,'']]],
-  ['is_5fleaf_57',['is_leaf',['../structrvv__pcl_1_1OctreeNode.html#aa60688f7c1a975c33ad7eb5ecde8de9d',1,'rvv_pcl::OctreeNode::is_leaf'],['../structrvv__pcl_1_1PointerOctreeNode.html#ad7abbb03c35499ea0b5792cc38728f33',1,'rvv_pcl::PointerOctreeNode::is_leaf'],['../structSIMDOctreeNode8Wide.html#afa6f4bd244818a8fefe999551bb4a9bd',1,'SIMDOctreeNode8Wide::is_leaf']]],
+  ['is_5fleaf_57',['is_leaf',['../structrvpoint_1_1OctreeNode.html#abd4f2e1706302b474888adc41fade435',1,'rvpoint::OctreeNode::is_leaf'],['../structrvpoint_1_1PointerOctreeNode.html#a52767b92a01ec6e0f3d93c6696314fdf',1,'rvpoint::PointerOctreeNode::is_leaf'],['../structSIMDOctreeNode8Wide.html#afa6f4bd244818a8fefe999551bb4a9bd',1,'SIMDOctreeNode8Wide::is_leaf']]],
   ['is_5foccupied_58',['is_occupied',['../structFusedVectorLeaf.html#a7bb8ab0497f3a86323a2e6a2c5a9d296',1,'FusedVectorLeaf']]],
   ['iteration_20scaling_59',['iteration scaling',['../md_docs_2reports_22026-08-10-pipeline-profiling-analysis.html#ablation-d-ransac-plane-fitting-iteration-scaling-1',1,'Ablation D: RANSAC Plane Fitting Iteration Scaling'],['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html#ablation-d-ransac-plane-fitting-iteration-scaling',1,'Ablation D: RANSAC Plane Fitting Iteration Scaling']]]
 ];

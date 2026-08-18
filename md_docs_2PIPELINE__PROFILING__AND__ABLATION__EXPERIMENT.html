@@ -89,7 +89,7 @@ Core Goals:</h2>
 <li><b>Evaluate Hyperparameter Sensitivity</b>: Benchmark pipeline behavior across voxel leaf sizes (<code>0.10</code> and <code>0.20</code>), SOR filter modes (enabled vs bypassed), and cluster tolerances.</li>
 <li><b>Comparative Implementation Ablations</b>: Directly compare competing algorithms for major actions (Voxel Grid v1 vs v2, Standard Octree vs Pointer Octree vs SpatialHash vs Caravan Query-Pack vs Global Vector Scan).</li>
 <li><b>SOR Radius Search Variant Benchmarks</b>: Evaluate spatial index variants (<code>sor_octree</code>, <code>sor_pointer_octree</code>, <code>sor_spatial_hash</code>) to solve the $O(N^2)$ SOR bottleneck.</li>
-<li><b>Zero-Overhead Diagnostic Tooling</b>: Implement a macro-based profiler (<code><a class="el" href="profiler_8h.html">src/include/profiler.h</a></code>) that compiles out completely in release builds to ensure zero runtime overhead in production.</li>
+<li><b>Zero-Overhead Diagnostic Tooling</b>: Implement a macro-based profiler (<code>src/include/profiler.h</code>) that compiles out completely in release builds to ensure zero runtime overhead in production.</li>
 </ol>
 <hr  />
 <h1><a class="anchor" id="autotoc_md2-infrastructure--diagnostic-design"></a>
@@ -271,7 +271,7 @@ Ablation D: RANSAC Plane Fitting Iteration Scaling</h2>
 <h2><a class="anchor" id="completed-tasks"></a>
 Completed Tasks:</h2>
 <ul>
-<li>[x] Implemented zero-overhead <code>#ifdef RVPOINT_ENABLE_PROFILING</code> macro system (<code><a class="el" href="profiler_8h.html">src/include/profiler.h</a></code>).</li>
+<li>[x] Implemented zero-overhead <code>#ifdef RVPOINT_ENABLE_PROFILING</code> macro system (<code>src/include/profiler.h</code>).</li>
 <li>[x] Added <code>--json</code> flag and sub-stage micro-timers to <code><a class="el" href="pipeline__export_8cpp.html">pipeline_export.cpp</a></code>.</li>
 <li>[x] Implemented comparative ablation benchmark tool (<code><a class="el" href="ablation__bench_8cpp.html">src/tools/ablation_bench.cpp</a></code>).</li>
 <li>[x] Automated two-phase profiling runner (<code><a class="el" href="profile__pipeline_8py.html">scripts/profile_pipeline.py</a></code>).</li>

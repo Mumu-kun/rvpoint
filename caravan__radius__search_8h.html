@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.9.8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>RVPoint: src/include/caravan_radius_search.h File Reference</title>
+<title>RVPoint: src/search/caravan_radius_search.h File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -70,7 +70,7 @@ $(function() {
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="dir_b0856f6b0d80ccb263b2f415c91f9e17.html">include</a></li>  </ul>
+<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="dir_5e53e25df8c865d23c4f0f620d3a69fb.html">search</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
@@ -81,28 +81,27 @@ $(function() {
   <div class="headertitle"><div class="title">caravan_radius_search.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &quot;<a class="el" href="rvv__pcl_8h_source.html">rvv_pcl.h</a>&quot;</code><br />
+<div class="textblock"><code>#include &quot;<a class="el" href="point__types_8h_source.html">core/point_types.h</a>&quot;</code><br />
 <code>#include &lt;cstdint&gt;</code><br />
 <code>#include &lt;vector&gt;</code><br />
+<code>#include &lt;cstddef&gt;</code><br />
 </div>
 <p><a href="caravan__radius__search_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvv__pcl_1_1CaravanRadiusSearch.html">rvv_pcl::CaravanRadiusSearch</a></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrvpoint_1_1CaravanRadiusSearch.html">rvpoint::CaravanRadiusSearch</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
-<tr class="memitem:namespacervv__pcl" id="r_namespacervv__pcl"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></td></tr>
-<tr class="memdesc:namespacervv__pcl"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library. <br /></td></tr>
+<tr class="memitem:namespacervpoint" id="r_namespacervpoint"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html">rvpoint</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ae83e3649ed3dec8e31b21dda36a1b61f" id="r_ae83e3649ed3dec8e31b21dda36a1b61f"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#ae83e3649ed3dec8e31b21dda36a1b61f">rvv_pcl::sor_grid_caravan</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha, float search_radius=0.5f)</td></tr>
-<tr class="memdesc:ae83e3649ed3dec8e31b21dda36a1b61f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Grid-Caravan Bounding Box Pruned SOR (O(N_local * Q / VL)). Computes tile AABB + radius, queries <a class="el" href="classrvv__pcl_1_1SpatialHash.html" title="Spatial Hash Grid for Fast Neighbor Search.">SpatialHash</a> cells, and streams candidate points into vector registers.  <br /></td></tr>
-<tr class="separator:ae83e3649ed3dec8e31b21dda36a1b61f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a752ed79bf7e97fbedbb613b253450978" id="r_a752ed79bf7e97fbedbb613b253450978"><td class="memItemLeft" align="right" valign="top">std::size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#a752ed79bf7e97fbedbb613b253450978">rvpoint::sor_grid_caravan</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;in, <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> *out, int k, float alpha, float search_radius)</td></tr>
+<tr class="separator:a752ed79bf7e97fbedbb613b253450978"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 <!-- start footer part -->

@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.9.8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>RVPoint: src/include/simple_pcd_loader.h File Reference</title>
+<title>RVPoint: src/io/simple_pcd_loader.h File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -70,7 +70,7 @@ $(function() {
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="dir_b0856f6b0d80ccb263b2f415c91f9e17.html">include</a></li>  </ul>
+<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="dir_c184e51c84f2c3f0345bbc8a0d75d3e1.html">io</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
@@ -81,7 +81,8 @@ $(function() {
   <div class="headertitle"><div class="title">simple_pcd_loader.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &lt;algorithm&gt;</code><br />
+<div class="textblock"><code>#include &quot;<a class="el" href="point__types_8h_source.html">core/point_types.h</a>&quot;</code><br />
+<code>#include &lt;algorithm&gt;</code><br />
 <code>#include &lt;cstdint&gt;</code><br />
 <code>#include &lt;cstring&gt;</code><br />
 <code>#include &lt;fstream&gt;</code><br />
@@ -94,38 +95,34 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1PointXYZ.html">rvv_pcl::PointXYZ</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Standard 3D Point structure.  <a href="structrvv__pcl_1_1PointXYZ.html#details">More...</a><br /></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvpoint_1_1detail_1_1PCDHeader.html">rvpoint::detail::PCDHeader</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1detail_1_1PCDHeader.html">rvv_pcl::detail::PCDHeader</a></td></tr>
-<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvv__pcl_1_1PointXYZRGB.html">rvv_pcl::PointXYZRGB</a></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvpoint_1_1PointXYZRGB.html">rvpoint::PointXYZRGB</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
-<tr class="memitem:namespacervv__pcl" id="r_namespacervv__pcl"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></td></tr>
-<tr class="memdesc:namespacervv__pcl"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library. <br /></td></tr>
+<tr class="memitem:namespacervpoint" id="r_namespacervpoint"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html">rvpoint</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:namespacervv__pcl_1_1detail" id="r_namespacervv__pcl_1_1detail"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html">rvv_pcl::detail</a></td></tr>
+<tr class="memitem:namespacervpoint_1_1detail" id="r_namespacervpoint_1_1detail"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1detail.html">rvpoint::detail</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a0cb063de721d4fc29b4d8ee421bb1d92" id="r_a0cb063de721d4fc29b4d8ee421bb1d92"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a0cb063de721d4fc29b4d8ee421bb1d92">rvv_pcl::detail::decompressLZF</a> (const std::vector&lt; unsigned char &gt; &amp;input, std::vector&lt; unsigned char &gt; &amp;output)</td></tr>
-<tr class="separator:a0cb063de721d4fc29b4d8ee421bb1d92"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a430353c3bb43ef404b7825300bf45332" id="r_a430353c3bb43ef404b7825300bf45332"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a430353c3bb43ef404b7825300bf45332">rvv_pcl::detail::parsePCDHeader</a> (std::istream &amp;stream, <a class="el" href="structrvv__pcl_1_1detail_1_1PCDHeader.html">PCDHeader</a> &amp;header)</td></tr>
-<tr class="separator:a430353c3bb43ef404b7825300bf45332"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a28b83e2af0874138ff8991d00a56109f" id="r_a28b83e2af0874138ff8991d00a56109f"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a28b83e2af0874138ff8991d00a56109f">rvv_pcl::detail::findFieldIndex</a> (const <a class="el" href="structrvv__pcl_1_1detail_1_1PCDHeader.html">PCDHeader</a> &amp;header, const std::string &amp;name)</td></tr>
-<tr class="separator:a28b83e2af0874138ff8991d00a56109f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a27a390d24094ef893f20fdbee998082e" id="r_a27a390d24094ef893f20fdbee998082e"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1detail.html#a27a390d24094ef893f20fdbee998082e">rvv_pcl::detail::readFloat</a> (const unsigned char *src, int size, float &amp;value)</td></tr>
-<tr class="separator:a27a390d24094ef893f20fdbee998082e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad513fe0e21cc1b7ae4c1086b415473d0" id="r_ad513fe0e21cc1b7ae4c1086b415473d0"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#ad513fe0e21cc1b7ae4c1086b415473d0">rvv_pcl::loadPCD</a> (const std::string &amp;file_path, std::vector&lt; <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> &gt; &amp;points)</td></tr>
-<tr class="separator:ad513fe0e21cc1b7ae4c1086b415473d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8c14b4e55a663b61179a570c0ec7fcef" id="r_a8c14b4e55a663b61179a570c0ec7fcef"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#a8c14b4e55a663b61179a570c0ec7fcef">rvv_pcl::savePCD</a> (const std::string &amp;filename, const std::vector&lt; <a class="el" href="structrvv__pcl_1_1PointXYZ.html">PointXYZ</a> &gt; &amp;points, bool binary=false)</td></tr>
-<tr class="separator:a8c14b4e55a663b61179a570c0ec7fcef"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:adb41d632dacd51d705751ef4c2b0b5bc" id="r_adb41d632dacd51d705751ef4c2b0b5bc"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html#adb41d632dacd51d705751ef4c2b0b5bc">rvv_pcl::savePCDRGB</a> (const std::string &amp;filename, const std::vector&lt; <a class="el" href="structrvv__pcl_1_1PointXYZRGB.html">PointXYZRGB</a> &gt; &amp;points, bool binary=false)</td></tr>
-<tr class="separator:adb41d632dacd51d705751ef4c2b0b5bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa4c9c75369acde93fe7a6d68a42c117f" id="r_aa4c9c75369acde93fe7a6d68a42c117f"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1detail.html#aa4c9c75369acde93fe7a6d68a42c117f">rvpoint::detail::decompressLZF</a> (const std::vector&lt; unsigned char &gt; &amp;input, std::vector&lt; unsigned char &gt; &amp;output)</td></tr>
+<tr class="separator:aa4c9c75369acde93fe7a6d68a42c117f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a596e148af0d2d0ff6ae9538732170bed" id="r_a596e148af0d2d0ff6ae9538732170bed"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1detail.html#a596e148af0d2d0ff6ae9538732170bed">rvpoint::detail::parsePCDHeader</a> (std::istream &amp;stream, <a class="el" href="structrvpoint_1_1detail_1_1PCDHeader.html">PCDHeader</a> &amp;header)</td></tr>
+<tr class="separator:a596e148af0d2d0ff6ae9538732170bed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8dada12edcdb96b606d7728bbe24c536" id="r_a8dada12edcdb96b606d7728bbe24c536"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1detail.html#a8dada12edcdb96b606d7728bbe24c536">rvpoint::detail::findFieldIndex</a> (const <a class="el" href="structrvpoint_1_1detail_1_1PCDHeader.html">PCDHeader</a> &amp;header, const std::string &amp;name)</td></tr>
+<tr class="separator:a8dada12edcdb96b606d7728bbe24c536"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a72bc3e465acec10da94151f4c4d5f881" id="r_a72bc3e465acec10da94151f4c4d5f881"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1detail.html#a72bc3e465acec10da94151f4c4d5f881">rvpoint::detail::readFloat</a> (const unsigned char *src, int size, float &amp;value)</td></tr>
+<tr class="separator:a72bc3e465acec10da94151f4c4d5f881"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a63c57900a13a76af267b191e2a533662" id="r_a63c57900a13a76af267b191e2a533662"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#a63c57900a13a76af267b191e2a533662">rvpoint::loadPCD</a> (const std::string &amp;file_path, std::vector&lt; <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> &gt; &amp;points)</td></tr>
+<tr class="separator:a63c57900a13a76af267b191e2a533662"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae8569e421b46a394d8ae193bd16d38f1" id="r_ae8569e421b46a394d8ae193bd16d38f1"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#ae8569e421b46a394d8ae193bd16d38f1">rvpoint::savePCD</a> (const std::string &amp;filename, const std::vector&lt; <a class="el" href="structrvpoint_1_1PointXYZ.html">PointXYZ</a> &gt; &amp;points, bool binary=false)</td></tr>
+<tr class="separator:ae8569e421b46a394d8ae193bd16d38f1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a66f6347c4ab3f8ceb1f72ddea9000361" id="r_a66f6347c4ab3f8ceb1f72ddea9000361"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html#a66f6347c4ab3f8ceb1f72ddea9000361">rvpoint::savePCDRGB</a> (const std::string &amp;filename, const std::vector&lt; <a class="el" href="structrvpoint_1_1PointXYZRGB.html">PointXYZRGB</a> &gt; &amp;points, bool binary=false)</td></tr>
+<tr class="separator:a66f6347c4ab3f8ceb1f72ddea9000361"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 <!-- start footer part -->

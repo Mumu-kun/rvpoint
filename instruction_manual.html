@@ -290,23 +290,22 @@ Command Breakdown</h3>
 4. &lt;tt&gt;-I src/include&lt;/tt&gt; - Include Directory</h4>
 <p><b>Purpose:</b> Tell preprocessor where to find header files</p>
 <p><b>How it works:</b> </p><div class="fragment"><div class="line"><span class="comment">// In your code:</span></div>
-<div class="line"><span class="preprocessor">#include &quot;<a class="code" href="rvv__pcl_8h.html">rvv_pcl.h</a>&quot;</span></div>
+<div class="line"><span class="preprocessor">#include &quot;rvv_pcl.h&quot;</span></div>
 <div class="line"> </div>
 <div class="line"><span class="comment">// Compiler searches:</span></div>
 <div class="line">1. Current directory</div>
 <div class="line">2. src/include/        ← Added by -I flag</div>
 <div class="line">3. System paths (/opt/riscv/include)</div>
-<div class="ttc" id="arvv__pcl_8h_html"><div class="ttname"><a href="rvv__pcl_8h.html">rvv_pcl.h</a></div></div>
 </div><!-- fragment --><p><b>Without <code>-I src/include</code>:</b> </p><div class="fragment"><div class="line"># Error: rvv_pcl.h: No such file or directory</div>
 </div><!-- fragment --><p><b>With <code>-I src/include</code>:</b> </p><div class="fragment"><div class="line"># Success: Found at src/include/rvv_pcl.h</div>
 </div><!-- fragment --><h4><a class="anchor" id="autotoc_md5-source-files---input"></a>
 5. Source Files - Input</h4>
-<p>**<code><a class="el" href="rvv__common_8cpp.html">src/rvv_common.cpp</a></code>**</p><ul>
+<p>**<code>src/rvv_common.cpp</code>**</p><ul>
 <li>Contains: <code>get_dist_sq_rvv()</code> kernel</li>
 <li>Used by: Multiple algorithms</li>
 <li>Compiles to: Object file with vector instructions</li>
 </ul>
-<p>**<code><a class="el" href="voxel__grid__downsamp_8cpp.html">src/voxel_grid_downsamp.cpp</a></code>**</p><ul>
+<p>**<code>src/voxel_grid_downsamp.cpp</code>**</p><ul>
 <li>Contains: Scalar + RVV implementations</li>
 <li>Generates: Two code paths in same binary</li>
 </ul>
@@ -335,17 +334,14 @@ Stage 1: Preprocessing</h4>
 <li>Output: <code>.i</code> file (all includes merged)</li>
 </ul>
 <p><b>Example:</b> </p><div class="fragment"><div class="line"><span class="comment">// Before (in source):</span></div>
-<div class="line"><span class="preprocessor">#include &quot;<a class="code" href="rvv__pcl_8h.html">rvv_pcl.h</a>&quot;</span></div>
+<div class="line"><span class="preprocessor">#include &quot;rvv_pcl.h&quot;</span></div>
 <div class="line"> </div>
 <div class="line"><span class="comment">// After (in .i file):</span></div>
 <div class="line"><span class="keyword">namespace </span><a class="code hl_namespace" href="namespacervv__pcl.html">rvv_pcl</a> {</div>
-<div class="line">  <span class="keyword">struct </span>PointXYZ { <span class="keywordtype">float</span> <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#a8152bc0ca1af1fca7af2e9cfa109c3b1">x</a>, <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb">y</a>, <a class="code hl_variable" href="structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5">z</a>; };</div>
+<div class="line">  <span class="keyword">struct </span>PointXYZ { <span class="keywordtype">float</span> x, y, z; };</div>
 <div class="line">  <span class="comment">// ... 100+ lines from header</span></div>
 <div class="line">}</div>
-<div class="ttc" id="anamespacervv__pcl_html"><div class="ttname"><a href="namespacervv__pcl.html">rvv_pcl</a></div><div class="ttdoc">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library.</div><div class="ttdef"><b>Definition</b> benchmark_kernels.cpp:8</div></div>
-<div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_a33da344ee6bf3aa17ca495a83f2e37b5"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#a33da344ee6bf3aa17ca495a83f2e37b5">rvv_pcl::PointXYZ::z</a></div><div class="ttdeci">float z</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
-<div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_a8152bc0ca1af1fca7af2e9cfa109c3b1"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#a8152bc0ca1af1fca7af2e9cfa109c3b1">rvv_pcl::PointXYZ::x</a></div><div class="ttdeci">float x</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
-<div class="ttc" id="astructrvv__pcl_1_1PointXYZ_html_ae75d9a71891478b54dfe1cae48c2edcb"><div class="ttname"><a href="structrvv__pcl_1_1PointXYZ.html#ae75d9a71891478b54dfe1cae48c2edcb">rvv_pcl::PointXYZ::y</a></div><div class="ttdeci">float y</div><div class="ttdef"><b>Definition</b> rvv_pcl.h:26</div></div>
+<div class="ttc" id="anamespacervv__pcl_html"><div class="ttname"><a href="namespacervv__pcl.html">rvv_pcl</a></div><div class="ttdef"><b>Definition</b> bench_params.h:7</div></div>
 </div><!-- fragment --><h4><a class="anchor" id="stage-2-compilation"></a>
 Stage 2: Compilation</h4>
 <div class="fragment"><div class="line"># Conceptual:</div>
@@ -1273,12 +1269,12 @@ Utilities</h3>
 &lt;tt&gt;loadPCD(file_path, points_vector)&lt;/tt&gt;</h4>
 <p>Robust loader for <code>.pcd</code> files. Supports both <b>ASCII</b> and <b>Binary</b> formats.</p><ul>
 <li><b>Returns</b>: Number of points loaded or -1 on error.</li>
-<li><b>Namespace</b>: <code><a class="el" href="namespacervv__pcl.html" title="Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library.">rvv_pcl</a></code></li>
+<li><b>Namespace</b>: <code><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></code></li>
 </ul>
 <h4><a class="anchor" id="savepcdfile_path-points_vector"></a>
 &lt;tt&gt;savePCD(file_path, points_vector)&lt;/tt&gt;</h4>
 <p>Saves a point cloud to a <code>.pcd</code> file in ASCII format.</p><ul>
-<li><b>Namespace</b>: <code><a class="el" href="namespacervv__pcl.html" title="Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library.">rvv_pcl</a></code></li>
+<li><b>Namespace</b>: <code><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></code></li>
 </ul>
 <hr  />
 <h2><a class="anchor" id="quick-reference"></a>
@@ -1380,7 +1376,7 @@ Team Integration &amp; Usage Guide</h2>
 &lt;strong&gt;Adding a New Algorithm&lt;/strong&gt;</h4>
 <p>When implementing a new point cloud filter (e.g., a "Pass-Through" filter), follow the established patterns:</p>
 <ol type="1">
-<li>**Header (<code><a class="el" href="rvv__pcl_8h.html">src/include/rvv_pcl.h</a></code>)**: Add both Scalar and RVV declarations. <code>cpp void pass_through_sc(const PointXYZ* in, size_t n, PointXYZ* out, float min_z, float max_z); void pass_through_rvv(const PointCloudSoA&amp; in, PointXYZ* out, float min_z, float max_z); </code></li>
+<li>**Header (<code>src/include/rvv_pcl.h</code>)**: Add both Scalar and RVV declarations. <code>cpp void pass_through_sc(const PointXYZ* in, size_t n, PointXYZ* out, float min_z, float max_z); void pass_through_rvv(const PointCloudSoA&amp; in, PointXYZ* out, float min_z, float max_z); </code></li>
 <li><b>Implementation</b>:<ul>
 <li>Use the <b>SoA (Structure of Arrays)</b> layout for the RVV path.</li>
 <li>Use <b>LMUL=8</b> for maximum throughput.</li>

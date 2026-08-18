@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.9.8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>RVPoint: src/include/benchmark_kernels.h File Reference</title>
+<title>RVPoint: src/tools/benchmark_kernels.h File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -70,68 +70,74 @@ $(function() {
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="dir_b0856f6b0d80ccb263b2f415c91f9e17.html">include</a></li>  </ul>
+<li class="navelem"><a class="el" href="dir_68267d1309a1af8e8297ef4c3efbcdba.html">src</a></li><li class="navelem"><a class="el" href="dir_1563a38af0d3a5e4a6330d6d45e9792a.html">tools</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#nested-classes">Classes</a> &#124;
 <a href="#namespaces">Namespaces</a> &#124;
 <a href="#enum-members">Enumerations</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">benchmark_kernels.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &quot;<a class="el" href="rvv__pcl_8h_source.html">rvv_pcl.h</a>&quot;</code><br />
+<div class="textblock"><code>#include &quot;<a class="el" href="point__types_8h_source.html">core/point_types.h</a>&quot;</code><br />
 <code>#include &lt;cstddef&gt;</code><br />
 <code>#include &lt;cstdint&gt;</code><br />
 <code>#include &lt;string&gt;</code><br />
+<code>#include &lt;vector&gt;</code><br />
 </div>
 <p><a href="benchmark__kernels_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structrvpoint_1_1bench_1_1BenchmarkCloudHolder.html">rvpoint::bench::BenchmarkCloudHolder</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
-<tr class="memitem:namespacervv__pcl" id="r_namespacervv__pcl"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl.html">rvv_pcl</a></td></tr>
-<tr class="memdesc:namespacervv__pcl"><td class="mdescLeft">&#160;</td><td class="mdescRight">Main namespace for the RVPoint RISC-V Vector Optimized Point Cloud Library. <br /></td></tr>
+<tr class="memitem:namespacervpoint" id="r_namespacervpoint"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint.html">rvpoint</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:namespacervv__pcl_1_1bench" id="r_namespacervv__pcl_1_1bench"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html">rvv_pcl::bench</a></td></tr>
+<tr class="memitem:namespacervpoint_1_1bench" id="r_namespacervpoint_1_1bench"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html">rvpoint::bench</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="enum-members" name="enum-members"></a>
 Enumerations</h2></td></tr>
-<tr class="memitem:a443e7f115d84c63cf8207e84e1276526" id="r_a443e7f115d84c63cf8207e84e1276526"><td class="memItemLeft" align="right" valign="top">enum class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526">rvv_pcl::bench::Kernel</a> { <br />
-&#160;&#160;<a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526a7e6aa2d53f6ee2b1a34b017fa403cb76">rvv_pcl::bench::L2</a>
-, <a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526a9e834f13e35e4edf64863ab414a6217a">rvv_pcl::bench::Reduction</a>
-, <a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526ad7778d0c64b6ba21494c97f77a66885a">rvv_pcl::bench::Filter</a>
-, <a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526ad1106ccca74e98877ed6d7890c70bb2c">rvv_pcl::bench::Radius</a>
+<tr class="memitem:a416d76d9e386cb87b9a30426806f50b8" id="r_a416d76d9e386cb87b9a30426806f50b8"><td class="memItemLeft" align="right" valign="top">enum class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8">rvpoint::bench::Kernel</a> { <br />
+&#160;&#160;<a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8a7e6aa2d53f6ee2b1a34b017fa403cb76">rvpoint::bench::L2</a>
+, <a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8a9e834f13e35e4edf64863ab414a6217a">rvpoint::bench::Reduction</a>
+, <a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8ad7778d0c64b6ba21494c97f77a66885a">rvpoint::bench::Filter</a>
+, <a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8ad1106ccca74e98877ed6d7890c70bb2c">rvpoint::bench::Radius</a>
 , <br />
-&#160;&#160;<a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526a960b44c579bc2f6818d2daaf9e4c16f0">rvv_pcl::bench::Normal</a>
-, <a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526ad7f8c7a175f2cf745cc3ff4bd05663ad">rvv_pcl::bench::Caravan</a>
+&#160;&#160;<a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8a960b44c579bc2f6818d2daaf9e4c16f0">rvpoint::bench::Normal</a>
+, <a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8ad7f8c7a175f2cf745cc3ff4bd05663ad">rvpoint::bench::Caravan</a>
 <br />
  }</td></tr>
-<tr class="separator:a443e7f115d84c63cf8207e84e1276526"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="separator:a416d76d9e386cb87b9a30426806f50b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:acea52487d0221fdc163b6b8a83765890" id="r_acea52487d0221fdc163b6b8a83765890"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#acea52487d0221fdc163b6b8a83765890">rvv_pcl::bench::makeDeterministicCloud</a> (std::size_t size)</td></tr>
-<tr class="separator:acea52487d0221fdc163b6b8a83765890"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3c243788fb382ffc7b8da0ff3f2d14b7" id="r_a3c243788fb382ffc7b8da0ff3f2d14b7"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a3c243788fb382ffc7b8da0ff3f2d14b7">rvv_pcl::bench::parseKernel</a> (const std::string &amp;name, <a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526">Kernel</a> &amp;kernel)</td></tr>
-<tr class="separator:a3c243788fb382ffc7b8da0ff3f2d14b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae480fb9c6be831a0eceba33c6c9b9032" id="r_ae480fb9c6be831a0eceba33c6c9b9032"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#ae480fb9c6be831a0eceba33c6c9b9032">rvv_pcl::bench::kernelName</a> (<a class="el" href="namespacervv__pcl_1_1bench.html#a443e7f115d84c63cf8207e84e1276526">Kernel</a> kernel)</td></tr>
-<tr class="separator:ae480fb9c6be831a0eceba33c6c9b9032"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0b181730e1604702bd3465178a6af755" id="r_a0b181730e1604702bd3465178a6af755"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a0b181730e1604702bd3465178a6af755">rvv_pcl::bench::modeName</a> ()</td></tr>
-<tr class="separator:a0b181730e1604702bd3465178a6af755"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aec8bcf93f5450a8ec22dca031ed5136b" id="r_aec8bcf93f5450a8ec22dca031ed5136b"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#aec8bcf93f5450a8ec22dca031ed5136b">rvv_pcl::bench::runL2Distance</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
-<tr class="separator:aec8bcf93f5450a8ec22dca031ed5136b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3e6c39fd1bbb0374b35695979a2c0e5e" id="r_a3e6c39fd1bbb0374b35695979a2c0e5e"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a3e6c39fd1bbb0374b35695979a2c0e5e">rvv_pcl::bench::runReduction</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
-<tr class="separator:a3e6c39fd1bbb0374b35695979a2c0e5e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a447bb002c671e614d93491580ebe2b6b" id="r_a447bb002c671e614d93491580ebe2b6b"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a447bb002c671e614d93491580ebe2b6b">rvv_pcl::bench::runMaskedFilter</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
-<tr class="separator:a447bb002c671e614d93491580ebe2b6b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a18939440e61c70dc0f5ac1e8e366df84" id="r_a18939440e61c70dc0f5ac1e8e366df84"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a18939440e61c70dc0f5ac1e8e366df84">rvv_pcl::bench::runRadiusSearch</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
-<tr class="separator:a18939440e61c70dc0f5ac1e8e366df84"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a96f7b3d46d4941e9f65c4be57a13b636" id="r_a96f7b3d46d4941e9f65c4be57a13b636"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a96f7b3d46d4941e9f65c4be57a13b636">rvv_pcl::bench::runNormalEstimation</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
-<tr class="separator:a96f7b3d46d4941e9f65c4be57a13b636"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6559c7394aff46b1812f854046e0ec7a" id="r_a6559c7394aff46b1812f854046e0ec7a"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervv__pcl_1_1bench.html#a6559c7394aff46b1812f854046e0ec7a">rvv_pcl::bench::runCaravanRadiusSearch</a> (const <a class="el" href="structrvv__pcl_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
-<tr class="separator:a6559c7394aff46b1812f854046e0ec7a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af243b8cecca38c4a20783018f40e6285" id="r_af243b8cecca38c4a20783018f40e6285"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structrvpoint_1_1bench_1_1BenchmarkCloudHolder.html">BenchmarkCloudHolder</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#af243b8cecca38c4a20783018f40e6285">rvpoint::bench::makeDeterministicCloud</a> (std::size_t size)</td></tr>
+<tr class="separator:af243b8cecca38c4a20783018f40e6285"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af27130d07ba1579e5239edc27d370fbd" id="r_af27130d07ba1579e5239edc27d370fbd"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#af27130d07ba1579e5239edc27d370fbd">rvpoint::bench::parseKernel</a> (const std::string &amp;name, <a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8">Kernel</a> &amp;kernel)</td></tr>
+<tr class="separator:af27130d07ba1579e5239edc27d370fbd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a39ef1fef0d9d65cfe50e517bfd127ca8" id="r_a39ef1fef0d9d65cfe50e517bfd127ca8"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#a39ef1fef0d9d65cfe50e517bfd127ca8">rvpoint::bench::kernelName</a> (<a class="el" href="namespacervpoint_1_1bench.html#a416d76d9e386cb87b9a30426806f50b8">Kernel</a> kernel)</td></tr>
+<tr class="separator:a39ef1fef0d9d65cfe50e517bfd127ca8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a168be0b17b0ad93d44e71a9990adf46b" id="r_a168be0b17b0ad93d44e71a9990adf46b"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#a168be0b17b0ad93d44e71a9990adf46b">rvpoint::bench::modeName</a> ()</td></tr>
+<tr class="separator:a168be0b17b0ad93d44e71a9990adf46b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abfddafa242e2ccb08e76f2b56e82e3e1" id="r_abfddafa242e2ccb08e76f2b56e82e3e1"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#abfddafa242e2ccb08e76f2b56e82e3e1">rvpoint::bench::runL2Distance</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
+<tr class="separator:abfddafa242e2ccb08e76f2b56e82e3e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abc40f24685466a37892a463b2c237ef7" id="r_abc40f24685466a37892a463b2c237ef7"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#abc40f24685466a37892a463b2c237ef7">rvpoint::bench::runReduction</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
+<tr class="separator:abc40f24685466a37892a463b2c237ef7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acbecdb0af4ad4bd1f49fd0c1d8287f55" id="r_acbecdb0af4ad4bd1f49fd0c1d8287f55"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#acbecdb0af4ad4bd1f49fd0c1d8287f55">rvpoint::bench::runMaskedFilter</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
+<tr class="separator:acbecdb0af4ad4bd1f49fd0c1d8287f55"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab011f2188fe5c5378d7d09118097fd2d" id="r_ab011f2188fe5c5378d7d09118097fd2d"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#ab011f2188fe5c5378d7d09118097fd2d">rvpoint::bench::runRadiusSearch</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
+<tr class="separator:ab011f2188fe5c5378d7d09118097fd2d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adc980f0fb7cc0efc0c1621e917f5dcda" id="r_adc980f0fb7cc0efc0c1621e917f5dcda"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#adc980f0fb7cc0efc0c1621e917f5dcda">rvpoint::bench::runNormalEstimation</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
+<tr class="separator:adc980f0fb7cc0efc0c1621e917f5dcda"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6c7e20a9b99f2ef571c77b2124367ad8" id="r_a6c7e20a9b99f2ef571c77b2124367ad8"><td class="memItemLeft" align="right" valign="top">uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacervpoint_1_1bench.html#a6c7e20a9b99f2ef571c77b2124367ad8">rvpoint::bench::runCaravanRadiusSearch</a> (const <a class="el" href="structrvpoint_1_1PointCloudSoA.html">PointCloudSoA</a> &amp;cloud)</td></tr>
+<tr class="separator:a6c7e20a9b99f2ef571c77b2124367ad8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 </div><!-- contents -->
 <!-- start footer part -->

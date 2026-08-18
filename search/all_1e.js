@@ -139,5 +139,5 @@ var searchData=
   ['tt_20vsetvl_20tt_20vector_20set_20vector_20length_136',['1. &lt;tt&gt;vsetvl&lt;/tt&gt; (Vector Set Vector Length)',['../vector_theory.html#autotoc_md1-vsetvl-vector-set-vector-length',1,'']]],
   ['tuning_137',['Performance Tuning',['../instruction_manual.html#performance-tuning',1,'']]],
   ['two_20phase_20workflow_20tt_20scripts_20profile_5fpipeline_20py_20tt_138',['Automated Two-Phase Workflow (&lt;tt&gt;scripts/profile_pipeline.py&lt;/tt&gt;)',['../md_docs_2PIPELINE__PROFILING__AND__ABLATION__EXPERIMENT.html#automated-two-phase-workflow-scriptsprofile_pipelinepy',1,'']]],
-  ['types_139',['types',['../structrvv__pcl_1_1detail_1_1PCDHeader.html#a98f31d73e0e4684d7fc5b3827fde3f2c',1,'rvv_pcl::detail::PCDHeader']]]
+  ['types_139',['types',['../structrvpoint_1_1detail_1_1PCDHeader.html#a6dd39af3f69d5d042a2c9a2fe8ae7f01',1,'rvpoint::detail::PCDHeader']]]
 ];
