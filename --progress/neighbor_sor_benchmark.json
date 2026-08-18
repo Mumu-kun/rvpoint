@@ -1,0 +1,90 @@
+[
+  {
+    "category": "PlainSearch",
+    "algorithm": "Global_RVV_Scan",
+    "time_ms": 1.26595,
+    "input_count": 22632,
+    "output_count": 16,
+    "speedup_vs_baseline": 1
+  },
+  {
+    "category": "PlainSearch",
+    "algorithm": "Standard_Octree",
+    "time_ms": 1.81298,
+    "input_count": 22632,
+    "output_count": 16,
+    "speedup_vs_baseline": 0.698273
+  },
+  {
+    "category": "PlainSearch",
+    "algorithm": "Pointer_Octree_RVV",
+    "time_ms": 1.64857,
+    "input_count": 22632,
+    "output_count": 16,
+    "speedup_vs_baseline": 0.76791
+  },
+  {
+    "category": "PlainSearch",
+    "algorithm": "Pointer_Octree_Scalar",
+    "time_ms": 0.792833,
+    "input_count": 22632,
+    "output_count": 16,
+    "speedup_vs_baseline": 1.59674
+  },
+  {
+    "category": "PlainSearch",
+    "algorithm": "SpatialHash_Grid",
+    "time_ms": 0.848536,
+    "input_count": 22632,
+    "output_count": 16,
+    "speedup_vs_baseline": 1.49192
+  },
+  {
+    "category": "PlainSearch",
+    "algorithm": "Caravan_SingleQuery",
+    "time_ms": 1.74217,
+    "input_count": 22632,
+    "output_count": 16,
+    "speedup_vs_baseline": 0.726651
+  },
+  {
+    "category": "SOR",
+    "algorithm": "Scalar_BruteForce",
+    "time_ms": 39956.7,
+    "input_count": 18542,
+    "output_count": 17603,
+    "speedup_vs_baseline": 1
+  },
+  {
+    "category": "SOR",
+    "algorithm": "RVV_BruteForce",
+    "time_ms": 11580.6,
+    "input_count": 18542,
+    "output_count": 17603,
+    "speedup_vs_baseline": 3.45032
+  },
+  {
+    "category": "SOR",
+    "algorithm": "Pointer_Octree_SOR",
+    "time_ms": 363.407,
+    "input_count": 18542,
+    "output_count": 16454,
+    "speedup_vs_baseline": 109.95
+  },
+  {
+    "category": "SOR",
+    "algorithm": "Caravan_PointerOctree_Hybrid",
+    "time_ms": 578.997,
+    "input_count": 18542,
+    "output_count": 17371,
+    "speedup_vs_baseline": 69.0101
+  },
+  {
+    "category": "SOR",
+    "algorithm": "Strategy1_Grid_Caravan",
+    "time_ms": 2298.58,
+    "input_count": 18542,
+    "output_count": 16443,
+    "speedup_vs_baseline": 17.3832
+  }
+]

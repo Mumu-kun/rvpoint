@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(RVVPCL LANGUAGES C CXX)
+project(RVPoint LANGUAGES C CXX)
 
 # Set C++ Standard
 set(CMAKE_CXX_STANDARD 17)
@@ -36,34 +36,38 @@ message(STATUS "RISC-V ABI: ${RISCV_ABI}")
 message(STATUS "RVV backend enabled: ${RVV_PCL_ENABLE_RVV}")
 message(STATUS "Binary output dir: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
-# 1. The Library (rvvpcl)
+# 1. The Library (rvpoint)
 list(APPEND SOURCES
-    "src/voxel_grid_downsamp.cpp"
-    "src/rvv_common.cpp"
-    "src/statistical_outlier_removal.cpp"
-    "src/normal_estimation.cpp"
-    "src/ransac_plane.cpp"
-    "src/euclidean_clustering.cpp"
-    "src/neighbor_search/octree.cpp"
-    "src/neighbor_search/spatial_hashing.cpp"
-    "src/neighbor_search/radius_search.cpp"
-    "src/neighbor_search/caravan_radius_search.cpp"
-    "src/neighbor_search/pointer_octree.cpp"
-    "src/neighbor_search/caravan_pointer_octree.cpp"
+    "src/core/rvv_common.cpp"
+    "src/filters/voxel_grid_downsamp.cpp"
+    "src/filters/statistical_outlier_removal.cpp"
+    "src/features/normal_estimation.cpp"
+    "src/segmentation/ransac_plane.cpp"
+    "src/segmentation/euclidean_clustering.cpp"
+    "src/search/octree.cpp"
+    "src/search/spatial_hashing.cpp"
+    "src/search/radius_search.cpp"
+    "src/search/caravan_radius_search.cpp"
+    "src/search/pointer_octree.cpp"
+    "src/search/caravan_pointer_octree.cpp"
+    "src/tools/benchmark_kernels.cpp"
 )
-add_library(rvvpcl ${SOURCES})
-target_include_directories(rvvpcl PUBLIC "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
-target_compile_options(rvvpcl PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
+add_library(rvpoint ${SOURCES})
+add_library(rvvpcl ALIAS rvpoint)
+target_include_directories(rvpoint PUBLIC "${CMAKE_SOURCE_DIR}/src")
+target_compile_options(rvpoint PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
 if(RVV_PCL_ENABLE_RVV)
-    target_compile_definitions(rvvpcl PUBLIC RVV_PCL_USE_RVV=1)
+    target_compile_definitions(rvpoint PUBLIC RVV_PCL_USE_RVV=1)
 endif()
 
 # Helper: add a test target from a source file
 function(add_rvv_test src)
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
-    target_link_libraries(${name} PRIVATE rvvpcl)
-    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+    target_link_libraries(${name} PRIVATE rvpoint)
+    target_compile_options(${name} PRIVATE "-fopenmp")
+    target_link_options(${name} PRIVATE "-fopenmp")
+    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
 endfunction()
 
 # 2. Test Executables
@@ -105,27 +109,57 @@ file(GLOB BENCHMARK_SOURCES "tests/benchmark_*.cpp")
 foreach(src ${BENCHMARK_SOURCES})
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
-    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
     target_compile_options(${name} PRIVATE "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
-    target_link_libraries(${name} PRIVATE rvvpcl)
+    target_link_libraries(${name} PRIVATE rvpoint)
 endforeach()
 
 # Pipeline Export Utility
 add_executable(pipeline_export src/tools/pipeline_export.cpp)
-target_include_directories(pipeline_export PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
-target_link_libraries(pipeline_export PRIVATE rvvpcl)
+target_include_directories(pipeline_export PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_export PRIVATE rvpoint)
 
 # Ablation Benchmark Utility
 add_executable(ablation_bench src/tools/ablation_bench.cpp)
-target_include_directories(ablation_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(ablation_bench PRIVATE rvvpcl)
+target_include_directories(ablation_bench PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(ablation_bench PRIVATE rvpoint)
 
 # Neighbor Search & 4 Caravan Strategies Benchmark Tool
 add_executable(neighbor_search_sor_bench src/tools/neighbor_search_sor_bench.cpp)
-target_include_directories(neighbor_search_sor_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(neighbor_search_sor_bench PRIVATE rvvpcl)
+target_include_directories(neighbor_search_sor_bench PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(neighbor_search_sor_bench PRIVATE rvpoint)
 
-# Stage-by-Stage Scalar vs. Vector Pipeline Comparison Tool
-add_executable(pipeline_stage_comparison src/tools/pipeline_stage_comparison.cpp)
-target_include_directories(pipeline_stage_comparison PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pipeline_stage_comparison PRIVATE rvvpcl)
+# Stage-by-Stage Scalar vs RVV Verification Benchmark
+add_executable(pipeline_compare_bench src/tools/pipeline_compare_bench.cpp)
+target_include_directories(pipeline_compare_bench PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_compare_bench PRIVATE rvpoint)
+
+# Standalone Pure-Scalar PCL Pipeline for RISC-V QEMU Simulation
+add_executable(pcl_standalone_pipeline src/tools/pcl_standalone_pipeline.cpp)
+target_include_directories(pcl_standalone_pipeline PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pcl_standalone_pipeline PRIVATE rvpoint)
+
+# Ultra-Fast Flat 2.5D Real-Time Perception Pipeline Export Utility
+add_executable(pipeline_fast_export src/tools/pipeline_fast_export.cpp)
+target_include_directories(pipeline_fast_export PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_fast_export PRIVATE rvpoint)
+
+# Hardware-Accelerated RVV 1.0 Ultra Fast Pipeline
+add_executable(pipeline_rvv_ultra_fast src/tools/pipeline_rvv_ultra_fast.cpp)
+target_include_directories(pipeline_rvv_ultra_fast PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_rvv_ultra_fast PRIVATE rvpoint)
+
+# Pure SoA Turbo Hardware RVV 1.0 Pipeline
+add_executable(pipeline_rvv_turbo src/tools/pipeline_rvv_turbo.cpp)
+target_include_directories(pipeline_rvv_turbo PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_rvv_turbo PRIVATE rvpoint)
+
+# Official Reference Open-Source Scalar 2.5D Baseline (No RVV)
+add_executable(scalar_25d_baseline src/tools/scalar_25d_baseline.cpp)
+target_include_directories(scalar_25d_baseline PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(scalar_25d_baseline PRIVATE rvpoint)
+
+# Accelerated True 3D RVPoint Turbo 10-Stage Pipeline
+add_executable(pipeline_3d_turbo src/tools/pipeline_3d_turbo.cpp)
+target_include_directories(pipeline_3d_turbo PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_3d_turbo PRIVATE rvpoint)

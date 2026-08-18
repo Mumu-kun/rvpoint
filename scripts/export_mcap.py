@@ -2,7 +2,29 @@
 """
 export_mcap.py  —  RVPoint Pipeline → Foxglove MCAP Timeline Exporter
 ====================================================================
+export_mcap.py  —  RVPoint Pipeline → Foxglove MCAP Timeline Exporter
+====================================================================
 
+Reads pipeline run outputs (per-stage .pcd files across single or multi-frame
+runs from `by_frame/`) and packs everything into a single .mcap timeline file
+for Foxglove Studio visualization.
+
+Usage Examples:
+───────────────
+1. Interactive Wizard (scans directory, lets you pick stages, outputs 1-line command):
+   python scripts/export_mcap.py output/pcd_compressed_pipeline -i
+
+2. Multi-Frame Export (all stages, 10 FPS timeline playback):
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --fps 10
+
+3. Specific Stages Only:
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --stages 00_input,05_ground_plane_removed,06_clusters
+
+4. Exclude Specific Stages:
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --exclude-stages 01_downsampled,02_sor_filtered
+
+5. Frame Slicing:
+   python scripts/export_mcap.py output/pcd_compressed_pipeline --max-frames 5 --fps 5.0
 Reads pipeline run outputs (per-stage .pcd files across single or multi-frame
 runs from `by_frame/`) and packs everything into a single .mcap timeline file
 for Foxglove Studio visualization.
@@ -49,6 +71,7 @@ FLOAT32 = PackedElementField_pb2.PackedElementField.FLOAT32  # 7
 UINT8 = PackedElementField_pb2.PackedElementField.UINT8  # 1
 
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -286,7 +309,39 @@ def export(
     start_frame: int = 0,
     max_frames: int = None,
     interactive: bool = False,
+    input_dir: str,
+    output_path: str = None,
+    fps: float = 10.0,
+    frame_id: str = "lidar",
+    stages: str = None,
+    exclude_stages: str = None,
+    start_frame: int = 0,
+    max_frames: int = None,
+    interactive: bool = False,
 ) -> None:
+    input_dir = Path(input_dir).resolve()
+    frames = discover_frames(input_dir)
+
+    if not frames:
+        print(f"❌ Error: No frame directories or PCD files found in '{input_dir}'.")
+        sys.exit(1)
+
+    if interactive or (not stages and sys.stdin.isatty() and "-i" in sys.argv):
+        wizard_res = run_interactive_wizard(input_dir, frames)
+        fps = wizard_res["fps"]
+        stages = wizard_res["stages"]
+
+    # Slice frames
+    sliced_frames = frames[start_frame:]
+    if max_frames and max_frames > 0:
+        sliced_frames = sliced_frames[:max_frames]
+
+    # Resolve output path
+    if not output_path:
+        output_path = input_dir / "pipeline.mcap"
+    else:
+        output_path = Path(output_path).resolve()
+
     input_dir = Path(input_dir).resolve()
     frames = discover_frames(input_dir)
 
@@ -325,15 +380,32 @@ def export(
     print(f"   Output     : {output_path}")
     print(f"   Frames     : {len(sliced_frames)} frame(s) @ {fps:.1f} FPS")
     print(f"   Stages ({len(selected_stages)}) : {', '.join(selected_stages)}\n")
+    # Determine stages to export
+    available_stages = discover_available_stages(sliced_frames[0])
+    selected_stages = filter_stages(available_stages, stages, exclude_stages)
+
+    if not selected_stages:
+        print("❌ Error: No stages matched your selection filters.")
+        sys.exit(1)
+
+    print(f"📦 RVPoint → Foxglove MCAP Timeline Exporter")
+    print(f"   Input      : {input_dir}")
+    print(f"   Output     : {output_path}")
+    print(f"   Frames     : {len(sliced_frames)} frame(s) @ {fps:.1f} FPS")
+    print(f"   Stages ({len(selected_stages)}) : {', '.join(selected_stages)}\n")
 
     temp_path = output_path.with_suffix(".mcap.tmp")
     frame_dt_ns = int(1_000_000_000 / max(fps, 0.001))
     base_time = now_ns()
 
     total_msgs_written = 0
+    base_time = now_ns()
+
+    total_msgs_written = 0
 
     with open(temp_path, "wb") as f_out:
         with McapWriter(f_out) as writer:
+            for frame_idx, frame_dir in enumerate(sliced_frames):
             for frame_idx, frame_dir in enumerate(sliced_frames):
                 cur_time = base_time + frame_idx * frame_dt_ns
 
@@ -357,10 +429,13 @@ def export(
 
                     writer.write_message(
                         topic=topic,
+                        topic=topic,
                         message=msg,
                         log_time=cur_time,
                         publish_time=cur_time,
                     )
+                    total_msgs_written += 1
+
                     total_msgs_written += 1
 
     temp_path.replace(output_path)
@@ -372,16 +447,35 @@ def export(
     print(f"   File       : {output_path.name} ({size_mb:.2f} MB)")
     print(f"   Timeline   : {duration_s:.1f} seconds playback\n")
     print(f"🦊 Open in Foxglove Studio:")
+    duration_s = (len(sliced_frames) - 1) / max(fps, 0.001) if len(sliced_frames) > 1 else 0.0
+
+    print(f"✅ Success — Wrote {total_msgs_written} messages across {len(sliced_frames)} frame(s)")
+    print(f"   File       : {output_path.name} ({size_mb:.2f} MB)")
+    print(f"   Timeline   : {duration_s:.1f} seconds playback\n")
+    print(f"🦊 Open in Foxglove Studio:")
     print(f"   https://studio.foxglove.dev  →  Open local file  →  {output_path}\n")
 
 
+# ─── CLI Entrypoint ───────────────────────────────────────────────────────────
 # ─── CLI Entrypoint ───────────────────────────────────────────────────────────
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Export RVPoint PCD pipeline stages to a Foxglove MCAP timeline file.",
+        description="Export RVPoint PCD pipeline stages to a Foxglove MCAP timeline file.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Interactive mode wizard:
+  python scripts/export_mcap.py output/pcd_compressed_pipeline -i
+
+  # Export 20-frame sequence at 10 FPS:
+  python scripts/export_mcap.py output/pcd_compressed_pipeline --fps 10
+
+  # Export specific stages only:
+  python scripts/export_mcap.py output/pcd_compressed_pipeline --stages 00_input,05_ground_plane_removed,06_clusters
+""",
         epilog="""
 Examples:
   # Interactive mode wizard:
@@ -397,16 +491,27 @@ Examples:
     parser.add_argument(
         "input_dir",
         help="Pipeline output directory (contains by_frame/ or PCD files)",
+        "input_dir",
+        help="Pipeline output directory (contains by_frame/ or PCD files)",
     )
     parser.add_argument(
         "--output",
         "-o",
         default=None,
         help="Output .mcap file path. Default: <input_dir>/pipeline.mcap",
+        help="Output .mcap file path. Default: <input_dir>/pipeline.mcap",
     )
     parser.add_argument(
         "--fps",
+        "--fps",
         type=float,
+        default=10.0,
+        help="Playback frame rate (FPS) for multi-frame timeline (default: 10.0)",
+    )
+    parser.add_argument(
+        "--frame-id",
+        default="lidar",
+        help="Coordinate frame ID for point cloud messages (default: lidar)",
         default=10.0,
         help="Playback frame rate (FPS) for multi-frame timeline (default: 10.0)",
     )
@@ -418,8 +523,12 @@ Examples:
     parser.add_argument(
         "--stages",
         help="Comma-separated stage stems to export (e.g., '00_input,05_ground_plane_removed,06_clusters')",
+        "--stages",
+        help="Comma-separated stage stems to export (e.g., '00_input,05_ground_plane_removed,06_clusters')",
     )
     parser.add_argument(
+        "--exclude-stages",
+        help="Comma-separated stage stems to exclude",
         "--exclude-stages",
         help="Comma-separated stage stems to exclude",
     )
@@ -428,14 +537,25 @@ Examples:
         type=int,
         default=0,
         help="Index of first frame to export (default: 0)",
+        "--start-frame",
+        type=int,
+        default=0,
+        help="Index of first frame to export (default: 0)",
     )
     parser.add_argument(
+        "--max-frames",
         "--max-frames",
         type=int,
         default=None,
         help="Maximum number of frames to export",
+        default=None,
+        help="Maximum number of frames to export",
     )
     parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Run interactive setup wizard",
         "--interactive",
         "-i",
         action="store_true",
@@ -448,7 +568,15 @@ Examples:
         input_dir=args.input_dir,
         output_path=args.output,
         fps=args.fps,
+        input_dir=args.input_dir,
+        output_path=args.output,
+        fps=args.fps,
         frame_id=args.frame_id,
+        stages=args.stages,
+        exclude_stages=args.exclude_stages,
+        start_frame=args.start_frame,
+        max_frames=args.max_frames,
+        interactive=args.interactive,
         stages=args.stages,
         exclude_stages=args.exclude_stages,
         start_frame=args.start_frame,
