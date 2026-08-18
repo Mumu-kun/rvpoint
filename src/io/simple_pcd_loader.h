@@ -1,4 +1,6 @@
 #pragma once
+
+#include "core/point_types.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -7,17 +9,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#ifdef __riscv_vector
-#include "rvv_pcl.h"
-#else
-namespace rvv_pcl {
-struct PointXYZ {
-  float x, y, z;
-};
-}
-#endif
 
-namespace rvv_pcl {
+namespace rvpoint {
 
 namespace detail {
 
@@ -314,7 +307,7 @@ inline void savePCD(const std::string& filename, const std::vector<PointXYZ>& po
     file << "TYPE F F F\n";
     file << "COUNT 1 1 1\n";
     file << "WIDTH " << points.size() << "\n";
-    file << "HEIGHT 1\n"; // Unorganized point cloud
+    file << "HEIGHT 1\n";
     file << "VIEWPOINT 0 0 0 1 0 0 0\n";
     file << "POINTS " << points.size() << "\n";
     file << "DATA " << (binary ? "binary" : "ascii") << "\n";
@@ -392,5 +385,4 @@ inline void savePCDRGB(const std::string& filename, const std::vector<PointXYZRG
     std::cout << "Saved " << points.size() << " colored points to " << filename << std::endl;
 }
 
-} // namespace rvv_pcl
-
+} // namespace rvpoint

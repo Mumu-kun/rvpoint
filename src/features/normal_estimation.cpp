@@ -1,26 +1,26 @@
-#include "include/rvv_pcl.h"
-#include "pointer_octree/pointer_octree.h"
+#include "features/normal_estimation.h"
+#include "search/octree.h"
+#include "search/spatial_hashing.h"
+#include "search/pointer_octree.h"
+
 #include <vector>
 #include <cmath>
 #include <algorithm>
 #include <limits>
 #include <iostream>
 
-namespace rvv_pcl {
+namespace rvpoint {
 
 // Helper: Diagonalize 3x3 symmetric matrix A
 // Returns eigenvector corresponding to smallest eigenvalue
 void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz, int eigen_iters) {
-    // Jacobi diagonalization (simplified for 3x3)
     float A[3][3];
     for(int i=0;i<3;i++) for(int j=0;j<3;j++) A[i][j] = cov[i][j];
     
     float V[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
     
-    // 4 iterations is usually enough for 3x3 float precision
     for(int iter=0; iter<eigen_iters; ++iter) { 
-    // JACOBI ROTATION
-        int p=0, q=1; // find pivot
+        int p=0, q=1;
         float max_off = std::abs(A[0][1]);
         if(std::abs(A[0][2]) > max_off) { p=0; q=2; max_off=std::abs(A[0][2]); }
         if(std::abs(A[1][2]) > max_off) { p=1; q=2; }
@@ -29,13 +29,11 @@ void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz, 
         float c = std::cos(phi);
         float s = std::sin(phi);
         
-        // Update diagonal
         float app = A[p][p], aqq = A[q][q], apq = A[p][q];
         A[p][p] = c*c*app - 2*s*c*apq + s*s*aqq;
         A[q][q] = s*s*app + 2*s*c*apq + c*c*aqq;
-        A[p][q] = 0; // elimination
+        A[p][q] = 0;
         
-        // Update eigenvectors
         for(int k=0; k<3; ++k) {
              float vip = V[k][p];
              float viq = V[k][q];
@@ -44,7 +42,6 @@ void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz, 
         }
     }
     
-    // Find smallest diagonal
     int min_idx = 0;
     if(A[1][1] < A[min_idx][min_idx]) min_idx = 1;
     if(A[2][2] < A[min_idx][min_idx]) min_idx = 2;
@@ -54,7 +51,6 @@ void simple_eigen3x3_smallest(float cov[3][3], float& nx, float& ny, float& nz, 
     nz = V[2][min_idx];
 }
 
-
 // Helper: Flip normal if it points away from viewpoint (standard PCL behavior)
 void flipNormalTowardsViewpoint(const PointXYZ& point, float vp_x, float vp_y, float vp_z,
                                 float& nx, float& ny, float& nz) {
@@ -62,7 +58,6 @@ void flipNormalTowardsViewpoint(const PointXYZ& point, float vp_x, float vp_y, f
     float vy = vp_y - point.y;
     float vz = vp_z - point.z;
     
-    // Dot product
     float dot = vx*nx + vy*ny + vz*nz;
     if (dot < 0) {
         nx = -nx;
@@ -82,7 +77,6 @@ void normal_estimation_sc(const PointXYZ* in, std::size_t n,
     std::vector<int> indices(n);
 
     for(size_t i=0; i<n; ++i) {
-        // Brute force NN
         for(size_t j=0; j<n; ++j) {
             float dx = in[i].x - in[j].x;
             float dy = in[i].y - in[j].y;
@@ -90,45 +84,37 @@ void normal_estimation_sc(const PointXYZ* in, std::size_t n,
             dists[j] = dx*dx + dy*dy + dz*dz;
             indices[j] = j;
         }
-         // Partial sort indices based on dists
-         std::partial_sort(indices.begin(), indices.begin()+k+1, indices.end(),
-             [&](int a, int b){ return dists[a] < dists[b]; });
+        std::partial_sort(indices.begin(), indices.begin()+k+1, indices.end(),
+            [&](int a, int b){ return dists[a] < dists[b]; });
 
-         // Centroid
-         float cx=0, cy=0, cz=0;
-         for(int j=0; j<=k; ++j) { // includes self
-             int idx = indices[j];
-             cx += in[idx].x; cy += in[idx].y; cz += in[idx].z;
-         }
-         cx /= (k+1); cy /= (k+1); cz /= (k+1);
+        float cx=0, cy=0, cz=0;
+        for(int j=0; j<=k; ++j) {
+            int idx = indices[j];
+            cx += in[idx].x; cy += in[idx].y; cz += in[idx].z;
+        }
+        cx /= (k+1); cy /= (k+1); cz /= (k+1);
 
-         // Covariance
-         float cov[3][3] = {0};
-         for(int j=0; j<=k; ++j) {
-             int idx = indices[j];
-             float dx = in[idx].x - cx;
-             float dy = in[idx].y - cy;
-             float dz = in[idx].z - cz;
-             cov[0][0] += dx*dx; cov[0][1] += dx*dy; cov[0][2] += dx*dz;
-             cov[1][1] += dy*dy; cov[1][2] += dy*dz;
-             cov[2][2] += dz*dz;
-         }
-         cov[1][0]=cov[0][1]; cov[2][0]=cov[0][2]; cov[2][1]=cov[1][2];
+        float cov[3][3] = {0};
+        for(int j=0; j<=k; ++j) {
+            int idx = indices[j];
+            float dx = in[idx].x - cx;
+            float dy = in[idx].y - cy;
+            float dz = in[idx].z - cz;
+            cov[0][0] += dx*dx; cov[0][1] += dx*dy; cov[0][2] += dx*dz;
+            cov[1][1] += dy*dy; cov[1][2] += dy*dz;
+            cov[2][2] += dz*dz;
+        }
+        cov[1][0]=cov[0][1]; cov[2][0]=cov[0][2]; cov[2][1]=cov[1][2];
 
-         simple_eigen3x3_smallest(cov, nx[i], ny[i], nz[i], eigen_iters);
-         
-         // Orient Normal
-         flipNormalTowardsViewpoint(in[i], vp_x, vp_y, vp_z, nx[i], ny[i], nz[i]);
+        simple_eigen3x3_smallest(cov, nx[i], ny[i], nz[i], eigen_iters);
+        flipNormalTowardsViewpoint(in[i], vp_x, vp_y, vp_z, nx[i], ny[i], nz[i]);
     }
 }
-
 
 // ============================================================================
 // Step-by-Step Implementations
 // ============================================================================
-
 void compute_covariance_rvv(const PointCloudSoA& cloud, const std::vector<int>& indices, float cov[3][3], float centroid[3]) {
-    // Centroid
     float cx=0, cy=0, cz=0;
     for(int idx : indices) {
         cx += cloud.x[idx]; cy += cloud.y[idx]; cz += cloud.z[idx];
@@ -137,7 +123,6 @@ void compute_covariance_rvv(const PointCloudSoA& cloud, const std::vector<int>& 
     cx *= inv_n; cy *= inv_n; cz *= inv_n;
     centroid[0]=cx; centroid[1]=cy; centroid[2]=cz;
 
-    // Covariance (Upper triangular)
     float c00=0, c01=0, c02=0;
     float c11=0, c12=0;
     float c22=0;
@@ -164,7 +149,6 @@ void flip_normal_rvv(const PointXYZ& point, float vp_x, float vp_y, float vp_z, 
     flipNormalTowardsViewpoint(point, vp_x, vp_y, vp_z, nx, ny, nz);
 }
 
-
 // ============================================================================
 // RVV Implementation (Octree passed externally)
 // ============================================================================
@@ -175,50 +159,33 @@ void normal_estimation_rvv(const PointCloudSoA& in,
     if(in.n == 0) return;
 
     float search_radius = radius;
-
     std::vector<int> indices;
     std::vector<float> dists;
     indices.reserve(k * 2);
 
     for(size_t i=0; i<in.n; ++i) {
-         // Progress logging removed for benchmarking
-
-
          PointXYZ query = {in.x[i], in.y[i], in.z[i]};
-         
-         // 1. Radius Search (using pre-built Octree)
          octree.radiusSearch(query, search_radius, indices, dists);
          
-         // 2. Filter / Check sufficiency
          if (indices.size() < 3) {
              nx[i] = ny[i] = nz[i] = 0; 
              continue;
          }
          
-         // 3. Covariance
          float cov[3][3];
          float centroid[3];
          compute_covariance_rvv(in, indices, cov, centroid);
 
-         // 4. Eigen Decomposition
          float n_x, n_y, n_z;
          eigen_decomposition_rvv(cov, n_x, n_y, n_z, eigen_iters);
-         
-         // 5. Orientation
          flip_normal_rvv(query, vp_x, vp_y, vp_z, n_x, n_y, n_z);
          
          nx[i] = n_x;
          ny[i] = n_y;
          nz[i] = n_z;
     }
-
 }
 
-// ============================================================================
-// RVV Normal Estimation using SpatialHash (pre-built, passed externally)
-// SpatialHash has O(1) average-case query vs Octree's O(log n).
-// Best when search radius is known ahead of time (set cell_size = radius).
-// ============================================================================
 void normal_estimation_rvv(const PointCloudSoA& in,
                            const SpatialHash& hash,
                            float* nx, float* ny, float* nz, int k, float radius,
@@ -231,7 +198,6 @@ void normal_estimation_rvv(const PointCloudSoA& in,
 
     for (size_t i = 0; i < in.n; ++i) {
         PointXYZ query = {in.x[i], in.y[i], in.z[i]};
-
         hash.radiusSearch(query, radius, indices, dists);
 
         if (indices.size() < 3) { nx[i] = ny[i] = nz[i] = 0; continue; }
@@ -277,11 +243,6 @@ void normal_estimation_rvv(const PointCloudSoA& in,
     }
 }
 
-// ============================================================================
-// Self-contained RVV Normal Estimation — Octree built internally.
-// Octree build cost is included. Use the explicit-Octree overload above
-// when measuring build and query costs separately (e.g. benchmarking).
-// ============================================================================
 void normal_estimation_rvv(const PointCloudSoA& in,
                            float* nx, float* ny, float* nz, int k, float radius,
                            float vp_x, float vp_y, float vp_z, int eigen_iters) {
@@ -291,4 +252,4 @@ void normal_estimation_rvv(const PointCloudSoA& in,
     normal_estimation_rvv(in, octree, nx, ny, nz, k, radius, vp_x, vp_y, vp_z, eigen_iters);
 }
 
-} // namespace rvv_pcl
+} // namespace rvpoint

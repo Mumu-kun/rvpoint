@@ -1,7 +1,4 @@
-// caravan_pointer_octree.cpp
-// Implementation of Caravan-PointerOctree Hybrid Algorithm with Morton Space-Filling Curve Query Sorting
-
-#include "caravan_pointer_octree.h"
+#include "search/caravan_pointer_octree.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -13,7 +10,7 @@
 #include <riscv_vector.h>
 #endif
 
-namespace rvv_pcl {
+namespace rvpoint {
 
 void CaravanPointerOctree::setInputCloud(const PointCloudSoA &cloud) {
   cloud_ = cloud;
@@ -35,7 +32,6 @@ static inline bool tileOverlapsNode(const PointerOctreeNode *node,
   return true;
 }
 
-// 3D Morton Z-order curve bit interleaving
 static inline uint32_t expandBits(uint32_t v) {
   v = (v | (v << 16)) & 0x030000FF;
   v = (v | (v <<  8)) & 0x0300F00F;
@@ -121,7 +117,6 @@ void CaravanPointerOctree::batchRadiusSearch(
   const PointerOctreeNode *root = ptr_octree_.getRoot();
   if (!root) return;
 
-  // 1. Morton Z-Order Query Space-Filling Curve Sorting
   float min_x = std::numeric_limits<float>::max();
   float min_y = std::numeric_limits<float>::max();
   float min_z = std::numeric_limits<float>::max();
@@ -152,7 +147,6 @@ void CaravanPointerOctree::batchRadiusSearch(
     return morton_codes[a] < morton_codes[b];
   });
 
-  // 2. Process Queries in Spatially Coherent Morton Tiles
   size_t q = 0;
   while (q < num_queries) {
     size_t vl = std::min(static_cast<size_t>(16), num_queries - q);
@@ -186,7 +180,6 @@ void CaravanPointerOctree::batchRadiusSearch(
       max_qz = std::max(max_qz, z);
     }
 
-    // 3. Tile AABB Pruned PointerOctree Traversal
     const PointerOctreeNode *stack[64];
     int stack_ptr = 0;
     stack[stack_ptr++] = root;
@@ -257,7 +250,6 @@ std::size_t CaravanPointerOctree::sorFilter(PointXYZ *out, int k, float alpha, f
     }
   }
 
-  // Filter inliers
   float global_sum = 0.0f;
   for (float d : mean_dists) global_sum += d;
   float global_mean = global_sum / cloud_.n;
@@ -282,4 +274,4 @@ std::size_t CaravanPointerOctree::sorFilter(PointXYZ *out, int k, float alpha, f
   return count;
 }
 
-} // namespace rvv_pcl
+} // namespace rvpoint

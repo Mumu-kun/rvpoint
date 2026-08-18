@@ -1,7 +1,7 @@
-#include "include/rvv_pcl.h"
+#include "core/rvv_common.h"
 #include <cstdio>
 
-namespace rvv_pcl {
+namespace rvpoint {
 
 // ============================================================================
 // Helper: Squared Euclidean Distance Kernel (RVV)
@@ -10,6 +10,7 @@ void get_dist_sq_rvv(const float* x, const float* y, const float* z,
                      float qx, float qy, float qz,
                      float* out_d2, std::size_t n)
 {
+#if defined(__riscv_vector)
   std::size_t i = 0;
   while (i < n) {
     std::size_t vl = __riscv_vsetvl_e32m8(n - i);
@@ -32,22 +33,18 @@ void get_dist_sq_rvv(const float* x, const float* y, const float* z,
     __riscv_vse32_v_f32m8(&out_d2[i], sum, vl);
     i += vl;
   }
-} // namespace rvv_pcl
+#else
+  for (std::size_t i = 0; i < n; ++i) {
+    float dx = x[i] - qx;
+    float dy = y[i] - qy;
+    float dz = z[i] - qz;
+    out_d2[i] = dx * dx + dy * dy + dz * dz;
+  }
+#endif
+}
 
 // ============================================================================
 // Fused Gather-Filter Kernel
-//
-// Two implementations selected at compile time:
-//
-//  DEFAULT (QEMU / real HW):
-//    Full RVV: vluxei32 indexed gather → vcompress filter.
-//    Maximum vectorization, requires working vluxei32 + vcompress.
-//
-//  GEM5_BUILD:
-//    Scalar gather into contiguous tmp buffers → unit-stride RVV distances
-//    → scalar filter. Avoids vluxei32 which gem5 v25 simulates incorrectly
-//    (wrong effective address computation). Still uses Octree + RVV for
-//    distances; only the index-scatter step falls back to scalar.
 // ============================================================================
 void get_inds_in_radius_rvv(const float* x, const float* y, const float* z,
                             const int* subset_indices, std::size_t n,
@@ -55,8 +52,8 @@ void get_inds_in_radius_rvv(const float* x, const float* y, const float* z,
                             std::vector<int>& out_indices,
                             std::vector<float>& out_dists)
 {
-#ifdef GEM5_BUILD
-    // ── gem5-safe path: scalar gather → unit-stride RVV → scalar filter ──────
+#if defined(GEM5_BUILD) || !defined(__riscv_vector)
+    // ── gem5-safe / scalar fallback path ──────
     std::vector<float> gx(n), gy(n), gz(n), gd(n);
     for (std::size_t i = 0; i < n; ++i) {
         int idx = subset_indices[i];
@@ -109,4 +106,4 @@ void get_inds_in_radius_rvv(const float* x, const float* y, const float* z,
 #endif
 }
 
-} // namespace rvv_pcl
+} // namespace rvpoint

@@ -1,6 +1,6 @@
-#include "pointer_octree/pointer_octree.h"
-#include "rvv_pcl.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "search/pointer_octree.h"
+#include "io/simple_pcd_loader.h"
 
 #include <chrono>
 #include <iomanip>
@@ -15,7 +15,7 @@
 #include <pcl/search/kdtree.h>
 #include <pcl/search/octree.h>
 
-using namespace rvv_pcl;
+using namespace rvpoint;
 
 int main(int argc, char **argv) {
   std::string pcd_path = "data/pcd_compressed/0000000000.pcd";

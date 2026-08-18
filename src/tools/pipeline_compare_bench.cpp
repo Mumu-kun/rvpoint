@@ -1,7 +1,12 @@
-#include "euclidean_clustering.h"
-#include "pointer_octree/pointer_octree.h"
-#include "rvv_pcl.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "filters/voxel_grid.h"
+#include "filters/statistical_outlier_removal.h"
+#include "features/normal_estimation.h"
+#include "segmentation/ransac_plane.h"
+#include "segmentation/euclidean_clustering.h"
+#include "search/octree.h"
+#include "search/pointer_octree.h"
+#include "io/simple_pcd_loader.h"
 
 #include <chrono>
 #include <cmath>
@@ -14,7 +19,7 @@
 #include <string>
 #include <vector>
 
-using namespace rvv_pcl;
+using namespace rvpoint;
 
 namespace {
 

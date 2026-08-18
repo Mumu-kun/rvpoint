@@ -1,11 +1,15 @@
-#include "include/benchmark_kernels.h"
-#include "include/caravan_radius_search.h"
+#include "tools/benchmark_kernels.h"
+#include "search/caravan_radius_search.h"
 
 #include <cmath>
 #include <cstdint>
 #include <vector>
 
-namespace rvv_pcl::bench {
+#if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
+#include <riscv_vector.h>
+#endif
+
+namespace rvpoint::bench {
 
 namespace {
 
@@ -28,18 +32,20 @@ uint64_t sumQuantized(const std::vector<float> &values) {
 
 } // namespace
 
-PointCloudSoA makeDeterministicCloud(std::size_t size) {
-  PointCloudSoA cloud;
-  cloud.reserve(size);
+BenchmarkCloudHolder makeDeterministicCloud(std::size_t size) {
+  BenchmarkCloudHolder holder;
+  holder.x.resize(size);
+  holder.y.resize(size);
+  holder.z.resize(size);
 
   for (std::size_t index = 0; index < size; ++index) {
-    const float x = static_cast<float>((index * 3u + 1u) % 97u);
-    const float y = static_cast<float>((index * 5u + 7u) % 89u);
-    const float z = static_cast<float>((index * 7u + 13u) % 83u);
-    cloud.push_back({x, y, z});
+    holder.x[index] = static_cast<float>((index * 3u + 1u) % 97u);
+    holder.y[index] = static_cast<float>((index * 5u + 7u) % 89u);
+    holder.z[index] = static_cast<float>((index * 7u + 13u) % 83u);
   }
 
-  return cloud;
+  holder.soa = {holder.x.data(), holder.y.data(), holder.z.data(), size};
+  return holder;
 }
 
 bool parseKernel(const std::string &name, Kernel &kernel) {
@@ -97,18 +103,18 @@ const char *modeName() {
 }
 
 uint64_t runL2Distance(const PointCloudSoA &cloud) {
-  if (cloud.empty()) {
+  if (cloud.n == 0) {
     return 0;
   }
 
-  std::vector<float> distances(cloud.size(), 0.0f);
+  std::vector<float> distances(cloud.n, 0.0f);
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
   std::size_t index = 0;
-  while (index < cloud.size()) {
-    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.size() - index);
-    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.xData() + index, vl);
-    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.yData() + index, vl);
-    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.zData() + index, vl);
+  while (index < cloud.n) {
+    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.n - index);
+    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.x + index, vl);
+    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.y + index, vl);
+    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.z + index, vl);
     const vfloat32m8_t dx = __riscv_vfsub_vf_f32m8(x, kL2QueryX, vl);
     const vfloat32m8_t dy = __riscv_vfsub_vf_f32m8(y, kL2QueryY, vl);
     const vfloat32m8_t dz = __riscv_vfsub_vf_f32m8(z, kL2QueryZ, vl);
@@ -119,10 +125,10 @@ uint64_t runL2Distance(const PointCloudSoA &cloud) {
     index += vl;
   }
 #else
-  for (std::size_t index = 0; index < cloud.size(); ++index) {
-    const float dx = cloud.xData()[index] - kL2QueryX;
-    const float dy = cloud.yData()[index] - kL2QueryY;
-    const float dz = cloud.zData()[index] - kL2QueryZ;
+  for (std::size_t index = 0; index < cloud.n; ++index) {
+    const float dx = cloud.x[index] - kL2QueryX;
+    const float dy = cloud.y[index] - kL2QueryY;
+    const float dz = cloud.z[index] - kL2QueryZ;
     distances[index] = dx * dx + dy * dy + dz * dz;
   }
 #endif
@@ -131,25 +137,25 @@ uint64_t runL2Distance(const PointCloudSoA &cloud) {
 }
 
 uint64_t runReduction(const PointCloudSoA &cloud) {
-  if (cloud.empty()) {
+  if (cloud.n == 0) {
     return 0;
   }
 
-  std::vector<float> values(cloud.size(), 0.0f);
+  std::vector<float> values(cloud.n, 0.0f);
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
   std::size_t index = 0;
-  while (index < cloud.size()) {
-    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.size() - index);
-    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.xData() + index, vl);
-    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.yData() + index, vl);
-    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.zData() + index, vl);
+  while (index < cloud.n) {
+    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.n - index);
+    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.x + index, vl);
+    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.y + index, vl);
+    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.z + index, vl);
     const vfloat32m8_t sum = __riscv_vfadd_vv_f32m8(__riscv_vfadd_vv_f32m8(x, y, vl), z, vl);
     __riscv_vse32_v_f32m8(values.data() + index, sum, vl);
     index += vl;
   }
 #else
-  for (std::size_t index = 0; index < cloud.size(); ++index) {
-    values[index] = cloud.xData()[index] + cloud.yData()[index] + cloud.zData()[index];
+  for (std::size_t index = 0; index < cloud.n; ++index) {
+    values[index] = cloud.x[index] + cloud.y[index] + cloud.z[index];
   }
 #endif
 
@@ -161,7 +167,7 @@ uint64_t runReduction(const PointCloudSoA &cloud) {
     sum_sq += quantized * quantized;
   }
 
-  const double count = static_cast<double>(cloud.size());
+  const double count = static_cast<double>(cloud.n);
   const double mean = static_cast<double>(sum) / count;
   const double variance = static_cast<double>(sum_sq) / count - mean * mean;
   const uint64_t mean_bits = static_cast<uint64_t>(std::llround(mean * 1000.0));
@@ -170,25 +176,25 @@ uint64_t runReduction(const PointCloudSoA &cloud) {
 }
 
 uint64_t runMaskedFilter(const PointCloudSoA &cloud) {
-  if (cloud.empty()) {
+  if (cloud.n == 0) {
     return 0;
   }
 
-  std::vector<float> sums(cloud.size(), 0.0f);
+  std::vector<float> sums(cloud.n, 0.0f);
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
   std::size_t index = 0;
-  while (index < cloud.size()) {
-    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.size() - index);
-    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.xData() + index, vl);
-    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.yData() + index, vl);
-    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.zData() + index, vl);
+  while (index < cloud.n) {
+    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.n - index);
+    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.x + index, vl);
+    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.y + index, vl);
+    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.z + index, vl);
     const vfloat32m8_t sum = __riscv_vfadd_vv_f32m8(__riscv_vfadd_vv_f32m8(x, y, vl), z, vl);
     __riscv_vse32_v_f32m8(sums.data() + index, sum, vl);
     index += vl;
   }
 #else
-  for (std::size_t index = 0; index < cloud.size(); ++index) {
-    sums[index] = cloud.xData()[index] + cloud.yData()[index] + cloud.zData()[index];
+  for (std::size_t index = 0; index < cloud.n; ++index) {
+    sums[index] = cloud.x[index] + cloud.y[index] + cloud.z[index];
   }
 #endif
 
@@ -202,18 +208,18 @@ uint64_t runMaskedFilter(const PointCloudSoA &cloud) {
 }
 
 uint64_t runRadiusSearch(const PointCloudSoA &cloud) {
-  if (cloud.empty()) {
+  if (cloud.n == 0) {
     return 0;
   }
 
-  std::vector<float> distances(cloud.size(), 0.0f);
+  std::vector<float> distances(cloud.n, 0.0f);
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
   std::size_t index = 0;
-  while (index < cloud.size()) {
-    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.size() - index);
-    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.xData() + index, vl);
-    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.yData() + index, vl);
-    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.zData() + index, vl);
+  while (index < cloud.n) {
+    const std::size_t vl = __riscv_vsetvl_e32m8(cloud.n - index);
+    const vfloat32m8_t x = __riscv_vle32_v_f32m8(cloud.x + index, vl);
+    const vfloat32m8_t y = __riscv_vle32_v_f32m8(cloud.y + index, vl);
+    const vfloat32m8_t z = __riscv_vle32_v_f32m8(cloud.z + index, vl);
     const vfloat32m8_t dx = __riscv_vfsub_vf_f32m8(x, kRadiusQueryX, vl);
     const vfloat32m8_t dy = __riscv_vfsub_vf_f32m8(y, kRadiusQueryY, vl);
     const vfloat32m8_t dz = __riscv_vfsub_vf_f32m8(z, kRadiusQueryZ, vl);
@@ -224,10 +230,10 @@ uint64_t runRadiusSearch(const PointCloudSoA &cloud) {
     index += vl;
   }
 #else
-  for (std::size_t index = 0; index < cloud.size(); ++index) {
-    const float dx = cloud.xData()[index] - kRadiusQueryX;
-    const float dy = cloud.yData()[index] - kRadiusQueryY;
-    const float dz = cloud.zData()[index] - kRadiusQueryZ;
+  for (std::size_t index = 0; index < cloud.n; ++index) {
+    const float dx = cloud.x[index] - kRadiusQueryX;
+    const float dy = cloud.y[index] - kRadiusQueryY;
+    const float dz = cloud.z[index] - kRadiusQueryZ;
     distances[index] = dx * dx + dy * dy + dz * dz;
   }
 #endif
@@ -242,11 +248,11 @@ uint64_t runRadiusSearch(const PointCloudSoA &cloud) {
 }
 
 uint64_t runNormalEstimation(const PointCloudSoA &cloud) {
-  if (cloud.size() < 3) {
+  if (cloud.n < 3) {
     return 0;
   }
 
-  const std::size_t output_size = cloud.size() - 2;
+  const std::size_t output_size = cloud.n - 2;
   std::vector<float> cross_x(output_size, 0.0f);
   std::vector<float> cross_y(output_size, 0.0f);
   std::vector<float> cross_z(output_size, 0.0f);
@@ -255,15 +261,15 @@ uint64_t runNormalEstimation(const PointCloudSoA &cloud) {
   std::size_t index = 0;
   while (index < output_size) {
     const std::size_t vl = __riscv_vsetvl_e32m8(output_size - index);
-    const vfloat32m8_t x0 = __riscv_vle32_v_f32m8(cloud.xData() + index, vl);
-    const vfloat32m8_t y0 = __riscv_vle32_v_f32m8(cloud.yData() + index, vl);
-    const vfloat32m8_t z0 = __riscv_vle32_v_f32m8(cloud.zData() + index, vl);
-    const vfloat32m8_t x1 = __riscv_vle32_v_f32m8(cloud.xData() + index + 1, vl);
-    const vfloat32m8_t y1 = __riscv_vle32_v_f32m8(cloud.yData() + index + 1, vl);
-    const vfloat32m8_t z1 = __riscv_vle32_v_f32m8(cloud.zData() + index + 1, vl);
-    const vfloat32m8_t x2 = __riscv_vle32_v_f32m8(cloud.xData() + index + 2, vl);
-    const vfloat32m8_t y2 = __riscv_vle32_v_f32m8(cloud.yData() + index + 2, vl);
-    const vfloat32m8_t z2 = __riscv_vle32_v_f32m8(cloud.zData() + index + 2, vl);
+    const vfloat32m8_t x0 = __riscv_vle32_v_f32m8(cloud.x + index, vl);
+    const vfloat32m8_t y0 = __riscv_vle32_v_f32m8(cloud.y + index, vl);
+    const vfloat32m8_t z0 = __riscv_vle32_v_f32m8(cloud.z + index, vl);
+    const vfloat32m8_t x1 = __riscv_vle32_v_f32m8(cloud.x + index + 1, vl);
+    const vfloat32m8_t y1 = __riscv_vle32_v_f32m8(cloud.y + index + 1, vl);
+    const vfloat32m8_t z1 = __riscv_vle32_v_f32m8(cloud.z + index + 1, vl);
+    const vfloat32m8_t x2 = __riscv_vle32_v_f32m8(cloud.x + index + 2, vl);
+    const vfloat32m8_t y2 = __riscv_vle32_v_f32m8(cloud.y + index + 2, vl);
+    const vfloat32m8_t z2 = __riscv_vle32_v_f32m8(cloud.z + index + 2, vl);
 
     const vfloat32m8_t ux = __riscv_vfsub_vv_f32m8(x1, x0, vl);
     const vfloat32m8_t uy = __riscv_vfsub_vv_f32m8(y1, y0, vl);
@@ -286,12 +292,12 @@ uint64_t runNormalEstimation(const PointCloudSoA &cloud) {
   }
 #else
   for (std::size_t index = 0; index < output_size; ++index) {
-    const float ux = cloud.xData()[index + 1] - cloud.xData()[index];
-    const float uy = cloud.yData()[index + 1] - cloud.yData()[index];
-    const float uz = cloud.zData()[index + 1] - cloud.zData()[index];
-    const float vx = cloud.xData()[index + 2] - cloud.xData()[index];
-    const float vy = cloud.yData()[index + 2] - cloud.yData()[index];
-    const float vz = cloud.zData()[index + 2] - cloud.zData()[index];
+    const float ux = cloud.x[index + 1] - cloud.x[index];
+    const float uy = cloud.y[index + 1] - cloud.y[index];
+    const float uz = cloud.z[index + 1] - cloud.z[index];
+    const float vx = cloud.x[index + 2] - cloud.x[index];
+    const float vy = cloud.y[index + 2] - cloud.y[index];
+    const float vz = cloud.z[index + 2] - cloud.z[index];
     cross_x[index] = uy * vz - uz * vy;
     cross_y[index] = uz * vx - ux * vz;
     cross_z[index] = ux * vy - uy * vx;
@@ -308,14 +314,14 @@ uint64_t runNormalEstimation(const PointCloudSoA &cloud) {
 }
 
 uint64_t runCaravanRadiusSearch(const PointCloudSoA &cloud) {
-  if (cloud.empty()) {
+  if (cloud.n == 0) {
     return 0;
   }
   CaravanRadiusSearch caravan;
   caravan.setInputCloud(cloud);
 
-  PointCloudSoA queries;
-  queries.push_back({kRadiusQueryX, kRadiusQueryY, kRadiusQueryZ});
+  float qx = kRadiusQueryX, qy = kRadiusQueryY, qz = kRadiusQueryZ;
+  PointCloudSoA queries = {&qx, &qy, &qz, 1};
 
   std::vector<std::vector<int32_t>> results;
   caravan.batchRadiusSearch(queries, 45.0f, results);
@@ -326,4 +332,4 @@ uint64_t runCaravanRadiusSearch(const PointCloudSoA &cloud) {
   return static_cast<uint64_t>(results[0].size());
 }
 
-} // namespace rvv_pcl::bench
+} // namespace rvpoint::bench

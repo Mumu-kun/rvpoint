@@ -1,7 +1,5 @@
-// caravan_radius_search.cpp
-// Caravan Query-Pack Radius Search & Grid-Caravan Strategy Implementation
-
-#include "caravan_radius_search.h"
+#include "search/caravan_radius_search.h"
+#include "search/spatial_hashing.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -11,7 +9,7 @@
 #include <riscv_vector.h>
 #endif
 
-namespace rvv_pcl {
+namespace rvpoint {
 
 #if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
 
@@ -162,9 +160,6 @@ std::size_t CaravanRadiusSearch::radiusSearch(
     return indices.size();
 }
 
-// ----------------------------------------------------------------------------
-// Strategy 1: Grid-Caravan Bounding Box Pruned SOR
-// ----------------------------------------------------------------------------
 static std::size_t filter_by_mean_dists(const PointCloudSoA &in,
                                         const std::vector<float> &mean_dists,
                                         PointXYZ *out, float alpha) {
@@ -223,4 +218,4 @@ std::size_t sor_grid_caravan(const PointCloudSoA &in, PointXYZ *out, int k,
   return filter_by_mean_dists(in, mean_dists, out, alpha);
 }
 
-} // namespace rvv_pcl
+} // namespace rvpoint

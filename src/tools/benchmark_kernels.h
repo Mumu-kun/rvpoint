@@ -1,12 +1,13 @@
 #pragma once
 
-#include "rvv_pcl.h"
+#include "core/point_types.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
-namespace rvv_pcl::bench {
+namespace rvpoint::bench {
 
 enum class Kernel {
   L2,
@@ -17,7 +18,14 @@ enum class Kernel {
   Caravan,
 };
 
-PointCloudSoA makeDeterministicCloud(std::size_t size);
+struct BenchmarkCloudHolder {
+  std::vector<float> x;
+  std::vector<float> y;
+  std::vector<float> z;
+  PointCloudSoA soa;
+};
+
+BenchmarkCloudHolder makeDeterministicCloud(std::size_t size);
 bool parseKernel(const std::string &name, Kernel &kernel);
 const char *kernelName(Kernel kernel);
 const char *modeName();
@@ -29,4 +37,4 @@ uint64_t runRadiusSearch(const PointCloudSoA &cloud);
 uint64_t runNormalEstimation(const PointCloudSoA &cloud);
 uint64_t runCaravanRadiusSearch(const PointCloudSoA &cloud);
 
-} // namespace rvv_pcl::bench
+} // namespace rvpoint::bench

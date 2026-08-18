@@ -3,7 +3,7 @@
 // Based on standard ROS/Autoware & ETH Elevation Mapping algorithms.
 // Compiled in pure standard scalar C++ (Zero RVV vectorization) for fair RISC-V hardware benchmarking.
 
-#include "simple_pcd_loader.h"
+#include "io/simple_pcd_loader.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -19,7 +19,7 @@
 #include <vector>
 
 using Clock = std::chrono::high_resolution_clock;
-using namespace rvv_pcl;
+using namespace rvpoint;
 
 namespace {
 

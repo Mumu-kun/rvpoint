@@ -2,8 +2,9 @@
 // Hardware-Accelerated 2.5D Elevation Pipeline using RVV 1.0 Vector Gather & Compress Kernels
 // Target: Orange Pi RV2 (SpacemiT K1 / TH1520 RISC-V 64-bit + RVV 1.0)
 
-#include "simple_pcd_loader.h"
-#include "rvv_pcl.h"
+#include "io/simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "filters/voxel_grid.h"
 
 #include <algorithm>
 #include <chrono>
@@ -23,7 +24,7 @@
 #include <riscv_vector.h>
 #endif
 
-using namespace rvv_pcl;
+using namespace rvpoint;
 using Clock = std::chrono::high_resolution_clock;
 
 namespace {

@@ -1,9 +1,13 @@
-#include "pointer_octree/pointer_octree.h"
+#include "search/pointer_octree.h"
 #include <algorithm>
 #include <limits>
 #include <cmath>
 
-namespace rvv_pcl {
+#if defined(__riscv_vector)
+#include <riscv_vector.h>
+#endif
+
+namespace rvpoint {
 
 PointerOctreeNode::PointerOctreeNode() : min_x(0.0f), min_y(0.0f), min_z(0.0f), max_x(0.0f), max_y(0.0f), max_z(0.0f), is_leaf(true) {
     for (int i = 0; i < 8; ++i) children[i] = nullptr;
@@ -32,7 +36,6 @@ void PointerOctree::build() {
         root_ = nullptr;
     }
 
-    // Determine bounding box
     float min_x = std::numeric_limits<float>::max();
     float min_y = std::numeric_limits<float>::max();
     float min_z = std::numeric_limits<float>::max();
@@ -131,7 +134,7 @@ static inline void get_inds_in_radius_contiguous_rvv(
     std::vector<int>& out_indices,
     std::vector<float>& out_dists)
 {
-    // Scalar fallback for tiny leaves to avoid vector execution setup overhead
+#if defined(__riscv_vector)
     if (n < 16) {
         for (size_t i = 0; i < n; ++i) {
             float dx = lx[i] - qx;
@@ -181,6 +184,18 @@ static inline void get_inds_in_radius_contiguous_rvv(
 
         i += vl;
     }
+#else
+    for (size_t i = 0; i < n; ++i) {
+        float dx = lx[i] - qx;
+        float dy = ly[i] - qy;
+        float dz = lz[i] - qz;
+        float d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 <= r2) {
+            out_indices.push_back(indices[i]);
+            out_dists.push_back(d2);
+        }
+    }
+#endif
 }
 
 std::size_t PointerOctree::radiusSearch(const PointXYZ& query, float radius,
@@ -276,4 +291,4 @@ void PointerOctree::recursiveSearchScalar(PointerOctreeNode* node, const PointXY
     (void)node; (void)query; (void)radius_sq; (void)indices; (void)dists;
 }
 
-} // namespace rvv_pcl
+} // namespace rvpoint

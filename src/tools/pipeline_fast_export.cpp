@@ -1,5 +1,6 @@
-#include "simple_pcd_loader.h"
-#include "rvv_pcl.h"
+#include "io/simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "filters/voxel_grid.h"
 
 #include <algorithm>
 #include <chrono>
@@ -19,7 +20,7 @@
 #include <riscv_vector.h>
 #endif
 
-using namespace rvv_pcl;
+using namespace rvpoint;
 
 namespace {
 

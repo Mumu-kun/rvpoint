@@ -1,15 +1,15 @@
-#include "include/rvv_pcl.h"
+#include "search/spatial_hashing.h"
+#include "core/rvv_common.h"
+
 #include <cmath>
 #include <algorithm>
 #include <limits>
 
+#if defined(__riscv_vector)
 #include <riscv_vector.h>
+#endif
 
-namespace rvv_pcl {
-
-// ============================================================================
-// SpatialHash Implementation
-// ============================================================================
+namespace rvpoint {
 
 SpatialHash::SpatialHash() 
     : cell_size_(0.0f), min_x_(0), min_y_(0), min_z_(0),
@@ -24,11 +24,10 @@ void SpatialHash::setInputCloud(const PointCloudSoA& cloud, float cell_size) {
     
     if (cloud.n == 0) return;
     
-    // Compute bounding box using RVV
     min_x_ = min_y_ = min_z_ = std::numeric_limits<float>::max();
     max_x_ = max_y_ = max_z_ = std::numeric_limits<float>::lowest();
     
-    // RVV-optimized bounding box computation
+#if defined(__riscv_vector)
     size_t n = cloud.n;
     size_t i = 0;
     
@@ -57,7 +56,6 @@ void SpatialHash::setInputCloud(const PointCloudSoA& cloud, float cell_size) {
         i += vl;
     }
     
-    // Reduction to get final min/max
     vfloat32m1_t v_scalar = __riscv_vfmv_v_f_f32m1(std::numeric_limits<float>::max(), 1);
     vfloat32m1_t min_x_red = __riscv_vfredmin_vs_f32m4_f32m1(vmin_x, v_scalar, __riscv_vsetvl_e32m4(n));
     vfloat32m1_t min_y_red = __riscv_vfredmin_vs_f32m4_f32m1(vmin_y, v_scalar, __riscv_vsetvl_e32m4(n));
@@ -74,9 +72,17 @@ void SpatialHash::setInputCloud(const PointCloudSoA& cloud, float cell_size) {
     __riscv_vse32_v_f32m1(&max_x_, max_x_red, 1);
     __riscv_vse32_v_f32m1(&max_y_, max_y_red, 1);
     __riscv_vse32_v_f32m1(&max_z_, max_z_red, 1);
+#else
+    for (size_t j = 0; j < cloud.n; ++j) {
+        if (cloud.x[j] < min_x_) min_x_ = cloud.x[j];
+        if (cloud.x[j] > max_x_) max_x_ = cloud.x[j];
+        if (cloud.y[j] < min_y_) min_y_ = cloud.y[j];
+        if (cloud.y[j] > max_y_) max_y_ = cloud.y[j];
+        if (cloud.z[j] < min_z_) min_z_ = cloud.z[j];
+        if (cloud.z[j] > max_z_) max_z_ = cloud.z[j];
+    }
+#endif
     
-    
-    // Add small epsilon to avoid boundary issues
     min_x_ -= cell_size_ * eps_scale_;
     min_y_ -= cell_size_ * eps_scale_;
     min_z_ -= cell_size_ * eps_scale_;
@@ -93,7 +99,6 @@ void SpatialHash::build() {
     grid_.clear();
     grid_.reserve((size_t)(cloud_.n * reserve_factor_)); 
     
-    // Insert all points into grid using RVV-accelerated hashing
     for (size_t i = 0; i < cloud_.n; ++i) {
         int ix, iy, iz;
         getCellIndices(cloud_.x[i], cloud_.y[i], cloud_.z[i], ix, iy, iz);
@@ -111,14 +116,11 @@ std::size_t SpatialHash::radiusSearch(const PointXYZ& query, float radius,
     
     float r2 = radius * radius;
     
-    // Get query cell
     int qix, qiy, qiz;
     getCellIndices(query.x, query.y, query.z, qix, qiy, qiz);
     
-    // Determine search range in cell coordinates
     int cell_range = (int)std::ceil(radius / cell_size_) + 1;
     
-    // Search neighboring cells
     for (int dx = -cell_range; dx <= cell_range; ++dx) {
         for (int dy = -cell_range; dy <= cell_range; ++dy) {
             for (int dz = -cell_range; dz <= cell_range; ++dz) {
@@ -133,7 +135,6 @@ std::size_t SpatialHash::radiusSearch(const PointXYZ& query, float radius,
                 const std::vector<int>& cell_indices = it->second;
                 if (cell_indices.empty()) continue;
                 
-                // Use RVV fused gather-filter kernel for this cell
                 get_inds_in_radius_rvv(
                     cloud_.x, cloud_.y, cloud_.z,
                     cell_indices.data(), cell_indices.size(),
@@ -144,7 +145,6 @@ std::size_t SpatialHash::radiusSearch(const PointXYZ& query, float radius,
         }
     }
     
-    // Sort by distance (optional, for consistency with Octree)
     if (!indices.empty()) {
         std::vector<std::pair<float, int>> pairs;
         pairs.reserve(indices.size());
@@ -158,7 +158,6 @@ std::size_t SpatialHash::radiusSearch(const PointXYZ& query, float radius,
             indices[i] = pairs[i].second;
         }
         
-        // Apply max_nn limit if specified
         if (max_nn > 0 && indices.size() > (size_t)max_nn) {
             indices.resize(max_nn);
             dists.resize(max_nn);
@@ -168,4 +167,4 @@ std::size_t SpatialHash::radiusSearch(const PointXYZ& query, float radius,
     return indices.size();
 }
 
-} // namespace rvv_pcl
+} // namespace rvpoint

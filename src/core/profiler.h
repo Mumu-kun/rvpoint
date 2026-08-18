@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 
-namespace rvv_pcl {
+namespace rvpoint {
 
 #ifdef RVPOINT_ENABLE_PROFILING
 
@@ -25,7 +25,7 @@ private:
 };
 
 #define RVPOINT_PROFILE_SCOPE(name)                                            \
-  ::rvv_pcl::ScopedTimer _timer_##__LINE__(name)
+  ::rvpoint::ScopedTimer _timer_##__LINE__(name)
 
 #else
 
@@ -33,4 +33,4 @@ private:
 
 #endif
 
-} // namespace rvv_pcl
+} // namespace rvpoint

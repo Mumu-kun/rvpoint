@@ -7,7 +7,9 @@
 // 4. Official Vectorized RVV 1.0 3D Plane RANSAC (ransac_plane_rvv)
 // 5. 3D Disjoint-Set (Union-Find) Fast Euclidean Clustering
 
-#include "simple_pcd_loader.h"
+#include "io/simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "segmentation/ransac_plane.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -27,7 +29,7 @@
 #endif
 
 using Clock = std::chrono::high_resolution_clock;
-using namespace rvv_pcl;
+using namespace rvpoint;
 
 namespace {
 

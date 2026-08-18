@@ -1,8 +1,10 @@
 #pragma once
-#include "../include/rvv_pcl.h"
-#include <vector>
 
-namespace rvv_pcl {
+#include "core/point_types.h"
+#include <vector>
+#include <cstddef>
+
+namespace rvpoint {
 
 struct PointerOctreeNode {
     float min_x, min_y, min_z;
@@ -59,4 +61,4 @@ private:
                                std::vector<int>& indices, std::vector<float>& dists) const;
 };
 
-} // namespace rvv_pcl
+} // namespace rvpoint

@@ -1,4 +1,4 @@
-#include "include/rvv_pcl.h"
+#include "filters/voxel_grid.h"
 #include <cmath>
 #include <map>
 #include <tuple>
@@ -7,15 +7,18 @@
 #include <numeric>
 #include <limits>
 
+#if defined(__riscv_vector)
 #include <riscv_vector.h>
+#endif
 
-namespace rvv_pcl {
+namespace rvpoint {
 
 // ============================================================================
 // Internal Helpers for Fully Vectorized Voxel Grid (v2)
 // ============================================================================
 namespace {
 
+#if defined(__riscv_vector)
 // Helper: Compute bounding box using RVV reductions (LMUL=m4)
 void compute_bbox_rvv(const PointCloudSoA& in,
                       float& out_min_x, float& out_min_y, float& out_min_z,
@@ -74,10 +77,6 @@ void compute_bbox_rvv(const PointCloudSoA& in,
 }
 
 // Helper: Vectorized floor(float)->int using RVV
-// trunc(v) truncates toward zero. floor(v) rounds toward -infinity.
-// For v >= 0: floor == trunc. For v < 0 and non-integer: floor = trunc - 1.
-// Implementation: trunc_i = vfcvt_rtz(v), trunc_f = vfcvt_f(trunc_i),
-//   correction = (v < trunc_f) ? -1 : 0, result = trunc_i + correction
 static inline vint32m4_t vfloor_i32m4(vfloat32m4_t v, size_t vl) {
     vint32m4_t trunc_i = __riscv_vfcvt_rtz_x_f_v_i32m4(v, vl);
     vfloat32m4_t trunc_f = __riscv_vfcvt_f_x_v_f32m4(trunc_i, vl);
@@ -89,8 +88,6 @@ static inline vint32m4_t vfloor_i32m4(vfloat32m4_t v, size_t vl) {
 }
 
 // Helper: Compute linear voxel keys using RVV (LMUL=m4)
-// Uses the same formula as scalar: floor(coord * inv_leaf) to ensure
-// identical voxel assignment regardless of implementation.
 void compute_voxel_keys_rvv(const PointCloudSoA& in,
                              float inv_leaf, int min_ix, int min_iy, int min_iz,
                              int grid_x, int grid_xy,
@@ -131,8 +128,6 @@ void compute_voxel_keys_rvv(const PointCloudSoA& in,
 }
 
 // Helper: Vectorized centroid reduction for a group of points (LMUL=m2)
-// Uses indexed gather (vluxei32) + ordered sum reduction (vfredosum)
-// LMUL=m2 chosen for compatibility with indexed loads (matching rvv_common.cpp pattern)
 void centroid_reduce_rvv(const PointCloudSoA& in,
                          const uint32_t* order, size_t group_start,
                          size_t group_size, PointXYZ& out) {
@@ -178,6 +173,7 @@ void centroid_reduce_rvv(const PointCloudSoA& in,
     out.y = sum_y * inv_count;
     out.z = sum_z * inv_count;
 }
+#endif
 
 } // anonymous namespace
 
@@ -189,7 +185,6 @@ std::size_t voxel_grid_downsamp_sc(const PointXYZ* in, std::size_t n,
     if (n == 0) return 0;
     
     // Key: (vx, vy, vz), Value: (Sum coordinates, Count)
-    // Using map to group points belonging to the same voxel
     std::map<std::tuple<int, int, int>, std::pair<PointXYZ, int>> grid;
     float inv_leaf = 1.0f / leaf_size;
 
@@ -224,24 +219,12 @@ std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
                                     PointXYZ* out, float leaf_size) {
     if (in.n == 0) return 0;
 
+#if defined(__riscv_vector)
     std::map<std::tuple<int, int, int>, std::pair<PointXYZ, int>> grid;
     float inv_leaf = 1.0f / leaf_size;
 
-    // In a full RVV implementation, we would also vectorize the aggregation (sorting/reducing).
-    // However, hash map insertion is inherently scalar.
-    // We WILL vectorize the transformation of coordinates to voxel indices.
-    
-    // Temporary storage for indices could be allocated, but for this hybrid approach
-    // we will process in chunks (stripming) and then insert into map scalar-wise.
-    // This allows us to use RVV for the FP math (mul + floor).
-
     size_t n = in.n;
     size_t i = 0;
-
-    // Arrays to hold chunk results
-    // Max VLEN is usually reasonable, assume max 256 or 512 elements for buffer logic if needed,
-    // but here we just loop standard strip mining.
-
 
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m8(n - i);
@@ -256,24 +239,12 @@ std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
         vfloat32m8_t vsy = __riscv_vfmul_vf_f32m8(vy, inv_leaf, vl);
         vfloat32m8_t vsz = __riscv_vfmul_vf_f32m8(vz, inv_leaf, vl);
 
-        // Floor: Uses vfcvt... but since we want integer indices:
-        // C++ std::floor returns float. RVV vfcvt_x_f_v converts float to int (truncate).
-        // Correct floor for positive/negative:
-        // Custom floor logic or just cast if we assume logical behavior. 
-        // For simplicity in this demo, we assume the conversion intrinsics available.
-        // vcvt.x.f.v (which truncates toward zero) is not exactly floor for negatives.
-        // We will stick to the scalar insertion for correctness if intricate instructions missing,
-        // BUT let's do the floating point scale in vector.
-        
-        // Storing back to analyze one by one (Hybrid)
-        // Hybrid: Store back to memory for scalar processing
         std::vector<float> raw_sx(vl), raw_sy(vl), raw_sz(vl);
         __riscv_vse32_v_f32m8(raw_sx.data(), vsx, vl);
         __riscv_vse32_v_f32m8(raw_sy.data(), vsy, vl);
         __riscv_vse32_v_f32m8(raw_sz.data(), vsz, vl);
 
         for(size_t j=0; j<vl; ++j) {
-            // "Scalar" part of the loop (Map Insertion)
             int idx_x = std::floor(raw_sx[j]);
             int idx_y = std::floor(raw_sy[j]);
             int idx_z = std::floor(raw_sz[j]);
@@ -298,6 +269,13 @@ std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
         count++;
     }
     return count;
+#else
+    std::vector<PointXYZ> aos(in.n);
+    for (size_t i = 0; i < in.n; ++i) {
+        aos[i] = {in.x[i], in.y[i], in.z[i]};
+    }
+    return voxel_grid_downsamp_sc(aos.data(), in.n, out, leaf_size);
+#endif
 }
 
 // ============================================================================
@@ -306,6 +284,7 @@ std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
 std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA& in,
                                         PointXYZ* out, float leaf_size) {
     if (in.n == 0) return 0;
+#if defined(__riscv_vector)
     const size_t n = in.n;
     const float inv_leaf = 1.0f / leaf_size;
 
@@ -350,6 +329,9 @@ std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA& in,
     }
 
     return out_count;
+#else
+    return voxel_grid_downsamp_rvv(in, out, leaf_size);
+#endif
 }
 
-} // namespace rvv_pcl
+} // namespace rvpoint
