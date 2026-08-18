@@ -4,10 +4,12 @@ project(RVVPCL LANGUAGES C CXX)
 # Set C++ Standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Static linking for QEMU compatibility
 set(CMAKE_EXE_LINKER_FLAGS "-static")
 option(RVV_PCL_USE_RVV "Enable RVV helper backend" ON)
+option(ENABLE_PROFILING "Enable diagnostic profiling instrumentation" OFF)
 set(RISCV_ARCH "rv64gcv" CACHE STRING "RISC-V ISA string, e.g. rv64gc or rv64gcv")
 set(RISCV_ABI "lp64d" CACHE STRING "RISC-V ABI")
 
@@ -19,6 +21,10 @@ if(RVV_PCL_USE_RVV AND RISCV_ARCH MATCHES ".*v.*")
     set(BACKEND_SUBDIR "rvv")
 else()
     set(BACKEND_SUBDIR "scalar")
+endif()
+
+if(ENABLE_PROFILING)
+    add_compile_definitions(RVPOINT_ENABLE_PROFILING=1)
 endif()
 
 # Set output directory for executables (e.g. build/bin/rvv or build/bin/scalar)
@@ -106,3 +112,8 @@ endforeach()
 add_executable(pipeline_export src/tools/pipeline_export.cpp)
 target_include_directories(pipeline_export PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 target_link_libraries(pipeline_export PRIVATE rvvpcl)
+
+# Ablation Benchmark Utility
+add_executable(ablation_bench src/tools/ablation_bench.cpp)
+target_include_directories(ablation_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+target_link_libraries(ablation_bench PRIVATE rvvpcl)
