@@ -1,323 +1,46 @@
-name: CI Build and Test
+name: RISC-V CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [main]
-  workflow_dispatch: # Manual trigger
+    branches: [ "main", "master" ]
 
 jobs:
-  # Native x86_64 build
-  native-build:
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        build_type: [Release, Debug]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            ninja-build \
-            git \
-            curl \
-            zip \
-            unzip \
-            tar \
-            pkg-config
-
-      - name: Setup vcpkg
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
-          /opt/vcpkg/bootstrap-vcpkg.sh
-          echo "VCPKG_ROOT=/opt/vcpkg" >> $GITHUB_ENV
-
-      - name: Build native
-        env:
-          VCPKG_ROOT: /opt/vcpkg
-        run: |
-          if [ "${{ matrix.build_type }}" = "Debug" ]; then
-            ./scripts/build.sh --debug
-          else
-            ./scripts/build.sh
-          fi
-
-      - name: Run voxel downsampling tests
-        run: |
-          cd build/native
-          ctest -R voxel_downsampling_tests --output-on-failure -V
-
-      - name: Upload test results
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-native-${{ matrix.build_type }}
-          path: build/Testing/Temporary/
-
-  # RISC-V cross-compilation builds
-  riscv-build:
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        build_type: [Release, Debug]
-        rvv: ['', '--rvv']
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install RISC-V toolchain and dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            ninja-build \
-            git \
-            curl \
-            zip \
-            unzip \
-            tar \
-            pkg-config \
-            gcc-riscv64-linux-gnu \
-            g++-riscv64-linux-gnu \
-            binutils-riscv64-linux-gnu \
-            qemu-user
-
-      - name: Setup vcpkg
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
-          /opt/vcpkg/bootstrap-vcpkg.sh
-          mkdir -p /opt/vcpkg/cmake
-          ln -sf $PWD/cmake/riscv64-linux-gnu.cmake /opt/vcpkg/cmake/riscv64-linux-gnu.cmake
-          echo "VCPKG_ROOT=/opt/vcpkg" >> $GITHUB_ENV
-          echo "VCPKG_OVERLAY_TRIPLETS=$PWD/triplets" >> $GITHUB_ENV
-
-      - name: Verify toolchain
-        run: |
-          riscv64-linux-gnu-gcc --version
-          qemu-riscv64 --version
-
-      - name: Build RISC-V
-        env:
-          VCPKG_ROOT: /opt/vcpkg
-        run: |
-          BUILD_FLAGS="--riscv ${{ matrix.rvv }}"
-          if [ "${{ matrix.build_type }}" = "Debug" ]; then
-            BUILD_FLAGS="$BUILD_FLAGS --debug"
-          fi
-          ./scripts/build.sh $BUILD_FLAGS
-
-      - name: Run voxel downsampling tests (RISC-V)
-        run: |
-          cd build/riscv
-          ctest -R voxel_downsampling_tests --output-on-failure -V
-
-      - name: Upload test results
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-riscv-${{ matrix.build_type }}-${{ matrix.rvv != '' && 'rvv' || 'scalar' }}
-          path: build/Testing/Temporary/
-
-  # Voxel Downsampling Comprehensive Tests
-  voxel-downsampling-tests:
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        build_type: [Release, Debug]
-        leaf_size: [0.5, 1.0, 2.0, 5.0]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            ninja-build \
-            git \
-            curl \
-            zip \
-            unzip \
-            tar \
-            pkg-config
-
-      - name: Setup vcpkg
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
-          /opt/vcpkg/bootstrap-vcpkg.sh
-          echo "VCPKG_ROOT=/opt/vcpkg" >> $GITHUB_ENV
-
-      - name: Build with voxel downsampling
-        env:
-          VCPKG_ROOT: /opt/vcpkg
-        run: |
-          if [ "${{ matrix.build_type }}" = "Debug" ]; then
-            ./scripts/build.sh --debug
-          else
-            ./scripts/build.sh
-          fi
-
-      - name: Run comprehensive voxel tests
-        run: |
-          cd build/native
-          # Run all voxel downsampling tests with verbose output
-          ctest -R voxel_downsampling_tests --output-on-failure -V
-
-          # Run stress tests separately to ensure they complete
-          ./tests/voxel_downsampling_tests "[voxel][stress]"
-
-          # Run comparison tests to verify scalar and RVV equivalence
-          ./tests/voxel_downsampling_tests "[voxel][comparison]"
-
-      - name: Test standalone executables
-        run: |
-          cd build/native
-
-          # Test scalar standalone with different leaf sizes
-          echo "Testing scalar implementation with leaf_size=${{ matrix.leaf_size }}"
-          echo "1.0 2.0 3.0" | ./src/voxel_downsample_scalar ${{ matrix.leaf_size }}
-
-          # Test RVV standalone with different leaf sizes
-          echo "Testing RVV implementation with leaf_size=${{ matrix.leaf_size }}"
-          echo "1.0 2.0 3.0" | ./src/voxel_downsample_rvv ${{ matrix.leaf_size }}
-
-      - name: Run performance validation
-        if: matrix.build_type == 'Release'
-        run: |
-          cd build/native
-          # Ensure performance tests complete without crashes
-          timeout 300 ./tests/voxel_downsampling_tests "[voxel][performance]" || exit 1
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: voxel-test-results-${{ matrix.build_type }}-leaf${{ matrix.leaf_size }}
-          path: |
-            build/native/Testing/Temporary/
-            build/native/tests/
-
-  # Performance regression tests
-  performance-tests:
+  build-and-test:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+    - uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            ninja-build \
-            git \
-            curl \
-            zip \
-            unzip \
-            tar \
-            pkg-config
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          wget \
+          tar \
+          build-essential \
+          libglib2.0-dev \
+          libpixman-1-dev \
+          meson
 
-      - name: Setup vcpkg
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
-          /opt/vcpkg/bootstrap-vcpkg.sh
-          echo "VCPKG_ROOT=/opt/vcpkg" >> $GITHUB_ENV
+    - name: Install QEMU 9.2 from source
+      run: |
+        source env/versions.sh
+        source env/packages/qemu.sh
+        install_qemu_linux
+        echo "/opt/qemu/bin" >> $GITHUB_PATH
 
-      - name: Build Release with benchmarks
-        env:
-          VCPKG_ROOT: /opt/vcpkg
-        run: |
-          ./scripts/build.sh
+    - name: Install RISC-V Toolchain
+      run: |
+        source env/versions.sh
+        source env/linux/paths.sh
+        source env/packages/riscv.sh
+        install_riscv_toolchain_linux
+        echo "/opt/riscv/bin" >> $GITHUB_PATH
 
-      - name: Run benchmarks
-        run: |
-          cd build/native
-          # Run benchmarks with reduced iterations for CI
-          ./benchmarks/benchmark_voxel_downsampling \
-            --benchmark_min_time=0.1s \
-            --benchmark_repetitions=3 \
-            --benchmark_display_aggregates_only=true \
-            --benchmark_format=json \
-            --benchmark_out=benchmark_results.json
-
-      - name: Validate performance
-        run: |
-          cd build/native
-          # Basic validation that benchmarks completed
-          if [ ! -f benchmark_results.json ]; then
-            echo "Benchmark results file not found!"
-            exit 1
-          fi
-
-          # Check that results contain data
-          if ! grep -q "benchmarks" benchmark_results.json; then
-            echo "Benchmark results appear empty!"
-            exit 1
-          fi
-
-          echo "Performance benchmarks completed successfully"
-          cat benchmark_results.json
-
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: build/native/benchmark_results.json
-
-  # Code quality checks
-  code-quality:
-    runs-on: ubuntu-22.04
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format cppcheck
-
-      - name: Check formatting (if exists)
-        run: |
-          if [ -d "src" ] || [ -d "include" ]; then
-            find src include tests examples -name '*.hpp' -o -name '*.cpp' -o -name '*.h' 2>/dev/null | \
-              xargs clang-format --dry-run --Werror || true
-          fi
-
-      - name: Run cppcheck (if source exists)
-        run: |
-          if [ -d "src" ]; then
-            cppcheck --enable=warning,style,performance,portability \
-              --suppress=missingIncludeSystem \
-              --error-exitcode=1 \
-              -I include \
-              src/ tests/ || true
-          fi
-
-      - name: Check voxel downsampling code quality
-        run: |
-          # Run cppcheck specifically on voxel downsampling code
-          cppcheck --enable=all \
-            --suppress=missingIncludeSystem \
-            --suppress=unusedFunction \
-            --error-exitcode=1 \
-            src/voxel_downsampling_scalar.cpp \
-            src/voxel_downsampling_rvv.cpp \
-            tests/test_voxel_downsampling.cpp
+    - name: Run Verification
+      run: |
+        bash scripts/verify_container.sh

@@ -1,303 +1,286 @@
-# RV Point
+# RVPoint: RISC-V Vector Optimized Point Cloud Library
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+**RVPoint** is a specialized Point Cloud Library (PCL) built for **RISC-V** architectures, leveraging **RVGe** (RISC-V Vector Extension) intrinsics to accelerate core 3D processing algorithms. 
 
-A high-performance point cloud processing library for RISC-V architecture with support for the RISC-V Vector (RVV) extension and future custom instructions.
+Optimized for **RV64GCV** (targeting `v0.10+` vector specs).
 
-🚀 **Try without hardware:** Runs on QEMU (no RISC-V board needed)  
-📊 **Benchmarks:** Designed for significant speedup with RVV 1.0  
-🎓 **Educational:** Documented for learning RISC-V vectorization  
-🔧 **Extensible:** Architecture ready for custom instructions
+> 📘 **[Online Code Documentation](https://mumu-kun.github.io/rvpoint/)**
 
-## Features
+##  Documentation & Resources
 
-- **Multiple Point Types**: Point3D, PointXYZI, PointXYZRGB, PointNormal
-- **Backend Abstraction**: Clean separation between scalar and vector implementations
-- **Modern Error Handling**: `tl::expected` for clean error propagation (C++17)
-- **Structured Logging**: `spdlog` for fast, configurable logging
-- **Dependency Management**: `vcpkg` for easy library integration
-- **Code Quality**: Pre-commit hooks with `clang-format`
-- **Header-Only Core**: Easy integration, minimal dependencies
-- **Comprehensive Testing**: Catch2 test suite with QEMU/Spike emulation
-- **CI/CD Ready**: GitHub Actions with cross-compilation
-- **Docker Support**: Reproducible development environment
+Explore these guides for a deeper understanding of the codebase and its performance:
 
-## Quick Start
+| Guide | Description |
+|-------|-------------|
+| [**Instruction Manual**](@ref instruction_manual) | **The Master Guide**. Contains API documentation, Team SOPs, and Intrinsic Naming conventions. |
+| [**Pipeline Demo**](@ref pipeline_demo) | **Recommended for Quick-start**. Detailed walkthrough of the optimized Octree/SpatialHash pipeline. |
+| [**Performance Report**](@ref performance_report) | Benchmarks comparing different spatial indexing methods. |
+| [**Vector Theory**](@ref vector_theory) | Geometric logic behind the RVV implementations. |
 
-### For Team Members (Recommended)
+## 🚀 Key Features
 
-**Using VS Code Dev Container (ensures consistent environment):**
+This library implements 5 core point cloud processing algorithms, each with a highly optimized **RVV** path alongside a standard Scalar reference path.
 
-1. Install [Docker Desktop](https://docs.docker.com/get-docker/) and [VS Code](https://code.visualstudio.com/)
-2. Install [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-3. Clone repository and checkout dev branch:
-   ```bash
-   git clone <repository-url>
-   cd CSE450-Capstone-Project-RISC-V-Emulator
-   git checkout dev
-   ```
-4. Open in VS Code: `code .`
-5. Click "Reopen in Container" when prompted
-6. Wait for container to build (~5-10 minutes first time)
-7. Start developing!
+| Algorithm | Function Name | RVV Optimization |
+| :--- | :--- | :--- |
+| **Voxel Grid Downsampling** | `voxel_grid_downsamp_rvv` | Vectorized coordinate scaling & projection. |
+| **Statistical Outlier Removal** | `sor_rvv` | Accelerated K-NN distance calculation using `get_dist_sq_rvv` kernel. |
+| **Normal Estimation** | `normal_estimation_rvv` | Accelerated neighbor search for covariance matrix building. |
+| **Radius Search** | `radius_search_rvv` | Vectorized global distance scan & filter mask. |
+| **RANSAC Plane Fitting** | `ransac_plane_rvv` | High-throughput inlier counting using vector masks (`vmfle`, `vcpop`). |
+| **Spatial Hashing** | `SpatialHash::radiusSearch` | O(1) cell lookup with RVV fused gather-filter candidate processing. |
 
-See [Dev Container Setup](.devcontainer/README.md) for detailed guide.
+## 🛠️ Installation & Setup
 
-### Manual Setup (Alternative)
+### Prerequisites
+*   **Docker Desktop** (or Docker Engine)
+*   **VS Code** with "Dev Containers" extension.
 
-**Dependencies:**
+### Quick Start (Recommended)
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/Mumu-kun/rvpoint.git
+    cd rvpoint
+    ```
+2.  **Open in Dev Container**:
+    *   Open VS Code (`code .`).
+    *   Click "Reopen in Container" when prompted.
+    *   *This automatically sets up the GCC 13+ (or GCC 14 if configured) RISC-V Toolchain, QEMU, CMake, and all dependencies.*
+
+### Running with Docker (Manual)
+If you prefer to run Docker commands manually in your terminal, use these commands:
+
+**Option 1: Open Already Built Image**
+(Requires an existing image tagged as `rvpoint-built`)
 ```bash
-# System packages
-sudo apt install cmake ninja-build g++ git zip unzip tar pkg-config
-
-# For RISC-V cross-compilation
-sudo apt install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu qemu-user
-
-# Python tools
-pip install pre-commit
+docker run -it --rm -v $(pwd):/workspace -w /workspace rvpoint-built /bin/bash
 ```
 
-**Install vcpkg (dependency manager):**
+**Option 2: Clean Build & Run (Simulate New User)**
+Test the build process from scratch:
+
+1. **Build the Image**:
+    ```bash
+    docker build -f .devcontainer/Dockerfile -t rvpoint-clean-test .
+    ```
+
+2. **Run the Clean Image**:
+    ```bash
+    docker run -it --rm -v $(pwd):/workspace -w /workspace rvpoint-clean-test /bin/bash
+    ```
+
+### Custom Toolchain Path
+If you installed the toolchain in a custom location, set the `RISCV_PATH` environment variable before running scripts or building:
 ```bash
-git clone https://github.com/microsoft/vcpkg.git
-./vcpkg/bootstrap-vcpkg.sh
-export VCPKG_ROOT=$(pwd)/vcpkg
-export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+export RISCV_PATH=/path/to/riscv
 ```
 
-**Setup pre-commit hooks:**
-```bash
-pre-commit install
-```
-
-### Building
-
-**Native build:**
-```bash
-./scripts/build.sh
-```
-
-**RISC-V cross-compilation:**
-```bash
-./scripts/build.sh --riscv
-```
-
-**With RVV support:**
-```bash
-./scripts/build.sh --riscv --rvv
-```
-
-**Run example:**
-```bash
-./build/examples/error_handling_example
-```
-
-
-
-### Project Structure
-
-```
-pcl-riscv/
-├── cmake/                   # CMake configuration files
-│   ├── riscv64-linux-gnu.cmake    # RISC-V toolchain
-│   └── CompilerWarnings.cmake     # Warning flags
-├── .github/workflows/       # CI/CD configuration
-│   └── ci.yml              # GitHub Actions workflow
-├── .devcontainer/           # Dev container setup
-│   ├── Dockerfile          # Container with full toolchain
-│   └── devcontainer.json   # VS Code configuration
-├── include/rvpoint/         # Public library headers
-│   ├── error.hpp           # Error handling with tl::expected
-│   └── logger.hpp          # Logging with spdlog
-├── scripts/                 # Build and utility scripts
-│   └── build.sh            # Convenient build script
-├── docs/                    # Documentation
-│   └── BUILD.md            # Build instructions
-├── tests/                   # Unit tests
-│   └── CMakeLists.txt      # Test configuration template
-├── examples/                # Usage examples
-│   ├── error_handling_example.cpp  # Error & logging demo
-│   └── CMakeLists.txt      # Example configuration
-├── benchmarks/              # Performance benchmarks
-│   └── CMakeLists.txt      # Benchmark configuration template
-├── vcpkg.json              # Dependency manifest
-├── vcpkg-configuration.json # vcpkg settings
-├── .clang-format           # Code formatting rules
-├── .pre-commit-config.yaml # Pre-commit hooks config
-├── CMakeLists.txt          # Main build configuration
-├── README.md               # This file
-├── LICENSE                 # MIT License
-└── .gitignore             # Git ignore patterns
-```
-
-## What's Included
-
-This project provides the **complete setup infrastructure** for developing a RISC-V point cloud library:
-
-✅ **CMake Build System**
-- Cross-compilation support for RISC-V (riscv64-linux-gnu)
-- Native compilation for x86/ARM development
-- RVV (RISC-V Vector) extension support
-- Custom instruction support (future)
-- Multiple build types (Debug/Release)
-
-✅ **Testing Framework**
-- Catch2 integration
-- Automatic test execution via QEMU or Spike
-- CTest integration for CI/CD
-- VS Code test explorer support
-
-✅ **CI/CD Pipeline**
-- GitHub Actions workflow
-- Matrix builds (Debug/Release × Scalar/RVV)
-- Automated testing on push/PR
-- Weekly Spike validation (optional)
-
-✅ **Docker Environment**
-- Pre-configured container with RISC-V toolchain
-- QEMU and Spike emulators
-- Reproducible builds
-
-✅ **Documentation**
-- Comprehensive README
-- Detailed build instructions
-- Examples and usage patterns
-
-## What You Need to Implement
-
-The project structure is ready. Now implement your library:
-
-1. **Create header files** in `include/` directory
-2. **Add test files** in `tests/` directory  
-3. **Implement algorithms** (filters, search, segmentation, etc.)
-4. **Write examples** in `examples/` directory
-5. **Add benchmarks** in `benchmarks/` directory
-
-## Performance
-
-Designed for benchmarking scalar vs RVV implementations:
-
-| Operation | Scalar | RVV | Speedup |
-|-----------|--------|-----|---------|
-| Array Addition (10k) | 45 μs | TBD | TBD |
-| Distance Computation | 120 μs | TBD | TBD |
-| Find Min/Max | 80 μs | TBD | TBD |
-
-*Note: Run benchmarks with real hardware for accurate measurements.*
-
-## Testing
+### WSL2 Setup (Ubuntu 24.04)
+For native WSL2 development without Docker:
 
 ```bash
-# Build and run all tests
-cmake -B build && cmake --build build && cd build && ctest
-
-# Run specific test
-./build/tests/pcl_tests --gtest_filter=PointCloudTest.*
-
-# Run with Spike instead of QEMU
-cmake -B build -DUSE_SPIKE_EMULATOR=ON
-cmake --build build && cd build && ctest
+# From Git Bash (as Administrator)
+./env/setup.sh
 ```
 
-## Roadmap
+This installs:
+- Ubuntu 24.04 WSL2
+- RISC-V GCC 14 toolchain (ELF + glibc)
+- QEMU 9.2 user-mode for RISC-V emulation (or system package if available)
 
-- [x] Core data structures (Point3D, PointCloud)
-- [x] Scalar backend implementation
-- [x] RVV backend skeleton
-- [x] Testing framework (Google Test)
-- [x] CI/CD pipeline (GitHub Actions)
-- [ ] Complete RVV vectorization
-- [ ] Passthrough filter
-- [ ] KD-tree construction and search
-- [ ] Voxel grid downsampling
-- [ ] Statistical outlier removal
-- [ ] Custom RISC-V instructions (PCL_* extensions)
-- [ ] Python bindings
-- [ ] ROS2 integration
-
-## Development
-
-### Project Setup
-
+Then inside WSL2:
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/pcl-riscv.git
-cd pcl-riscv
-
-# Build in debug mode
-./scripts/build.sh --debug
-
-# Run tests
-cd build && ctest --verbose
+source env/activate.sh
+scripts/verify_container.sh
 ```
 
-### Adding New Algorithms
+## 🏗️ Building & Testing
 
-1. Add scalar implementation in `include/pcl_riscv/backend/scalar.hpp`
-2. Add tests in `tests/test_backend_scalar.cpp`
-3. (Later) Add RVV implementation in `include/pcl_riscv/backend/rvv.hpp`
-4. Add golden reference test comparing scalar vs RVV outputs
+We provide scripts for building and verifying all algorithms.
 
-### Custom Instructions (Future)
+### Run Full Verification
+```bash
+scripts/verify_container.sh
+```
+This script performs:
+1.  **CMake Configuration** (Targeting `rv64gcv`)
+2.  **Compilation**
+3.  **QEMU Emulation Tests** (Runs 7 core tests: scalar, vector, voxel_grid, sor, normal, radius, ransac)
 
-For implementing custom RISC-V instructions:
-1. Modify Spike: Add instruction in `spike/riscv/insns/pcl_*.h`
-2. Update encoding table in `spike/riscv/encoding.h`
-3. Rebuild Spike and test with `--isa=rv64gcv_xpcl`
-4. Document in `docs/CUSTOM_ISA.md`
-
-## Documentation
-
-Detailed documentation is available in the [docs/](docs/) directory:
-
-- **[Build Guide](docs/BUILD.md)** - Building for different targets (native, RISC-V, with RVV)
-- **[Testing Guide](docs/TESTING.md)** - Writing and running tests with Catch2
-- **[Contributing Guide](docs/CONTRIBUTING.md)** - Team workflow and collaboration practices
-- **[Dev Container Setup](.devcontainer/README.md)** - Development environment setup
-
-## Contributing
-
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the detailed collaboration workflow.
-
-**Quick checklist:**
-1. Create feature branch from `dev`
-2. Add tests for new functionality
-3. Ensure all tests pass (`ctest --output-on-failure`)
-4. Submit pull request to `dev` branch
-
-## License
-
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- RISC-V International for the open ISA specification
-- PCL (Point Cloud Library) for API inspiration
-- Open3D for modern point cloud processing patterns
-
-## Contact
-
-- **Project Lead**: Your Name
-- **Institution**: Your University
-- **Email**: your.email@university.edu
-- **Course**: CSE450 Capstone Project
-
-## Citation
-
-If you use this library in your research, please cite:
-
-```bibtex
-@software{pcl_riscv2026,
-  title = {PCL-RISC-V: Point Cloud Library for RISC-V with Vector Extensions},
-  author = {Your Name},
-  year = {2026},
-  url = {https://github.com/yourusername/pcl-riscv}
-}
+### Manual Build
+If you want to build manually:
+```bash
+mkdir build
+cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../src/cmake/riscv.cmake # (Or rely on env vars set by container)
+make
 ```
 
-## References
+### Running Individual Tests
+After building, you can run specific tests using QEMU:
+```bash
+# Example: Run RANSAC test
+/opt/riscv/bin/qemu-riscv64 -cpu max build_cmake/test_ransac
+```
 
-- [RISC-V Vector Extension Specification](https://github.com/riscv/riscv-v-spec)
-- [Point Cloud Library (PCL)](https://pointclouds.org/)
-- [Open3D](http://www.open3d.org/)
-- [RISC-V ISA Simulator (Spike)](https://github.com/riscv-software-src/riscv-isa-sim)
+## 📂 Project Structure
+
+```
+.
+├── src/
+│   ├── include/rvv_pcl.h       # Public API Header
+│   ├── rvv_common.cpp          # Reusable RVV Kernels (Distance, etc.)
+│   ├── voxel_grid_downsamp.cpp # Voxel Grid Implementation
+│   ├── statistical_outlier...  # SOR Implementation
+│   ├── normal_estimation.cpp   # Normal Estimation Implementation
+│   ├── radius_search.cpp       # Radius Search Implementation
+│   ├── octree.cpp              # Octree spatial index
+│   ├── spatial_hashing.cpp     # RVV Optimized Hash Grid
+│   └── ransac_plane.cpp        # RANSAC Implementation
+├── tests/                      # Unit Tests (C++)
+├── scripts/
+│   ├── bench                   # gem5 benchmark wrapper
+│   ├── build.sh                # Build wrapper
+│   ├── export_pipeline.sh      # Pipeline execution exporter
+│   ├── pipeline_render.py      # Open3D PCD renderer & viewer
+│   ├── run.sh                  # Test runner
+│   ├── setup_git_hooks.sh      # Git hook installer
+│   ├── verify_container.sh     # Master CI/CD script
+│   └── lib/
+│       └── common.sh           # Shared functions
+├── .devcontainer/              # Docker Environment Config
+└── .github/workflows/          # GitHub Actions CI
+```
+
+## 🤖 CI/CD Pipeline
+
+This repository is protected by a robust CI/CD pipeline:
+*   **GitHub Actions**: Automatically compiles and runs all tests on every `push` and `pull_request` using a fresh Ubuntu+RISC-V environment.
+*   **Local Git Hooks**: A `pre-push` hook is available to prevent pushing broken code.
+    *   Enable with: `bash scripts/setup_git_hooks.sh`
+
+## 📊 Benchmarking
+
+We now provide a gem5-based cycle benchmark for scalar-versus-RVV comparison. The benchmark keeps the implementation mode fixed at build time, runs one kernel per invocation, and reports cycle counts from gem5 stats.
+
+### Running the Benchmark
+Run one benchmark case with:
+```bash
+./scripts/bench <mode> <kernel> <size>
+```
+Where:
+- `mode` is `scalar` or `rvv`
+- `kernel` is `l2`, `reduction`, `filter`, `radius`, or `normal`
+- `size` is one of `1k`, `10k`, `100k`, or a raw point count
+
+The wrapper rebuilds the correct backend, runs the benchmark under gem5, parses the cycle stat, and prints:
+
+```text
+<mode> <kernel> <size> <cycles>
+```
+
+### Notes
+- The benchmark uses SoA layouts only: `x[]`, `y[]`, `z[]`.
+- Scalar builds use `-O3` with `rv64gc`.
+- RVV builds use `-O3 -march=rv64gcv` and vector-length-agnostic loops.
+- The gem5 launcher expects `GEM5_CONFIG` to point at your SE config script.
+
+### Verify without CMake (Manual Compilation)
+You can manually compile and verify each function against its scalar counterpart using individual commands.
+
+**Individual commands:**
+
+*Voxel Grid:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/voxel_grid_downsamp.cpp tests/test_voxel_grid.cpp -o test_voxel_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_voxel_rvv_manual
+```
+
+*RANSAC Plane:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/ransac_plane.cpp tests/test_ransac.cpp -o test_ransac_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_ransac_rvv_manual
+```
+
+*Radius Search:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/radius_search.cpp tests/test_radius.cpp -o test_radius_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_radius_rvv_manual
+```
+
+*Statistical Outlier Removal:*
+```bash
+/opt/riscv/bin/riscv64-unknown-elf-g++ -march=rv64gcv -mabi=lp64d -I src/include src/rvv_common.cpp src/statistical_outlier_removal.cpp tests/test_sor.cpp -o test_sor_rvv_manual
+qemu-riscv64 -cpu rv64,v=true,vlen=128 ./test_sor_rvv_manual
+```
+
+
+
+## ⚡ GCC 14 Upgrade & Linux Toolchain
+
+We have upgraded the toolchain to **GCC 14** (supports RVV 1.0, Auto-vectorization, Tuple types).
+We now provide **two** toolchains in the container:
+1.  **Embedded/ELF** (`riscv64-unknown-elf-`): Default, for bare-metal/simulated verification.
+2.  **Linux/Glibc** (`riscv64-unknown-linux-gnu-`): For building full Linux applications.
+
+### How to use
+1.  **Rebuild Dev Container**:
+    *   Command Palette (`Ctrl+Shift+P`) -> `Dev Containers: Rebuild Container`.
+    *   *This will automatically install both GCC 14 toolchains.*
+2.  **Verify Setup**:
+    ```bash
+    scripts/verify_container.sh
+    ```
+    *This runs tests for both toolchains.*
+
+### Building for Linux
+To build using the Linux (glibc) toolchain, use the specialized CMake file:
+```bash
+mkdir build_linux
+cd build_linux
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../src/cmake/riscv_linux.cmake
+make
+```
+
+### Detailed Verification Steps (Manual)
+If you want to verify specific GCC 14 capabilities manually, run these commands:
+
+**1. Verify Toolchain Version & Environment**
+```bash
+echo $RISCV_PATH  # Should output /opt/riscv (or your custom path)
+riscv64-unknown-elf-gcc --version
+```
+*(If RISCV_PATH is empty, run `export RISCV_PATH=/opt/riscv` first)*
+
+**2. Verify New RVV 1.0 Features (Fractional LMUL)**
+```bash
+# Compile
+$RISCV_PATH/bin/riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o tests/test_rvv_features tests/test_rvv_features.c
+# Run (Expect "vl=2" for mf2)
+qemu-riscv64 -cpu rv64,v=true,vlen=128 tests/test_rvv_features
+```
+
+**3. Verify Tuple Types & Segmented Operations**
+```bash
+# Compile
+$RISCV_PATH/bin/riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o tests/test_tuples tests/test_tuples.c
+# Run
+qemu-riscv64 -cpu rv64,v=true,vlen=128 tests/test_tuples
+```
+
+**4. Verify Auto-Vectorization**
+```bash
+# Compile to assembly
+$RISCV_PATH/bin/riscv64-unknown-elf-gcc -O3 -march=rv64gcv -mabi=lp64d -S -o tests/test_autovec.s tests/test_autovec.c
+# Check for vector instructions (should show 'vle32.v', 'vadd.vv', etc.)
+grep -E "vle|vadd|vse" tests/test_autovec.s
+```
+
+### New Features Enabled
+*   **Auto-Vectorization**: `-O3 -march=rv64gcv` now automatically vectorizes standard loops.
+*   **RVV 1.0 Intrinsics**: Full support for fractional LMUL (`mf2`) and Tuple types (`vfloat32m1x2_t`).
+*   **Tests**: See `tests/test_rvv_features.c` and `tests/test_tuples.c` for examples.
+
+
+## 📄 License
+[MIT](LICENSE)

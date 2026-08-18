@@ -1,0 +1,14 @@
+[project]
+name = "rvpoint"
+version = "0.1.0"
+description = "RISC-V Point Cloud Processing Pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "foxglove-schemas-protobuf",
+    "mcap-protobuf-support",
+    "numpy",
+    "open3d",
+    "protobuf",
+]
+

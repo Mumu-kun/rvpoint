@@ -1,104 +1,169 @@
 #!/bin/bash
-# Build script for easy compilation
-
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Default values
-BUILD_TYPE="Release"
-ENABLE_RVV="OFF"
-BUILD_DIR="build/native"
-TOOLCHAIN_FILE=""
-VCPKG_TRIPLET=""
-EMULATOR="qemu"
+source "$SCRIPT_DIR/lib/common.sh"
+wsl_bootstrap "scripts/build.sh" "$@"
+
+BUILD_DIR="$(get_build_dir)"
+source "${PROJECT_ROOT}/env/activate.sh"
+export RISCV_PATH="${RISCV:-${RISCV_ROOT:-/opt/riscv}}"
+
+# Defaults (can be overridden by command line)
+TOOLCHAIN="linux"
+BACKEND="rvv"
 CLEAN=false
+TARGET=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        --debug)
-            BUILD_TYPE="Debug"
-            shift
-            ;;
-        --rvv)
-            ENABLE_RVV="ON"
-            shift
-            ;;
-        --riscv)
-            BUILD_DIR="build/riscv"
-            TOOLCHAIN_FILE="-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-            VCPKG_TRIPLET="-DVCPKG_TARGET_TRIPLET=riscv64-linux -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/vcpkg/cmake/riscv64-linux-gnu.cmake"
-            shift
-            ;;
-        --spike)
-            EMULATOR="spike"
-            shift
+    case "$1" in
+        --toolchain)
+            TOOLCHAIN="$2"
+            shift 2
             ;;
         --clean)
             CLEAN=true
             shift
             ;;
-        --help)
-            echo "Usage: $0 [options]"
-            echo "Options:"
-            echo "  --debug       Build in Debug mode (default: Release)"
-            echo "  --rvv         Enable RISC-V Vector extension"
-            echo "  --riscv       Cross-compile for RISC-V"
-            echo "  --spike       Use Spike instead of QEMU for testing"
-            echo "  --clean       Clean build directory before building"
-            echo "  --help        Show this help message"
-            exit 0
+        --backend)
+            BACKEND="$2"
+            shift 2
+            ;;
+        --target)
+            TARGET="$2"
+            shift 2
             ;;
         *)
-            echo -e "${RED}Unknown option: $1${NC}"
+            echo "Usage: $0 [--toolchain linux|elf] [--backend rvv|riscv] [--target <cmake-target>] [--clean]"
             exit 1
             ;;
     esac
 done
 
-# Clean if requested
-if [ "$CLEAN" = true ]; then
-    echo -e "${YELLOW}Cleaning build directory...${NC}"
-    rm -rf "$BUILD_DIR"
-fi
+# Helper function to build a single backend (scalar or rvv)
+build_backend() {
+    local b_name="$1"
+    local riscv_arch=""
+    local rvv_cmake=""
 
-# Configure
-echo -e "${GREEN}Configuring PCL-RISC-V...${NC}"
-echo "  Build Type: $BUILD_TYPE"
-echo "  RVV Enabled: $ENABLE_RVV"
-echo "  Emulator: $EMULATOR"
-if [ -n "$VCPKG_TRIPLET" ]; then
-    echo "  Target: RISC-V 64-bit"
-    echo "  Triplet: riscv64-linux"
-fi
+    case "$b_name" in
+        rvv)
+            riscv_arch="rv64gcv"
+            rvv_cmake="ON"
+            ;;
+        scalar|riscv|normal)
+            b_name="scalar"
+            riscv_arch="rv64gc"
+            rvv_cmake="OFF"
+            ;;
+        *)
+            echo "Error: unknown backend '$b_name'. Use 'scalar', 'rvv', or 'all'."
+            exit 1
+            ;;
+    esac
 
-# If not using RISC-V cross-compilation, use regular vcpkg toolchain
-if [ -z "$VCPKG_TRIPLET" ]; then
-    TOOLCHAIN_FILE="-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-fi
+    local b_dir="${BUILD_DIR}/${b_name}"
 
-cmake -B "$BUILD_DIR" -G Ninja \
-    $TOOLCHAIN_FILE \
-    $VCPKG_TRIPLET \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DENABLE_RVV="$ENABLE_RVV" \
-    -DUSE_SPIKE_EMULATOR="$( [ "$EMULATOR" = "spike" ] && echo "ON" || echo "OFF" )" \
-    -DBUILD_TESTS=ON \
-    -DBUILD_EXAMPLES=ON \
-    -DBUILD_BENCHMARKS=ON
+    # Map toolchain name to cmake file
+    local toolchain_file=""
+    case "$TOOLCHAIN" in
+        linux)
+            toolchain_file="${PROJECT_ROOT}/src/cmake/riscv_linux.cmake"
+            ;;
+        elf)
+            toolchain_file="${PROJECT_ROOT}/src/cmake/riscv.cmake"
+            ;;
+        *)
+            echo "Error: unknown toolchain '$TOOLCHAIN'. Use 'linux' or 'elf'."
+            exit 1
+            ;;
+    esac
 
-# Build
-echo -e "${GREEN}Building...${NC}"
-cmake --build "$BUILD_DIR" --parallel
+    # Clean if requested
+    if [ "$CLEAN" = true ]; then
+        echo "Cleaning build directory for $b_name..."
+        rm -rf "$b_dir"
+    fi
 
-# Test
-echo -e "${GREEN}Running tests...${NC}"
-cd "$BUILD_DIR"
-ctest --output-on-failure
+    # Auto-clean on toolchain mismatch
+    local marker="$b_dir/.toolchain"
+    if [ -f "$marker" ] && [ "$(cat "$marker")" != "$TOOLCHAIN" ]; then
+        echo "Toolchain changed ($(cat "$marker") -> $TOOLCHAIN), reconfiguring $b_name..."
+        rm -rf "$b_dir"
+    fi
 
-echo -e "${GREEN}Build completed successfully!${NC}"
+    # Auto-clean if CMake cache is pinned to a non-RISC-V compiler or different build configuration
+    local cache_file="$b_dir/CMakeCache.txt"
+    if [ -f "$cache_file" ]; then
+        local cxx_compiler="$(sed -n 's/^CMAKE_CXX_COMPILER:FILEPATH=//p' "$cache_file" | head -n 1)"
+        local cache_arch="$(sed -n 's/^RISCV_ARCH:STRING=//p' "$cache_file" | head -n 1)"
+        local cache_rvv="$(sed -n 's/^RVV_PCL_USE_RVV:BOOL=//p' "$cache_file" | head -n 1)"
+        local cache_build_type="$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' "$cache_file" | head -n 1)"
+        if [ -n "$cxx_compiler" ] && [[ "$cxx_compiler" != *riscv64* ]]; then
+            echo "Detected stale host compiler in CMake cache ($cxx_compiler), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -n "$cache_arch" ] && [ "$cache_arch" != "$riscv_arch" ]; then
+            echo "Detected stale ISA in CMake cache ($cache_arch -> $riscv_arch), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -n "$cache_rvv" ] && [ "$cache_rvv" != "$rvv_cmake" ]; then
+            echo "Detected stale RVV setting in CMake cache ($cache_rvv -> $rvv_cmake), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -z "$cache_build_type" ] || [ "$cache_build_type" != "Release" ]; then
+            echo "Detected non-Release build type in CMake cache ($cache_build_type), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        fi
+    fi
+
+    # Configure if needed
+    if [ ! -f "$b_dir/CMakeCache.txt" ]; then
+        echo "Configuring CMake (toolchain: $TOOLCHAIN, backend: $b_name)..."
+        cmake -S "$PROJECT_ROOT" -B "$b_dir" \
+            -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DRISCV_ARCH="$riscv_arch" \
+            -DRISCV_ABI="lp64d" \
+            -DRVV_PCL_USE_RVV="$rvv_cmake"
+        echo "$TOOLCHAIN" > "$marker"
+    fi
+
+    # Build
+    if [ -n "$TARGET" ]; then
+        echo "Building target '$TARGET' [$b_name]..."
+        cmake --build "$b_dir" --target "$TARGET" -j"${NPROC:-2}"
+    else
+        echo "Building [$b_name]..."
+        cmake --build "$b_dir" -j"${NPROC:-2}"
+    fi
+
+    echo "Build complete for $b_name backend. Binaries in: ${b_dir}/bin/${b_name}/"
+
+    # Sync compile_commands.json for host IDE (e.g., Windows clangd / IntelliSense)
+    if [ -f "${b_dir}/compile_commands.json" ]; then
+        mkdir -p "${PROJECT_ROOT}/build"
+        local wsl_root="${PROJECT_ROOT}"
+        local host_root=""
+        if command -v wslpath &>/dev/null; then
+            host_root="$(wslpath -m "${wsl_root}" 2>/dev/null || echo "")"
+        fi
+
+        if [ -n "$host_root" ] && [ -n "$wsl_root" ]; then
+            sed -e "s|${wsl_root}|${host_root}|g" -e "s|\"directory\": \"[^\"]*\"|\"directory\": \"${host_root}\"|g" "${b_dir}/compile_commands.json" > "${PROJECT_ROOT}/build/compile_commands.json"
+        else
+            cp "${b_dir}/compile_commands.json" "${PROJECT_ROOT}/build/compile_commands.json"
+        fi
+        echo "Exported IntelliSense compilation database to: ${PROJECT_ROOT}/build/compile_commands.json"
+    fi
+}
+
+case "$BACKEND" in
+    all|both)
+        build_backend "scalar"
+        build_backend "rvv"
+        ;;
+    *)
+        build_backend "$BACKEND"
+        ;;
+esac

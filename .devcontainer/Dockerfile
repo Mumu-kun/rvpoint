@@ -1,101 +1,77 @@
-# Dev Container for PCL-RISC-V Development
-# Optimized for Docker layer caching
+# === Stage 1: Base System Prerequisites ===
+FROM ubuntu:24.04 AS base
 
-FROM ubuntu:22.04
+ARG ENVIRONMENT_VERSION=1.0.0
+LABEL org.opencontainers.image.version="${ENVIRONMENT_VERSION}"
 
-# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Copy Bangladesh mirrors configuration with fallbacks
-COPY sources.list /etc/apt/sources.list
+# Copy common files and prereqs installer
+COPY env/common.sh env/versions.sh /tmp/env/
+COPY env/linux/install_prereqs.sh /tmp/env/linux/
 
-# Layer 1: System packages (changes rarely - excellent caching)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    ninja-build \
-    git \
-    wget \
-    curl \
-    zip \
-    unzip \
-    tar \
-    pkg-config \
-    python3 \
-    python3-pip \
-    python3-venv \
-    gcc-riscv64-linux-gnu \
-    g++-riscv64-linux-gnu \
-    binutils-riscv64-linux-gnu \
-    qemu-user \
-    gdb \
-    gdb-multiarch \
-    valgrind \
-    ccache \
-    clang-format \
-    cppcheck \
-    && rm -rf /var/lib/apt/lists/*
+# Install core apt prerequisites using single source of truth script
+RUN sed -i 's/\r$//' /tmp/env/*.sh /tmp/env/linux/*.sh && bash /tmp/env/linux/install_prereqs.sh
 
-# Note: Spike is NOT included for faster setup. QEMU suffices for scalar/RVV.
-# Install later if needed - see docs/SPIKE_SETUP.md
+# === Stage 2: CMake Builder ===
+FROM base AS cmake-builder
+COPY env/linux/install_cmake.sh /tmp/env/linux/
+RUN sed -i 's/\r$//' /tmp/env/linux/*.sh && bash /tmp/env/linux/install_cmake.sh
 
-# Layer 2: Tool verification (fast, but separate for debugging)
-RUN riscv64-linux-gnu-gcc --version && \
-    qemu-riscv64 --version && \
-    echo "Tools verified successfully"
+# === Stage 3: QEMU Builder ===
+FROM base AS qemu-builder
+COPY env/linux/install_qemu.sh /tmp/env/linux/
+RUN sed -i 's/\r$//' /tmp/env/linux/*.sh && bash /tmp/env/linux/install_qemu.sh
 
-# Layer 3: Python tools (changes occasionally)
-RUN pip3 install --no-cache-dir pre-commit
+# === Stage 4: RISC-V Toolchain Builder ===
+FROM base AS riscv-builder
+COPY env/linux/install_riscv.sh /tmp/env/linux/
+RUN sed -i 's/\r$//' /tmp/env/linux/*.sh && bash /tmp/env/linux/install_riscv.sh
 
-# Layer 3.5: Install vcpkg
-RUN git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg && \
-    /opt/vcpkg/bootstrap-vcpkg.sh && \
-    ln -s /opt/vcpkg/vcpkg /usr/local/bin/vcpkg && \
-    mkdir -p /opt/vcpkg/cmake
+# === Stage 5: Final DevContainer Image ===
+FROM base AS final
 
-ENV VCPKG_ROOT=/opt/vcpkg
+# Copy cached toolchain builds from dedicated stages
+COPY --from=cmake-builder /opt/cmake /opt/cmake
+COPY --from=qemu-builder /opt/qemu /opt/qemu
+COPY --from=riscv-builder /opt/riscv /opt/riscv
 
-# Layer 4: Global configuration (changes occasionally)
-RUN ccache --max-size=2G && \
-    git config --global core.editor "vim" && \
-    git config --global init.defaultBranch main
+# Clean up temp env scripts from base layer
+RUN rm -rf /tmp/env
+
+# Set environment variables
+ENV CMAKE_ROOT=/opt/cmake
+ENV QEMU_ROOT=/opt/qemu
+ENV RISCV=/opt/riscv
+ENV PATH="/opt/cmake/bin:/opt/riscv/bin:/opt/qemu/bin:${PATH}"
 
 WORKDIR /workspace
-RUN chmod 777 /workspace
 
+# Verify installation inside image build
+RUN cmake --version && \
+    riscv64-unknown-elf-gcc --version && \
+    qemu-riscv64 --version && \
+    echo "RISC-V environment ready!"
 
-# Layer 5: Aliases (changes with project commands - separate for easy updates)
-RUN echo 'alias ll="ls -lah"' >> /root/.bashrc && \
-    echo 'alias build="./scripts/build.sh"' >> /root/.bashrc && \
-    echo 'alias build-riscv="./scripts/build.sh --riscv"' >> /root/.bashrc && \
-    echo 'alias build-rvv="./scripts/build.sh --riscv --rvv"' >> /root/.bashrc && \
-    echo 'alias test-qemu="cd build && ctest --output-on-failure"' >> /root/.bashrc && \
-    echo 'alias run="./scripts/run.sh"' >> /root/.bashrc && \
-    echo 'alias dev="./scripts/dev.sh"' >> /root/.bashrc
+# Automatically activate environment in interactive shells
+RUN echo '[ -f /workspace/env/activate.sh ] && source /workspace/env/activate.sh' >> /etc/bash.bashrc
 
-# Layer 6: Welcome message (cosmetic - easily updated without rebuilding everything)
+# Welcome banner
 RUN echo '#!/bin/bash' > /usr/local/bin/welcome.sh && \
     echo 'echo "╔════════════════════════════════════════════════════════════╗"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║  PCL-RISC-V Development Container                          ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║  RVPoint: RISC-V Vector Optimized Point Cloud Library      ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "╠════════════════════════════════════════════════════════════╣"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║  Available tools:                                          ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - GCC/G++ (native)                                      ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - riscv64-linux-gnu-gcc/g++ (cross-compiler)            ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - QEMU (user-mode & system emulation)                   ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - CMake, Ninja, ccache, vcpkg                           ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    - spdlog, tl-expected (via vcpkg)                       ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║  Quick commands:                                           ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    build         - Native build                            ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    build-riscv   - RISC-V cross-compile (scalar)           ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    build-rvv     - RISC-V cross-compile (with RVV)         ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    test-qemu     - Run tests in QEMU                       ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    run           - Run executables (native/RISC-V)         ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║    dev           - Smart build & run with ccache           ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║                  --tests, --examples, --benchmarks         ║"' >> /usr/local/bin/welcome.sh && \
-    echo 'echo "║                  --native, --riscv, --qemu, --spike        ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║  Environment Ready:                                        ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - RISC-V GCC 14 Toolchain (rv64gcv)                     ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - QEMU 9.2 (full RVV v1.0)                            ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    - CMake, Ninja, Python3                                 ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║                                                            ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║  Quick Commands:                                           ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Verify All:   env/verify_container.sh                   ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Manual Build: mkdir build && cd build && cmake ..       ║"' >> /usr/local/bin/welcome.sh && \
+    echo 'echo "║    Run Tests:    qemu-riscv64 -L /opt/riscv/sysroot ...    ║"' >> /usr/local/bin/welcome.sh && \
     echo 'echo "╚════════════════════════════════════════════════════════════╝"' >> /usr/local/bin/welcome.sh && \
     chmod +x /usr/local/bin/welcome.sh && \
-    echo '/usr/local/bin/welcome.sh' >> /root/.bashrc
+    echo '/usr/local/bin/welcome.sh' >> /etc/bash.bashrc
 
-# Default command
 CMD ["/bin/bash"]

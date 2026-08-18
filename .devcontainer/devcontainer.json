@@ -1,76 +1,40 @@
 {
-    "name": "RV Point Development",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "context": "."
-    },
-    // Container configuration
-    "workspaceFolder": "/workspace",
-    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-    // VS Code settings
-    "customizations": {
-        "vscode": {
-            "settings": {
-                "terminal.integrated.defaultProfile.linux": "bash",
-                "cmake.configureOnOpen": true,
-                "cmake.buildDirectory": "${workspaceFolder}/build",
-                "files.associations": {
-                    "*.hpp": "cpp",
-                    "*.h": "c"
-                },
-                "editor.formatOnSave": true,
-                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-                "C_Cpp.codeAnalysis.clangTidy.enabled": true,
-                "C_Cpp.codeAnalysis.clangTidy.runAutomatically": true,
-                "coverage-gutters.coverageFileNames": [
-                    "coverage.info",
-                    "lcov.info",
-                    "coverage.xml"
-                ],
-                "coverage-gutters.showLineCoverage": true,
-                "coverage-gutters.showRulerCoverage": true
-            },
-            // Recommended extensions
-            "extensions": [
-                "ms-vscode.cpptools",
-                "ms-vscode.cpptools-extension-pack",
-                "ms-vscode.cmake-tools",
-                "twxs.cmake",
-                "cheshirekow.cmake-format",
-                "xaver.clang-format",
-                "ms-vscode.hexeditor",
-                "vadimcn.vscode-lldb",
-                "notskm.clang-tidy",
-                "ryanluker.vscode-coverage-gutters",
-                "matepek.vscode-catch2-test-adapter",
-                "eamodio.gitlens",
-                "vivaxy.vscode-conventional-commits"
-            ]
-        }
-    },
-    // Set environment variables
-    "remoteEnv": {
-        "CMAKE_GENERATOR": "Ninja",
-        "VCPKG_ROOT": "/opt/vcpkg",
-        "VCPKG_DEFAULT_TRIPLET": "x64-linux",
-        "VCPKG_OVERLAY_TRIPLETS": "${containerWorkspaceFolder}/triplets"
-    },
-    // Forward ports (if needed for future web demos)
-    "forwardPorts": [],
-    // Keep container running
-    "runArgs": [
-        "--cap-add=SYS_PTRACE",
-        "--security-opt",
-        "seccomp=unconfined"
-    ],
-    // Mount git config as read-only, copy to allow modifications
-    //"mounts": [
-    //    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/tmp/.gitconfig-host,type=bind,readonly"
-    //],
-    // Use 'postStartCommand' for commands that should run every time
-    // User settings
-    "remoteUser": "root",
-    "postCreateCommand": "cp /tmp/.gitconfig-host /root/.gitconfig 2>/dev/null || true && ln -sf /workspace/cmake/riscv64-linux-gnu.cmake /opt/vcpkg/cmake/riscv64-linux-gnu.cmake && pre-commit install && git config --global --add safe.directory /workspace && echo 'Dev container ready! Pre-commit hooks installed. Use ./scripts/build.sh to build the project.'",
-    // Features (alternative to installing in Dockerfile)
-    "features": {}
+  "name": "RVPoint RISC-V Development Environment",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "containerEnv": {
+    "CMAKE_ROOT": "/opt/cmake",
+    "QEMU_ROOT": "/opt/qemu",
+    "RISCV": "/opt/riscv",
+    "RISCV_PATH": "/opt/riscv"
+  },
+  "runArgs": [
+    "--privileged"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "twxs.cmake",
+        "ms-vscode.hexeditor",
+        "ms-python.python"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "cmake.cmakePath": "/opt/cmake/bin/cmake",
+        "C_Cpp.default.compilerPath": "/opt/riscv/bin/riscv64-unknown-elf-gcc",
+        "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+      }
+    }
+  },
+  "postCreateCommand": "bash -c 'echo \"=== RVPoint Dev Container Ready ===\"'",
+  "remoteUser": "root"
 }

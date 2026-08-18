@@ -1,57 +1,42 @@
 # Build directories
+build_cmake/
 build/
-build-*/
-cmake-build-*/
 
-# IDE files
-# .vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Compiled files
+# Binaries
+bin/
 *.o
 *.a
 *.so
-*.dylib
-*.exe
+**pycache**
 
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps/
+# Test binaries
+test_*_linux
+tests/test_*
 
-# Testing
-Testing/
-*.gcda
-*.gcno
-*.gcov
+# Output results & renders
+output/
+results/
+renders/
+*.pcd
+*.png
 
-# Package managers
-conan.lock
-vcpkg_installed/
+# Doxygen generated docs
+html/
+latex/
+docs/doxygen/
 
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-*.whl
+# Editors
+.vscode/
+.idea/
 
-# Documentation
-docs/_build/
-docs/html/
-docs/latex/
+# Exception (keep data if needed, but usually large files ignored)
+!data/*.pcd
+!doc/*.png
 
-# Logs
-*.log
-
-# Editor backups
-*.bak
-*~
+# Local tools, venv, and WSL caches
+.tools/
+env/.tools/
+wsl/
+env/.wsl/
+.venv/
+AGENTS.md

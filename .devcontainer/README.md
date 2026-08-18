@@ -1,256 +1,100 @@
-# Dev Container Setup
+# RISC-V Development Environment
 
-This project uses VS Code Dev Containers to provide a consistent development environment for all team members.
-
-## Prerequisites
-
-1. **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux)
-   - Windows: https://docs.docker.com/desktop/install/windows-install/
-   - Mac: https://docs.docker.com/desktop/install/mac-install/
-   - Linux: https://docs.docker.com/engine/install/
-
-2. **Visual Studio Code**
-   - Download: https://code.visualstudio.com/
-
-3. **Dev Containers Extension**
-   - Install: https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers
-   - Or search "Dev Containers" in VS Code Extensions
-
-## Quick Start
-
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd CSE450-Capstone-Project-RISC-V-Emulator
-   ```
-
-2. **Checkout dev branch:**
-   ```bash
-   git checkout dev
-   ```
-
-3. **Open in VS Code:**
-   ```bash
-   code .
-   ```
-
-4. **Reopen in Container:**
-   - VS Code will detect `.devcontainer/devcontainer.json`
-   - Click "Reopen in Container" when prompted
-   - Or use Command Palette (F1) → "Dev Containers: Reopen in Container"
-
-5. **Wait for container to build** (first time only, ~5-10 minutes)
-
-6. **Start developing!**
-   ```bash
-   # Inside the container
-   ./scripts/build.sh --riscv
-   ```
+This Docker development container provides a complete RISC-V development environment matching our Mac setup.
 
 ## What's Included
 
-The dev container provides:
+- **RISC-V GNU Toolchain** (riscv64-unknown-elf-gcc 14.2.0)
+- **Spike RISC-V ISA Simulator** (v1.1.0)
+- **RISC-V Proxy Kernel (pk)**
+- Essential build tools (cmake, ninja, etc.)
 
-- ✅ **RISC-V Toolchains**
-  - `riscv64-linux-gnu-gcc/g++` (Linux userspace target)
-  - `riscv64-unknown-elf-gcc/g++` (Bare-metal target)
+## Prerequisites
 
-- ✅ **Emulators**
-  - QEMU (user-mode and system emulation)
-  - Spike (RISC-V ISA simulator)
-  - pk (Proxy kernel for Spike)
+1. **Docker Desktop** - [Download](https://www.docker.com/products/docker-desktop)
+2. **Visual Studio Code** - [Download](https://code.visualstudio.com/)
+3. **Dev Containers Extension** - Install from VS Code extensions
 
-- ✅ **Build Tools**
-  - CMake 3.22+
-  - Ninja build system
-  - ccache (for faster rebuilds)
+## Quick Start
 
-- ✅ **Development Tools**
-  - GDB (with multiarch support)
-  - Valgrind
-  - clang-format, cppcheck
-  - Git with LFS
-
-- ✅ **VS Code Extensions** (auto-installed)
-  - C/C++ Extension Pack
-  - CMake Tools
-  - GitLens
-  - Git Graph
-
-## Helpful Aliases
-
-The container includes convenient aliases:
+1. Clone the repository:
 
 ```bash
-build           # Native build (./scripts/build.sh)
-build-riscv     # RISC-V scalar build (./scripts/build.sh --riscv)
-build-rvv       # RISC-V with RVV (./scripts/build.sh --riscv --rvv)
-test-qemu       # Run tests (cd build && ctest --output-on-failure)
+   git clone <your-repo-url>
+   cd rvpoint
 ```
 
-## Common Tasks
+2. Open in VS Code:
 
-### Building the Project
-
-**Native build (for quick testing):**
 ```bash
-./scripts/build.sh
+   code .
 ```
 
-**RISC-V cross-compilation:**
+3. When prompted, click **"Reopen in Container"**
+   - Or press `Cmd+Shift+P` and select "Dev Containers: Reopen in Container"
+
+4. Wait for the container to build (first time takes ~15-20 minutes)
+
+5. Verify installation:
+
 ```bash
-./scripts/build.sh --riscv
+   scripts/verify_container.sh
 ```
 
-**With RVV support:**
+## Usage Examples
+
+### Compile and Run Tests
+
+Use the provided `Makefile` to compile and run tests:
+
 ```bash
-./scripts/build.sh --riscv --rvv
+# Run Scalar Test
+make run_scalar
+
+# Run Vector Test
+make run_vector
+
+# Clean build artifacts
+make clean
 ```
 
-**Debug build:**
-```bash
-./scripts/build.sh --riscv --rvv --debug
-```
+### Manual Compilation
 
-### Running Tests
+If you prefer to compile manually:
 
 ```bash
-cd build
-ctest --output-on-failure --verbose
-```
+# Compile Scalar
+rubriscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o build/test_scalar tests/test_scalar.c
+qemu-riscv64 -cpu max build/test_scalar
 
-Or use the alias:
-```bash
-test-qemu
-```
-
-### Verifying Toolchain
-
-```bash
-# Check RISC-V compiler
-riscv64-linux-gnu-gcc --version
-
-# Check QEMU
-qemu-riscv64 --version
-
-# Check Spike
-spike --version
-
-# Test QEMU with a simple program
-echo 'int main() { return 0; }' > test.c
-riscv64-linux-gnu-gcc test.c -o test
-qemu-riscv64 test
-echo $?  # Should print 0
+# Compile Vector
+riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -o build/test_vector tests/test_vector.c
+qemu-riscv64 -cpu max build/test_vector
 ```
 
 ## Troubleshooting
 
-### Container won't start
+**Container build fails?**
 
-1. **Check Docker is running:**
-   ```bash
-   docker ps
-   ```
+- Ensure Docker Desktop is running
+- Try: `docker system prune -a` to clean up space
+- Rebuild: `Cmd+Shift+P` → "Dev Containers: Rebuild Container"
 
-2. **Rebuild container:**
-   - Command Palette (F1) → "Dev Containers: Rebuild Container"
+**Need to update packages?**
 
-3. **Check Docker resources:**
-   - Ensure Docker has at least 4GB RAM allocated
-   - Check Docker Desktop settings
+- Edit `.devcontainer/Dockerfile`
+- Rebuild the container
 
-### Build fails
+## Environment Variables
 
-1. **Clean build directory:**
-   ```bash
-   rm -rf build
-   ./scripts/build.sh --clean --riscv
-   ```
+- `RISCV=/opt/riscv` - Toolchain installation path
+- `PATH` includes `/opt/riscv/bin`
 
-2. **Verify toolchain:**
-   ```bash
-   which riscv64-linux-gnu-gcc
-   riscv64-linux-gnu-gcc --version
-   ```
+## Contributing
 
-### QEMU tests timeout
+When making changes to the dev environment:
 
-1. **Check QEMU version:**
-   ```bash
-   qemu-riscv64 --version  # Should be 6.2+
-   ```
-
-2. **Run test manually:**
-   ```bash
-   qemu-riscv64 -L /usr/riscv64-linux-gnu ./build/tests/your_test
-   ```
-
-## Team Collaboration
-
-### Git Workflow
-
-1. **Always work on dev branch:**
-   ```bash
-   git checkout dev
-   git pull origin dev
-   ```
-
-2. **Create feature branches:**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-3. **Commit and push:**
-   ```bash
-   git add .
-   git commit -m "Description of changes"
-   git push origin feature/your-feature-name
-   ```
-
-4. **Merge back to dev** (after review)
-
-### Keeping Container Updated
-
-When `.devcontainer/Dockerfile` changes:
-
-1. **Pull latest changes:**
-   ```bash
-   git pull origin dev
-   ```
-
-2. **Rebuild container:**
-   - Command Palette (F1) → "Dev Containers: Rebuild Container"
-
-## Performance Tips
-
-1. **Use ccache for faster rebuilds:**
-   - Already configured in the container
-   - Builds will be faster after the first compilation
-
-2. **Parallel builds:**
-   ```bash
-   cmake --build build --parallel $(nproc)
-   ```
-
-3. **Use Ninja instead of Make:**
-   - Already configured as default generator
-
-## Container Details
-
-- **Base Image:** Ubuntu 22.04
-- **Architecture:** amd64 (x86_64)
-- **Size:** ~3GB (after build)
-- **Build Time:** ~5-10 minutes (first time)
-
-## Getting Help
-
-- Check [docs/BUILD.md](../docs/BUILD.md) for detailed build instructions
-- Ask team members in your project chat
-- Check container logs if something fails:
-  ```bash
-  docker logs <container-id>
-  ```
-
-## Updating This Guide
-
-If you discover issues or improvements, please update this README and commit to dev branch.
+1. Update the Dockerfile
+2. Test locally by rebuilding the container
+3. Document changes in this README
+4. Commit and push

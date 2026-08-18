@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# ─── DEPRECATED ─────────────────────────────────────────────────────────────
+# 'scripts/bench' is obsolete.
+# Use './scripts/gem5run' for gem5 simulations or './scripts/run.sh' for QEMU/host.
+# ─────────────────────────────────────────────────────────────────────────────
+
+BOLD=$'\e[1m'
+YELLOW=$'\e[33m'
+CYAN=$'\e[36m'
+RESET=$'\e[0m'
+
+echo "${YELLOW}${BOLD}[DEPRECATED] 'scripts/bench' is obsolete.${RESET}"
+echo "Please use direct runner scripts:"
+echo "  ${CYAN}./scripts/gem5run tests/bench/bench_caravan_radius.cpp [--scalar|--rvv]${RESET}"
+echo "  ${CYAN}./scripts/run.sh tests/bench/bench_caravan_radius.cpp${RESET}"
+echo ""
+exit 1

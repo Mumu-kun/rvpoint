@@ -1,7 +1,0 @@
-{
-	"$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-	"name": "rvpoint",
-	"version": "0.1.0",
-	"description": "RV Point - Point Cloud Processing for RISC-V",
-	"dependencies": ["spdlog", "tl-expected", "catch2", "benchmark"]
-}
