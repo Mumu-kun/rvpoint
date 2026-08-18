@@ -11,14 +11,12 @@ void PointCloudSoA::reserve(std::size_t capacity) {
   xCoords_.reserve(capacity);
   yCoords_.reserve(capacity);
   zCoords_.reserve(capacity);
-  intensities_.reserve(capacity);
 }
 
 void PointCloudSoA::clear() {
   xCoords_.clear();
   yCoords_.clear();
   zCoords_.clear();
-  intensities_.clear();
   pointCount_ = 0;
 }
 
@@ -26,7 +24,6 @@ void PointCloudSoA::resize(std::size_t new_size) {
   xCoords_.resize(new_size);
   yCoords_.resize(new_size);
   zCoords_.resize(new_size);
-  intensities_.resize(new_size, 0.0f);
   pointCount_ = new_size;
 }
 
@@ -41,11 +38,10 @@ bool PointCloudSoA::loadFromPCD(const std::string &filename) {
   return true;
 }
 
-void PointCloudSoA::push_back(const PointXYZ &point, float intensity) {
+void PointCloudSoA::push_back(const PointXYZ &point, float /*intensity*/) {
   xCoords_.push_back(point.x);
   yCoords_.push_back(point.y);
   zCoords_.push_back(point.z);
-  intensities_.push_back(intensity);
   pointCount_ = xCoords_.size();
 }
 

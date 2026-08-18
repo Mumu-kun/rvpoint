@@ -29,11 +29,23 @@ using namespace rvv_pcl;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-static PointCloudSoA make_cloud(const std::vector<PointXYZ> &pts) {
+struct SoABuffer {
+    std::vector<float> x, y, z;
     PointCloudSoA cloud;
-    cloud.reserve(pts.size());
-    for (const auto &p : pts) cloud.push_back(p);
-    return cloud;
+};
+
+static SoABuffer make_cloud(const std::vector<PointXYZ> &pts) {
+    SoABuffer buf;
+    buf.x.resize(pts.size());
+    buf.y.resize(pts.size());
+    buf.z.resize(pts.size());
+    for (size_t i = 0; i < pts.size(); ++i) {
+        buf.x[i] = pts[i].x;
+        buf.y[i] = pts[i].y;
+        buf.z[i] = pts[i].z;
+    }
+    buf.cloud = {buf.x.data(), buf.y.data(), buf.z.data(), pts.size()};
+    return buf;
 }
 
 // Naive brute-force BFS clustering (reference implementation for correctness
@@ -41,7 +53,7 @@ static PointCloudSoA make_cloud(const std::vector<PointXYZ> &pts) {
 static std::vector<std::set<int>> naive_bfs(
     const PointCloudSoA &cloud, float tol, int min_sz, int max_sz
 ) {
-    const std::size_t  n      = cloud.size();
+    const std::size_t  n      = cloud.n;
     const float        tol_sq = tol * tol;
     std::vector<bool>  visited(n, false);
     std::vector<std::set<int>> clusters;
@@ -55,10 +67,10 @@ static std::vector<std::set<int>> naive_bfs(
         while (!q.empty()) {
             const int cur = q.front(); q.pop();
             cluster.insert(cur);
-            const PointXYZ pc = cloud.point(static_cast<std::size_t>(cur));
+            const PointXYZ pc = {cloud.x[cur], cloud.y[cur], cloud.z[cur]};
             for (std::size_t j = 0; j < n; ++j) {
                 if (visited[j]) continue;
-                const PointXYZ pj = cloud.point(j);
+                const PointXYZ pj = {cloud.x[j], cloud.y[j], cloud.z[j]};
                 const float dx = pj.x - pc.x;
                 const float dy = pj.y - pc.y;
                 const float dz = pj.z - pc.z;
@@ -111,9 +123,9 @@ static void test_empty_cloud() {
 }
 
 static void test_single_point() {
-    PointCloudSoA cloud = make_cloud({{1.0f, 2.0f, 3.0f}});
+    auto buf = make_cloud({{1.0f, 2.0f, 3.0f}});
     EuclideanClustering ec;
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(buf.cloud);
     ec.setClusterTolerance(0.5f);
     ec.setMinClusterSize(1);
     ec.setMaxClusterSize(100);
@@ -139,21 +151,21 @@ static void test_two_separated_blobs() {
     for (int i = 0; i < BLOB_SIZE; ++i)
         pts.push_back({GAP + jitter(gen), jitter(gen), jitter(gen)});    // blob B far in X
 
-    PointCloudSoA cloud = make_cloud(pts);
+    auto buf = make_cloud(pts);
 
     constexpr float TOL = 0.15f;
     constexpr int   MIN = 1;
     constexpr int   MAX = 10000;
 
     EuclideanClustering ec;
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(buf.cloud);
     ec.setClusterTolerance(TOL);
     ec.setMinClusterSize(MIN);
     ec.setMaxClusterSize(MAX);
     const auto clusters = ec.extract();
 
     // Reference
-    const auto ref = naive_bfs(cloud, TOL, MIN, MAX);
+    const auto ref = naive_bfs(buf.cloud, TOL, MIN, MAX);
 
     CHECK(clusters.size() == 2, "Two-blob cloud → exactly 2 clusters");
     CHECK(clusters.size() == ref.size(),
@@ -198,10 +210,10 @@ static void test_size_filter_min() {
     // blob C: 5 points at X=2*GAP
     for (int i = 0; i < 5; ++i) pts.push_back({2*GAP + jitter(gen), jitter(gen), jitter(gen)});
 
-    PointCloudSoA cloud = make_cloud(pts);
+    auto buf = make_cloud(pts);
 
     EuclideanClustering ec;
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(buf.cloud);
     ec.setClusterTolerance(0.15f);
     ec.setMinClusterSize(10);
     ec.setMaxClusterSize(100);
@@ -226,10 +238,10 @@ static void test_size_filter_max() {
     for (int i = 0; i < 30; ++i) pts.push_back({jitter(gen), jitter(gen), jitter(gen)});
     for (int i = 0; i < 5;  ++i) pts.push_back({GAP + jitter(gen), jitter(gen), jitter(gen)});
 
-    PointCloudSoA cloud = make_cloud(pts);
+    auto buf = make_cloud(pts);
 
     EuclideanClustering ec;
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(buf.cloud);
     ec.setClusterTolerance(0.15f);
     ec.setMinClusterSize(1);
     ec.setMaxClusterSize(10);
@@ -253,10 +265,10 @@ static void test_all_one_cluster() {
     for (std::size_t i = 0; i < N; ++i)
         pts.push_back({dist(gen), dist(gen), dist(gen)});
 
-    PointCloudSoA cloud = make_cloud(pts);
+    auto buf = make_cloud(pts);
 
     EuclideanClustering ec;
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(buf.cloud);
     ec.setClusterTolerance(0.2f);  // generous tolerance
     ec.setMinClusterSize(1);
     ec.setMaxClusterSize(10000);
@@ -282,10 +294,10 @@ static void test_indices_sorted() {
     for (int i = 0; i < BLOB_SIZE; ++i) pts.push_back({jitter(gen), jitter(gen), jitter(gen)});
     for (int i = 0; i < BLOB_SIZE; ++i) pts.push_back({GAP + jitter(gen), jitter(gen), jitter(gen)});
 
-    PointCloudSoA cloud = make_cloud(pts);
+    auto buf = make_cloud(pts);
 
     EuclideanClustering ec;
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(buf.cloud);
     ec.setClusterTolerance(0.15f);
     ec.setMinClusterSize(1);
     ec.setMaxClusterSize(10000);
@@ -305,12 +317,12 @@ static void test_tolerance_boundary() {
     // Two points exactly at distance D apart.  Test with tol just below and
     // just above D to confirm boundary behaviour.
     const float D = 1.0f;
-    PointCloudSoA cloud = make_cloud({{0.0f, 0.0f, 0.0f}, {D, 0.0f, 0.0f}});
+    auto buf = make_cloud({{0.0f, 0.0f, 0.0f}, {D, 0.0f, 0.0f}});
 
     // tol < D → 2 separate clusters
     {
         EuclideanClustering ec;
-        ec.setInputCloud(cloud);
+        ec.setInputCloud(buf.cloud);
         ec.setClusterTolerance(D * 0.999f);
         ec.setMinClusterSize(1);
         ec.setMaxClusterSize(100);
@@ -321,7 +333,7 @@ static void test_tolerance_boundary() {
     // tol >= D → 1 merged cluster  (d2 == r2 is in-range, check uses <=)
     {
         EuclideanClustering ec;
-        ec.setInputCloud(cloud);
+        ec.setInputCloud(buf.cloud);
         ec.setClusterTolerance(D);
         ec.setMinClusterSize(1);
         ec.setMaxClusterSize(100);
@@ -345,16 +357,16 @@ static void test_against_naive_random() {
     for (std::size_t i = 0; i < N; ++i)
         pts.push_back({pos(gen), pos(gen), pos(gen)});
 
-    PointCloudSoA cloud = make_cloud(pts);
+    auto buf = make_cloud(pts);
 
     EuclideanClustering ec;
-    ec.setInputCloud(cloud);
+    ec.setInputCloud(buf.cloud);
     ec.setClusterTolerance(TOL);
     ec.setMinClusterSize(MIN);
     ec.setMaxClusterSize(MAX);
     const auto clusters = ec.extract();
 
-    const auto ref = naive_bfs(cloud, TOL, MIN, MAX);
+    const auto ref = naive_bfs(buf.cloud, TOL, MIN, MAX);
 
     // Build canonical sets and sort by min element for comparison
     auto imp_sets = to_sets(clusters);

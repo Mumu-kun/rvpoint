@@ -198,7 +198,7 @@ void runSORAblation(const PointCloudSoA &soa,
   // 6. Caravan Query-Pack SOR O(N^2 / VL)
   std::vector<PointXYZ> out_caravan(test_n);
   t0 = std::chrono::high_resolution_clock::now();
-  std::size_t count_caravan = sor_caravan(sub_soa, out_caravan.data(), k, alpha);
+  std::size_t count_caravan = sor_rvv(sub_soa, out_caravan.data(), k, alpha);
   t1 = std::chrono::high_resolution_clock::now();
   double ms_caravan = std::chrono::duration<double, std::milli>(t1 - t0).count();
 

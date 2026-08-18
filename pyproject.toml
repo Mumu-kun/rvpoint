@@ -1,9 +1,14 @@
-[tool.basilisk]
-typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"
+[project]
+name = "rvpoint"
+version = "0.1.0"
+description = "RISC-V Point Cloud Processing Pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "foxglove-schemas-protobuf",
+    "mcap-protobuf-support",
+    "numpy",
+    "open3d",
+    "protobuf",
+]
 
-[tool.basilisk.rule-tags]
-basilisk = "error"
-
-[tool.basilisk.rules]
-BSK-0002 = "warning"
-BSK-0152 = "warning"

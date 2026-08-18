@@ -75,81 +75,83 @@ def make_timestamp(ns: int) -> Timestamp:
     return ts
 
 
-def xyz_fields() -> list:
-    fields = []
-    for name, offset in [("x", 0), ("y", 4), ("z", 8)]:
-        f = PackedElementField_pb2.PackedElementField()
-        f.name = name
-        f.offset = offset
-        f.type = FLOAT32
-        fields.append(f)
-    return fields
-
-
-def xyzrgb_fields() -> list:
-    fields = xyz_fields()
-    for name, offset in [("red", 12), ("green", 13), ("blue", 14)]:
-        f = PackedElementField_pb2.PackedElementField()
-        f.name = name
-        f.offset = offset
-        f.type = UINT8
-        fields.append(f)
-    return fields
-
-
-def pack_xyz(points: np.ndarray) -> bytes:
-    return points.astype(np.float32).tobytes()
-
-
-def pack_xyzrgb(points: np.ndarray, colors_u8: np.ndarray) -> bytes:
-    n = len(points)
-    buf = bytearray(n * 15)
-    xyz_f32 = points.astype(np.float32)
-    for i in range(n):
-        base = i * 15
-        buf[base : base + 12] = struct.pack(
-            "3f", float(xyz_f32[i, 0]), float(xyz_f32[i, 1]), float(xyz_f32[i, 2])
-        )
-        buf[base + 12] = int(colors_u8[i, 0])
-        buf[base + 13] = int(colors_u8[i, 1])
-        buf[base + 14] = int(colors_u8[i, 2])
-    return bytes(buf)
-
-
 def build_point_cloud_msg(
-    points: np.ndarray,
+    fields: list,
+    raw_payload: bytes,
+    num_points: int,
     timestamp_ns: int,
     frame_id: str = "lidar",
-    colors_u8: np.ndarray = None,
 ) -> PointCloud_pb2.PointCloud:
     msg = PointCloud_pb2.PointCloud()
     msg.timestamp.CopyFrom(make_timestamp(timestamp_ns))
     msg.frame_id = frame_id
     msg.pose.CopyFrom(identity_pose())
 
-    if colors_u8 is not None and len(colors_u8) == len(points):
-        msg.point_stride = 15
-        msg.fields.extend(xyzrgb_fields())
-        msg.data = pack_xyzrgb(points, colors_u8)
-    else:
-        msg.point_stride = 12
-        msg.fields.extend(xyz_fields())
-        msg.data = pack_xyz(points)
+    if num_points == 0 or not raw_payload:
+        return msg
 
+    stride = len(raw_payload) // num_points
+    msg.point_stride = stride
+
+    offset = 0
+    for name in fields:
+        f = PackedElementField_pb2.PackedElementField()
+        f.name = name
+        f.offset = offset
+        f.type = FLOAT32
+        msg.fields.append(f)
+        offset += 4
+
+    msg.data = raw_payload
     return msg
 
 
 def load_pcd_data(pcd_path: Path):
-    pcd = o3d.io.read_point_cloud(str(pcd_path))
-    if pcd.is_empty():
-        return None, None
-    pts = np.asarray(pcd.points, dtype=np.float32)
-    colors = None
-    if pcd.has_colors():
-        c = np.asarray(pcd.colors)
-        if len(c) == len(pts):
-            colors = (c * 255.0).clip(0, 255).astype(np.uint8)
-    return pts, colors
+    """
+    Parses PCD header and raw binary payload.
+    Returns: (fields, raw_payload, num_points)
+    """
+    try:
+        with open(pcd_path, "rb") as f:
+            header_lines = []
+            data_mode = None
+            while True:
+                line = f.readline()
+                if not line:
+                    break
+                line_str = line.decode("ascii", errors="ignore").strip()
+                header_lines.append(line_str)
+                if line_str.startswith("DATA"):
+                    data_mode = line_str.split()[1].lower()
+                    break
+
+            fields = []
+            num_points = 0
+            for l in header_lines:
+                if l.startswith("FIELDS"):
+                    fields = l.split()[1:]
+                elif l.startswith("POINTS"):
+                    num_points = int(l.split()[1])
+
+            if num_points == 0 or not fields:
+                return None, None, 0
+
+            if data_mode == "ascii":
+                lines = f.readlines()
+                vals = []
+                for l in lines:
+                    parts = l.decode("ascii", errors="ignore").strip().split()
+                    if len(parts) >= len(fields):
+                        vals.extend([float(p) for p in parts[: len(fields)]])
+                arr = np.array(vals, dtype=np.float32)
+                raw_payload = arr.tobytes()
+            else:
+                raw_payload = f.read()
+
+            return fields, raw_payload, num_points
+    except Exception as e:
+        print(f"⚠️ Error reading PCD {pcd_path}: {e}")
+        return None, None, 0
 
 
 # ─── Frame & Stage Resolution ──────────────────────────────────────────────────
@@ -340,16 +342,17 @@ def export(
                     if not pcd_path.exists():
                         continue
 
-                    pts, colors = load_pcd_data(pcd_path)
-                    if pts is None or len(pts) == 0:
+                    fields, raw_payload, num_points = load_pcd_data(pcd_path)
+                    if num_points == 0 or not raw_payload:
                         continue
 
-                    topic = f"/stage/{stage_stem}"
+                    topic = f"/3d_points/{stage_stem}"
                     msg = build_point_cloud_msg(
-                        points=pts,
+                        fields=fields,
+                        raw_payload=raw_payload,
+                        num_points=num_points,
                         timestamp_ns=cur_time,
                         frame_id=frame_id,
-                        colors_u8=colors,
                     )
 
                     writer.write_message(

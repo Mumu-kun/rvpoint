@@ -460,73 +460,31 @@ int main(int argc, char **argv) {
   beginStage(10, "Write cluster stage", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
 
-  struct RGBColor {
-    std::uint8_t r, g, b;
-  };
-
-  auto generateClusterColors = [](std::size_t count) {
-    std::vector<RGBColor> colors;
-    colors.reserve(count);
-    const float golden_ratio = 0.618033988749895f;
-    float hue = 0.35f;
-
-    for (std::size_t i = 0; i < count; ++i) {
-      hue = std::fmod(hue + golden_ratio, 1.0f);
-      float s = 0.85f;
-      float v = 0.95f;
-
-      float c = v * s;
-      float x = c * (1.0f - std::abs(std::fmod(hue * 6.0f, 2.0f) - 1.0f));
-      float m = v - c;
-
-      float r_f = 0.0f, g_f = 0.0f, b_f = 0.0f;
-      int h_i = static_cast<int>(hue * 6.0f) % 6;
-      switch (h_i) {
-        case 0: r_f = c; g_f = x; b_f = 0.0f; break;
-        case 1: r_f = x; g_f = c; b_f = 0.0f; break;
-        case 2: r_f = 0.0f; g_f = c; b_f = x; break;
-        case 3: r_f = 0.0f; g_f = x; b_f = c; break;
-        case 4: r_f = x; g_f = 0.0f; b_f = c; break;
-        case 5: r_f = c; g_f = 0.0f; b_f = x; break;
-      }
-
-      colors.push_back({
-        static_cast<std::uint8_t>((r_f + m) * 255.0f),
-        static_cast<std::uint8_t>((g_f + m) * 255.0f),
-        static_cast<std::uint8_t>((b_f + m) * 255.0f)
-      });
-    }
-    return colors;
-  };
-
-  std::vector<RGBColor> cluster_colors = generateClusterColors(clusters.size());
-  std::vector<PointXYZRGB> colored_cluster_pts;
+  std::vector<PointXYZCluster> cluster_pts;
 
   std::size_t total_clustered_pts = 0;
   for (const auto &cls : clusters) {
     total_clustered_pts += cls.indices.size();
   }
-  colored_cluster_pts.reserve(total_clustered_pts);
+  cluster_pts.reserve(total_clustered_pts);
 
   for (std::size_t c_idx = 0; c_idx < clusters.size(); ++c_idx) {
-    const RGBColor &col = cluster_colors[c_idx];
+    const std::uint32_t cid = static_cast<std::uint32_t>(c_idx + 1);
     for (int pt_idx : clusters[c_idx].indices) {
       if (pt_idx >= 0 && static_cast<std::size_t>(pt_idx) < n_outliers) {
-        colored_cluster_pts.push_back({
+        cluster_pts.push_back({
             outlier_pts[pt_idx].x,
             outlier_pts[pt_idx].y,
             outlier_pts[pt_idx].z,
-            col.r,
-            col.g,
-            col.b
+            cid
         });
       }
     }
   }
 
   const std::filesystem::path cluster_out_path = output_dir / "06_clusters.pcd";
-  savePCDRGB(cluster_out_path.string(), colored_cluster_pts, true);
-  std::cout << "Clusters: " << colored_cluster_pts.size() << " points ("
+  savePCDCluster(cluster_out_path.string(), cluster_pts, true);
+  std::cout << "Clusters: " << cluster_pts.size() << " points ("
             << clusters.size() << " clusters) -> " << cluster_out_path.string()
             << std::endl;
 
