@@ -1,4 +1,5 @@
 #include "euclidean_clustering.h"
+#include "pointer_octree/pointer_octree.h"
 #include "profiler.h"
 #include "rvv_pcl.h"
 #include "simple_pcd_loader.h"
@@ -72,7 +73,7 @@ void runNeighborSearchAblation(const PointCloudSoA &soa,
   auto t1 = std::chrono::high_resolution_clock::now();
   double ms_rvv = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  // 2. Octree Search
+  // 2. Standard Octree Search
   Octree octree;
   octree.setInputCloud(soa);
   t0 = std::chrono::high_resolution_clock::now();
@@ -87,7 +88,27 @@ void runNeighborSearchAblation(const PointCloudSoA &soa,
   t1 = std::chrono::high_resolution_clock::now();
   double ms_tree_search = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  // 3. Spatial Hash Search
+  // 3. Pointer Octree Search (RVV & Scalar)
+  PointerOctree ptr_octree;
+  ptr_octree.setInputCloud(soa);
+  t0 = std::chrono::high_resolution_clock::now();
+  ptr_octree.build();
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_ptr_build = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  std::vector<int> ptr_indices_rvv, ptr_indices_sc;
+  std::vector<float> ptr_dists_rvv, ptr_dists_sc;
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_ptr_rvv = ptr_octree.radiusSearch(query, radius, ptr_indices_rvv, ptr_dists_rvv);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_ptr_rvv = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_ptr_sc = ptr_octree.radiusSearchScalar(query, radius, ptr_indices_sc, ptr_dists_sc);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_ptr_sc = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  // 4. Spatial Hash Search
   SpatialHash hash;
   hash.setInputCloud(soa, radius);
   t0 = std::chrono::high_resolution_clock::now();
@@ -102,48 +123,109 @@ void runNeighborSearchAblation(const PointCloudSoA &soa,
   t1 = std::chrono::high_resolution_clock::now();
   double ms_hash_search = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  std::cout << "  Global RVV Scan:     " << std::fixed << std::setprecision(3)
+  std::cout << "  Global RVV Scan:           " << std::fixed << std::setprecision(3)
             << ms_rvv << " ms (" << count_rvv << " nbrs)" << std::endl;
-  std::cout << "  Octree Search:       " << std::fixed << std::setprecision(3)
+  std::cout << "  Standard Octree Query:     " << std::fixed << std::setprecision(3)
             << ms_tree_search << " ms (build: " << ms_tree_build << " ms)" << std::endl;
-  std::cout << "  Spatial Hash Search: " << std::fixed << std::setprecision(3)
+  std::cout << "  Pointer Octree (RVV):      " << std::fixed << std::setprecision(3)
+            << ms_ptr_rvv << " ms (build: " << ms_ptr_build << " ms)" << std::endl;
+  std::cout << "  Pointer Octree (Scalar):   " << std::fixed << std::setprecision(3)
+            << ms_ptr_sc << " ms" << std::endl;
+  std::cout << "  Spatial Hash Grid Query:   " << std::fixed << std::setprecision(3)
             << ms_hash_search << " ms (build: " << ms_hash_build << " ms)" << std::endl;
 
   results.push_back({"NeighborSearch", "Global_RVV_Scan", ms_rvv, soa.n, count_rvv, 1.0});
-  results.push_back({"NeighborSearch", "Octree_Query", ms_tree_search, soa.n, count_tree, ms_rvv / (ms_tree_search + 1e-6)});
-  results.push_back({"NeighborSearch", "SpatialHash_Query", ms_hash_search, soa.n, count_hash, ms_rvv / (ms_hash_search + 1e-6)});
+  results.push_back({"NeighborSearch", "Standard_Octree", ms_tree_search, soa.n, count_tree, ms_rvv / (ms_tree_search + 1e-6)});
+  results.push_back({"NeighborSearch", "Pointer_Octree_RVV", ms_ptr_rvv, soa.n, count_ptr_rvv, ms_rvv / (ms_ptr_rvv + 1e-6)});
+  results.push_back({"NeighborSearch", "Pointer_Octree_Scalar", ms_ptr_sc, soa.n, count_ptr_sc, ms_rvv / (ms_ptr_sc + 1e-6)});
+  results.push_back({"NeighborSearch", "SpatialHash_Grid", ms_hash_search, soa.n, count_hash, ms_rvv / (ms_hash_search + 1e-6)});
 }
 
 void runSORAblation(const PointCloudSoA &soa,
                     const std::vector<PointXYZ> &aos,
                     int k, float alpha,
                     std::vector<BenchmarkResult> &results) {
-  std::cout << "\n=== [Ablation C: Statistical Outlier Removal (SOR)] ===" << std::endl;
+  std::cout << "\n=== [Ablation C: Statistical Outlier Removal (SOR) Variants] ===" << std::endl;
 
-  // Limit max point count for scalar benchmark if cloud is large to avoid hangs
   std::size_t test_n = std::min(soa.n, static_cast<std::size_t>(20000));
   PointCloudSoA sub_soa = {soa.x, soa.y, soa.z, test_n};
+  float search_radius = 0.5f;
 
+  // 1. RVV Brute-Force O(N^2)
   std::vector<PointXYZ> out_rvv(test_n);
   auto t0 = std::chrono::high_resolution_clock::now();
   std::size_t count_rvv = sor_rvv(sub_soa, out_rvv.data(), k, alpha);
   auto t1 = std::chrono::high_resolution_clock::now();
   double ms_rvv = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
+  // 2. Scalar Brute-Force O(N^2)
   std::vector<PointXYZ> out_sc(test_n);
   t0 = std::chrono::high_resolution_clock::now();
   std::size_t count_sc = sor_sc(aos.data(), test_n, out_sc.data(), k, alpha);
   t1 = std::chrono::high_resolution_clock::now();
   double ms_sc = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  std::cout << "  Scalar Brute-force (N=" << test_n << "): " << std::fixed << std::setprecision(3)
-            << ms_sc << " ms (" << count_sc << " pts)" << std::endl;
-  std::cout << "  RVV Brute-force (N=" << test_n << "):    " << std::fixed << std::setprecision(3)
-            << ms_rvv << " ms (" << count_rvv << " pts) -> "
+  // 3. Octree-Accelerated SOR O(N log N)
+  Octree octree;
+  octree.setInputCloud(sub_soa);
+  octree.build();
+  std::vector<PointXYZ> out_tree(test_n);
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_tree = sor_octree(sub_soa, octree, out_tree.data(), k, alpha, search_radius);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_tree = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  // 4. PointerOctree-Accelerated SOR O(N log N)
+  PointerOctree ptr_octree;
+  ptr_octree.setInputCloud(sub_soa);
+  ptr_octree.build();
+  std::vector<PointXYZ> out_ptr(test_n);
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_ptr = sor_pointer_octree(sub_soa, ptr_octree, out_ptr.data(), k, alpha, search_radius);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_ptr = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  // 5. SpatialHash-Accelerated SOR O(N)
+  SpatialHash hash;
+  hash.setInputCloud(sub_soa, search_radius);
+  hash.build();
+  std::vector<PointXYZ> out_hash(test_n);
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_hash = sor_spatial_hash(sub_soa, hash, out_hash.data(), k, alpha, search_radius);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_hash = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  // 6. Caravan Query-Pack SOR O(N^2 / VL)
+  std::vector<PointXYZ> out_caravan(test_n);
+  t0 = std::chrono::high_resolution_clock::now();
+  std::size_t count_caravan = sor_caravan(sub_soa, out_caravan.data(), k, alpha);
+  t1 = std::chrono::high_resolution_clock::now();
+  double ms_caravan = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+  std::cout << "  Scalar Brute-force O(N^2):    " << std::fixed << std::setprecision(3)
+            << ms_sc << " ms (" << count_sc << " inliers)" << std::endl;
+  std::cout << "  RVV Brute-force O(N^2):       " << std::fixed << std::setprecision(3)
+            << ms_rvv << " ms (" << count_rvv << " inliers) -> "
             << std::setprecision(2) << (ms_sc / ms_rvv) << "x speedup" << std::endl;
+  std::cout << "  Caravan Query-Pack SOR:       " << std::fixed << std::setprecision(3)
+            << ms_caravan << " ms (" << count_caravan << " inliers) -> "
+            << std::setprecision(2) << (ms_sc / ms_caravan) << "x speedup vs scalar" << std::endl;
+  std::cout << "  Standard Octree SOR:          " << std::fixed << std::setprecision(3)
+            << ms_tree << " ms (" << count_tree << " inliers) -> "
+            << std::setprecision(2) << (ms_sc / ms_tree) << "x speedup vs scalar" << std::endl;
+  std::cout << "  Pointer Octree SOR:           " << std::fixed << std::setprecision(3)
+            << ms_ptr << " ms (" << count_ptr << " inliers) -> "
+            << std::setprecision(2) << (ms_sc / ms_ptr) << "x speedup vs scalar" << std::endl;
+  std::cout << "  Spatial Hash Grid SOR:        " << std::fixed << std::setprecision(3)
+            << ms_hash << " ms (" << count_hash << " inliers) -> "
+            << std::setprecision(2) << (ms_sc / ms_hash) << "x speedup vs scalar" << std::endl;
 
   results.push_back({"StatisticalOutlierRemoval", "Scalar_BruteForce", ms_sc, test_n, count_sc, 1.0});
   results.push_back({"StatisticalOutlierRemoval", "RVV_BruteForce", ms_rvv, test_n, count_rvv, ms_sc / ms_rvv});
+  results.push_back({"StatisticalOutlierRemoval", "Caravan_QueryPack_SOR", ms_caravan, test_n, count_caravan, ms_sc / (ms_caravan + 1e-6)});
+  results.push_back({"StatisticalOutlierRemoval", "Standard_Octree_SOR", ms_tree, test_n, count_tree, ms_sc / (ms_tree + 1e-6)});
+  results.push_back({"StatisticalOutlierRemoval", "Pointer_Octree_SOR", ms_ptr, test_n, count_ptr, ms_sc / (ms_ptr + 1e-6)});
+  results.push_back({"StatisticalOutlierRemoval", "SpatialHash_Grid_SOR", ms_hash, test_n, count_hash, ms_sc / (ms_hash + 1e-6)});
 }
 
 void runRANSACAblation(const PointCloudSoA &soa,

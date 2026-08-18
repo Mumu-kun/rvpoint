@@ -41,8 +41,9 @@ struct PointCloudSoA {
   std::size_t n; /**< Number of points in the cloud */
 };
 
-class Octree;      // Forward declaration
-class SpatialHash; // Forward declaration
+class Octree;         // Forward declaration
+class SpatialHash;    // Forward declaration
+class PointerOctree;  // Forward declaration
 
 // ============================================================================
 // 1) Voxel Grid Downsampling
@@ -127,6 +128,24 @@ std::size_t sor_sc(const PointXYZ *in, std::size_t n, PointXYZ *out, int k,
  * @return std::size_t Number of inlier points remaining.
  */
 std::size_t sor_rvv(const PointCloudSoA &in, PointXYZ *out, int k, float alpha);
+
+/**
+ * @brief Index-Accelerated SOR using Octree (O(N log N)).
+ */
+std::size_t sor_octree(const PointCloudSoA &in, const Octree &tree, PointXYZ *out,
+                       int k, float alpha, float search_radius = 0.5f);
+
+/**
+ * @brief Index-Accelerated SOR using SpatialHash (O(N)).
+ */
+std::size_t sor_spatial_hash(const PointCloudSoA &in, const SpatialHash &hash, PointXYZ *out,
+                             int k, float alpha, float search_radius = 0.5f);
+
+/**
+ * @brief Index-Accelerated SOR using PointerOctree (O(N log N)).
+ */
+std::size_t sor_pointer_octree(const PointCloudSoA &in, const PointerOctree &tree, PointXYZ *out,
+                               int k, float alpha, float search_radius = 0.5f);
 
 // ============================================================================
 // 3) Normal Estimation
