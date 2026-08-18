@@ -131,3 +131,8 @@ target_link_libraries(neighbor_search_sor_bench PRIVATE rvvpcl)
 add_executable(tracking_mode_bench tests/benchmark/tracking_mode_bench.cpp)
 target_include_directories(tracking_mode_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/registration")
 target_link_libraries(tracking_mode_bench PRIVATE rvvpcl)
+
+# Tracking Mode PCD Comparison Tool
+add_executable(tracking_pcd_compare src/tools/tracking_pcd_compare.cpp)
+target_include_directories(tracking_pcd_compare PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/registration")
+target_link_libraries(tracking_pcd_compare PRIVATE rvvpcl)

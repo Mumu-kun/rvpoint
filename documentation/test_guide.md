@@ -73,6 +73,7 @@ This builds:
 
 ---
 
+a
 ## Running Tests
 
 ### Test 1: ICP Registration Unit Test
@@ -307,8 +308,192 @@ source env/activate.sh
 | `src/registration/tracking_types.h` | Data structures (SE3Transform, PlaneModel, etc.) |
 | `src/registration/icp_registration.h/cpp` | ICP core (Stages 2–5) |
 | `src/registration/tracking_pipeline.h/cpp` | Full 9-stage pipeline orchestrator |
+| `src/tools/tracking_pcd_compare.cpp` | Real-PCD comparison tool (full vs tracking mode) |
 | `tests/unit/test_tracking_registration.cpp` | ICP unit tests |
 | `tests/unit/test_tracking_pipeline.cpp` | Pipeline end-to-end tests |
 | `tests/benchmark/tracking_mode_bench.cpp` | Speedup benchmark |
 | `benchmarks/` | JSON benchmark results (generated) |
 | `documentation/tracking_mode_design.md` | Technical design document |
+
+---
+
+## Real PCD Comparison: Full Pipeline vs Tracking Mode
+
+This section explains how to process the sequential PCD frames from `data/pcd_compressed/` through both the full pipeline and the tracking mode, then visually compare the outputs.
+
+### Overview
+
+The `tracking_pcd_compare` tool:
+
+1. **Loads** N sequential PCD frames from a directory
+2. **Mode A (Full Pipeline)**: Processes each frame independently through the complete pipeline (Downsample → SOR → Normal Estimation → RANSAC → Ground Removal)
+3. **Mode B (Tracking Mode)**: Runs the full pipeline only on **keyframes** (every K-th frame), and the lightweight 9-stage tracking pipeline on all other frames
+4. **Exports** processed PCD files to separate directories for side-by-side visual comparison
+5. **Reports** per-frame timing and overall speedup
+
+### Running the Comparison
+
+#### Basic usage (first 10 frames):
+
+```bash
+./scripts/run.sh tracking_pcd_compare data/pcd_compressed data/pcd_processed 10
+```
+
+#### Full 131-frame sequence:
+
+```bash
+./scripts/run.sh tracking_pcd_compare data/pcd_compressed data/pcd_processed 0
+```
+
+> Setting `max_frames` to `0` processes all available PCD files.
+
+#### Custom keyframe interval:
+
+```bash
+# Keyframe every 10 frames (more tracking, bigger speedup, potentially less accurate)
+./scripts/run.sh tracking_pcd_compare data/pcd_compressed data/pcd_processed 50 10
+
+# Keyframe every 3 frames (more keyframes, less speedup, closer to full pipeline)
+./scripts/run.sh tracking_pcd_compare data/pcd_compressed data/pcd_processed 50 3
+```
+
+#### Arguments:
+
+| Argument | Description | Default |
+|---|---|---|
+| `pcd_dir` | Directory containing sequential `.pcd` files | (required) |
+| `output_dir` | Output directory for processed PCDs | (required) |
+| `max_frames` | Number of frames to process (`0` = all) | (required) |
+| `keyframe_interval` | Full pipeline runs every N-th frame | `5` |
+
+### Output Directory Structure
+
+After running, the output directory will contain:
+
+```
+data/pcd_processed/
+├── full_pipeline/            # Mode A: Every frame processed independently
+│   ├── 0000000000.pcd
+│   ├── 0000000001.pcd
+│   ├── ...
+│   └── 0000000049.pcd
+├── tracking_mode/            # Mode B: Keyframes + tracking frames
+│   ├── 0000000000.pcd        # [KEYFRAME] Full pipeline
+│   ├── 0000000001.pcd        # [TRACKING] Tracking mode
+│   ├── 0000000002.pcd        # [TRACKING]
+│   ├── ...
+│   ├── 0000000005.pcd        # [KEYFRAME] Full pipeline
+│   └── ...
+└── comparison_results.json   # Per-frame timing comparison
+```
+
+### Understanding the Output
+
+- **`full_pipeline/`**: Each PCD is the **ground-removed** point cloud (RANSAC outliers) — this is the baseline "correct" output.
+- **`tracking_mode/`**: Keyframe PCDs match `full_pipeline/` exactly. Tracking frame PCDs contain the **residual points** — points not matched to known geometric models. These should look similar to `full_pipeline/` if tracking is working correctly.
+
+### Console Output Example
+
+```
+================================================================
+   RVPoint — Tracking Mode PCD Comparison
+================================================================
+  PCD directory:      data/pcd_compressed
+  Max frames:         10
+  Keyframe interval:  5
+================================================================
+
+=== Mode A: Full Pipeline (every frame independently) ===
+  Frame    0: 1542.3 ms, 28451 output points
+  ...
+
+=== Mode B: Tracking Mode (keyframe every 5 frames) ===
+  [KEYFRAME] Frame    0: full pipeline + tracking init (1612.5 ms), 28451 pts
+  [TRACKING] Frame    1: tracking mode (245.3 ms), confirmed=25122 residual=3891 ...
+  [TRACKING] Frame    2: tracking mode (238.1 ms), ...
+  ...
+  [KEYFRAME] Frame    5: full pipeline + tracking init (1598.7 ms), 28103 pts
+  ...
+
+================================================================
+                      COMPARISON SUMMARY
+================================================================
+  Total full pipeline:    15234.1 ms
+  Total tracking mode:     5891.2 ms
+  Overall speedup:        2.59x
+================================================================
+```
+
+---
+
+## Visual Comparison Guide
+
+To verify that tracking mode produces visually similar results to the full pipeline, open matching frame PCD files from both output directories in a 3D point cloud viewer.
+
+### Option 1: CloudCompare (Recommended — GUI)
+
+CloudCompare is a free, cross-platform 3D point cloud viewer.
+
+1. **Install**: Download from [cloudcompare.org](https://www.cloudcompare.org/release/index.html)
+2. **Open both files side by side**:
+   - `File → Open` → select `data/pcd_processed/full_pipeline/0000000001.pcd`
+   - `File → Open` → select `data/pcd_processed/tracking_mode/0000000001.pcd`
+3. **Color-code** each cloud differently (click the cloud in the DB Tree → Properties → change color)
+4. **Toggle visibility** of each cloud to spot differences
+5. **Use Cloud-to-Cloud Distance** (`Tools → Distances → Cloud/Cloud Dist`) for quantitative comparison
+
+### Option 2: Open3D (Python)
+
+```python
+import open3d as o3d
+
+full = o3d.io.read_point_cloud("data/pcd_processed/full_pipeline/0000000001.pcd")
+track = o3d.io.read_point_cloud("data/pcd_processed/tracking_mode/0000000001.pcd")
+
+full.paint_uniform_color([0.2, 0.6, 1.0])   # Blue = full pipeline
+track.paint_uniform_color([1.0, 0.3, 0.2])  # Red  = tracking mode
+
+o3d.visualization.draw_geometries([full, track],
+    window_name="Full Pipeline (blue) vs Tracking Mode (red)")
+```
+
+### Option 3: pcl_viewer (if PCL is installed)
+
+```bash
+# View full pipeline output
+pcl_viewer data/pcd_processed/full_pipeline/0000000005.pcd
+
+# View tracking mode output
+pcl_viewer data/pcd_processed/tracking_mode/0000000005.pcd
+```
+
+### What to Check
+
+| Check | What to Look For |
+|---|---|
+| **Overall shape** | Both clouds should have the same general 3D structure |
+| **Ground removal** | The ground plane should be absent in both outputs |
+| **Point density** | Tracking mode may have slightly fewer points (residual-only on non-keyframes) |
+| **Keyframe frames** | Frames 0, 5, 10, ... should be **identical** between both modes |
+| **Tracking frames** | Frames 1-4, 6-9, ... may have minor differences but overall shape should match |
+| **Drift** | Check later frames (e.g., frame 40+) — if tracking drifts, the keyframe resets will correct it |
+
+### JSON Results
+
+The `comparison_results.json` file contains per-frame timing for quantitative analysis:
+
+```json
+{
+  "comparison": "full_pipeline_vs_tracking_mode",
+  "n_frames": 50,
+  "keyframe_interval": 5,
+  "total_full_pipeline_ms": 75234.12,
+  "total_tracking_mode_ms": 29891.23,
+  "overall_speedup": 2.52,
+  "frames": [
+    {"frame": 0, "full_ms": 1542.3, "tracking_ms": 1612.5, "speedup": 0.96},
+    {"frame": 1, "full_ms": 1501.2, "tracking_ms": 245.3, "speedup": 6.12},
+    ...
+  ]
+}
+```

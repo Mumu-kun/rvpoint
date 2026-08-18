@@ -83,7 +83,7 @@ TARGET_NAME="${TARGET_NAME%.cc}"
 
 if [[ "$TARGET_NAME" == "pointer_octree" || "$TARGET_NAME" == "pointer_octree_bench" || "$TARGET_NAME" == "pointer_octree_real" ]]; then
     TARGET_NAME="benchmark_pointer_octree_real"
-elif [[ "$TARGET_NAME" != test_* && "$TARGET_NAME" != rvv_test && "$TARGET_NAME" != benchmark && "$TARGET_NAME" != benchmark_* && "$TARGET_NAME" != pipeline_export && "$TARGET_NAME" != ablation_bench && "$TARGET_NAME" != neighbor_search_sor_bench ]]; then
+elif [[ "$TARGET_NAME" != test_* && "$TARGET_NAME" != rvv_test && "$TARGET_NAME" != benchmark && "$TARGET_NAME" != benchmark_* && "$TARGET_NAME" != pipeline_export && "$TARGET_NAME" != ablation_bench && "$TARGET_NAME" != neighbor_search_sor_bench && "$TARGET_NAME" != tracking_mode_bench && "$TARGET_NAME" != tracking_pcd_compare ]]; then
     TARGET_NAME="test_$TARGET_NAME"
 fi
 

@@ -20,12 +20,17 @@ using namespace rvv_pcl;
 
 namespace {
 
-// Generate a synthetic planar point cloud (a flat grid on z=0 plane)
+// Generate a synthetic paraboloid point cloud: z = curvature * (x² + y²)
+// A curved 3D surface with analytically varying normals so point-to-plane
+// ICP can constrain all 6 DOF (unlike a flat plane which is degenerate
+// for in-plane translations).
 void generateSyntheticCloud(std::vector<float>& x, std::vector<float>& y,
                             std::vector<float>& z,
                             std::vector<float>& nx, std::vector<float>& ny,
                             std::vector<float>& nz,
                             int grid_size, float spacing) {
+    const float curvature = 0.5f; // controls bowl depth
+
     int n = grid_size * grid_size;
     x.resize(n); y.resize(n); z.resize(n);
     nx.resize(n); ny.resize(n); nz.resize(n);
@@ -33,14 +38,23 @@ void generateSyntheticCloud(std::vector<float>& x, std::vector<float>& y,
     int idx = 0;
     for (int i = 0; i < grid_size; ++i) {
         for (int j = 0; j < grid_size; ++j) {
-            x[idx] = (float)i * spacing - (grid_size * spacing * 0.5f);
-            y[idx] = (float)j * spacing - (grid_size * spacing * 0.5f);
-            z[idx] = 0.0f; // flat on z=0
+            float px = (float)i * spacing - (grid_size * spacing * 0.5f);
+            float py = (float)j * spacing - (grid_size * spacing * 0.5f);
+            float pz = curvature * (px * px + py * py);
 
-            // Normal pointing up
-            nx[idx] = 0.0f;
-            ny[idx] = 0.0f;
-            nz[idx] = 1.0f;
+            x[idx] = px;
+            y[idx] = py;
+            z[idx] = pz;
+
+            // Analytic normal of z = c*(x²+y²):
+            //   grad = (-dz/dx, -dz/dy, 1) = (-2cx, -2cy, 1), then normalize
+            float gx = -2.0f * curvature * px;
+            float gy = -2.0f * curvature * py;
+            float gz = 1.0f;
+            float inv_len = 1.0f / std::sqrt(gx*gx + gy*gy + gz*gz);
+            nx[idx] = gx * inv_len;
+            ny[idx] = gy * inv_len;
+            nz[idx] = gz * inv_len;
             idx++;
         }
     }
@@ -153,7 +167,11 @@ int main(int argc, char** argv) {
                   << " ty=" << recovered_T.ty()
                   << " tz=" << recovered_T.tz() << std::endl;
 
-        if (transformsClose(recovered_T, known_T, 5.0f, 0.05f)) {
+        // ICP finds source→target, which is the inverse of known_T.
+        // Verify: recovered_T ∘ known_T ≈ Identity
+        SE3Transform composed = recovered_T.compose(known_T);
+        SE3Transform identity;
+        if (transformsClose(composed, identity, 5.0f, 0.05f)) {
             std::cout << "  PASS" << std::endl;
             pass_count++;
         } else {
@@ -204,7 +222,11 @@ int main(int argc, char** argv) {
         std::cout << "  ICP iterations: " << iterations << std::endl;
         std::cout << "  Final error:    " << error << std::endl;
 
-        if (transformsClose(recovered_T, known_T, 10.0f, 0.05f)) {
+        // ICP finds source→target, which is the inverse of known_T.
+        // Verify: recovered_T ∘ known_T ≈ Identity
+        SE3Transform composed = recovered_T.compose(known_T);
+        SE3Transform identity;
+        if (transformsClose(composed, identity, 10.0f, 0.05f)) {
             std::cout << "  PASS" << std::endl;
             pass_count++;
         } else {
