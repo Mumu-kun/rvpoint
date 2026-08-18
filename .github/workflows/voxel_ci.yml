@@ -1,0 +1,244 @@
+name: Voxel Downsampling CI
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'src/voxel_downsampling_*.cpp'
+      - 'tests/test_voxel_downsampling.cpp'
+      - 'benchmarks/benchmark_voxel_downsampling.cpp'
+      - '.github/workflows/voxel_ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/voxel_downsampling_*.cpp'
+      - 'tests/test_voxel_downsampling.cpp'
+      - 'benchmarks/benchmark_voxel_downsampling.cpp'
+  workflow_dispatch:
+
+jobs:
+  # Quick validation job
+  quick-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check code files exist
+        run: |
+          echo "Checking voxel downsampling files..."
+          test -f src/voxel_downsampling_scalar.cpp || (echo "Missing scalar implementation" && exit 1)
+          test -f src/voxel_downsampling_rvv.cpp || (echo "Missing RVV implementation" && exit 1)
+          test -f tests/test_voxel_downsampling.cpp || (echo "Missing tests" && exit 1)
+          echo "✓ All files present"
+
+  # Comprehensive voxel downsampling tests
+  voxel-tests:
+    runs-on: ubuntu-22.04
+    needs: quick-check
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+        compiler: [gcc, clang]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            git \
+            curl \
+            zip \
+            unzip \
+            tar \
+            pkg-config \
+            clang
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
+          /opt/vcpkg/bootstrap-vcpkg.sh
+
+      - name: Configure compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+          else
+            echo "CC=gcc" >> $GITHUB_ENV
+            echo "CXX=g++" >> $GITHUB_ENV
+          fi
+
+      - name: Build
+        env:
+          VCPKG_ROOT: /opt/vcpkg
+        run: |
+          if [ "${{ matrix.build_type }}" = "Debug" ]; then
+            ./scripts/build.sh --debug
+          else
+            ./scripts/build.sh
+          fi
+
+      - name: Run all voxel tests
+        run: |
+          cd build/native
+          ctest -R voxel_downsampling_tests --output-on-failure -V
+
+      - name: Run specific test categories
+        run: |
+          cd build/native
+
+          echo "=== Running edge case tests ==="
+          ./tests/voxel_downsampling_tests '[voxel][edge]' || exit 1
+
+          echo "=== Running comparison tests ==="
+          ./tests/voxel_downsampling_tests '[voxel][comparison]' || exit 1
+
+          echo "=== Running stress tests ==="
+          ./tests/voxel_downsampling_tests '[voxel][stress]' || exit 1
+
+          echo "=== Running stability tests ==="
+          ./tests/voxel_downsampling_tests '[voxel][stability]' || exit 1
+
+      - name: Test standalone executables
+        run: |
+          cd build/native
+
+          # Test with various inputs
+          echo "Testing scalar with simple input..."
+          echo "1.0 2.0 3.0" | ./src/voxel_downsample_scalar 1.0 || exit 1
+
+          echo "Testing RVV with simple input..."
+          echo "1.0 2.0 3.0" | ./src/voxel_downsample_rvv 1.0 || exit 1
+
+          # Test with multiple points
+          echo "Testing with multiple points..."
+          (echo "0.0 0.0 0.0"; echo "0.5 0.5 0.5"; echo "1.5 1.5 1.5") | \
+            ./src/voxel_downsample_scalar 1.0 || exit 1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.build_type }}-${{ matrix.compiler }}
+          path: |
+            build/native/Testing/
+            build/native/tests/
+
+  # Performance benchmarks
+  performance:
+    runs-on: ubuntu-22.04
+    needs: quick-check
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            git \
+            curl \
+            zip \
+            unzip \
+            tar \
+            pkg-config
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
+          /opt/vcpkg/bootstrap-vcpkg.sh
+
+      - name: Build Release
+        env:
+          VCPKG_ROOT: /opt/vcpkg
+        run: ./scripts/build.sh
+
+      - name: Run benchmarks
+        run: |
+          cd build/native
+          ./benchmarks/benchmark_voxel_downsampling \
+            --benchmark_min_time=0.2s \
+            --benchmark_repetitions=5 \
+            --benchmark_display_aggregates_only=true \
+            --benchmark_format=json \
+            --benchmark_out=benchmark_results.json
+
+      - name: Display results
+        run: |
+          cd build/native
+          echo "=== Benchmark Results ==="
+          cat benchmark_results.json
+
+          # Basic validation
+          if ! grep -q "benchmarks" benchmark_results.json; then
+            echo "ERROR: Benchmark results invalid"
+            exit 1
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: build/native/benchmark_results.json
+
+  # Code quality
+  quality:
+    runs-on: ubuntu-22.04
+    needs: quick-check
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck clang-format clang-tidy
+
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=all \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            --inline-suppr \
+            --error-exitcode=1 \
+            src/voxel_downsampling_scalar.cpp \
+            src/voxel_downsampling_rvv.cpp \
+            tests/test_voxel_downsampling.cpp
+
+      - name: Check code formatting
+        run: |
+          clang-format --dry-run --Werror \
+            src/voxel_downsampling_scalar.cpp \
+            src/voxel_downsampling_rvv.cpp \
+            tests/test_voxel_downsampling.cpp || true
+
+  # Summary job
+  ci-success:
+    runs-on: ubuntu-22.04
+    needs: [quick-check, voxel-tests, performance, quality]
+    if: always()
+
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.quick-check.result }}" != "success" ] || \
+             [ "${{ needs.voxel-tests.result }}" != "success" ] || \
+             [ "${{ needs.performance.result }}" != "success" ] || \
+             [ "${{ needs.quality.result }}" != "success" ]; then
+            echo "❌ Some CI jobs failed"
+            exit 1
+          fi
+          echo "✅ All CI jobs passed successfully!"

@@ -1,0 +1,29 @@
+# Bangladesh mirrors (using HTTP to avoid SSL certificate issues during Docker build)
+# Note: Removed mirror.xeonbd.com and mirror.icn.com.bd due to HTTPS redirect + certificate issues
+
+deb http://mirror.gotmyhost.com/ubuntu-archive/ jammy main restricted universe multiverse
+deb http://mirror.gotmyhost.com/ubuntu-archive/ jammy-updates main restricted universe multiverse
+deb http://mirror.gotmyhost.com/ubuntu-archive/ jammy-backports main restricted universe multiverse
+deb http://mirror.gotmyhost.com/ubuntu-archive/ jammy-security main restricted universe multiverse
+
+deb http://mirror.visiontech.com.bd/ubuntu/ jammy main restricted universe multiverse
+deb http://mirror.visiontech.com.bd/ubuntu/ jammy-updates main restricted universe multiverse
+deb http://mirror.visiontech.com.bd/ubuntu/ jammy-backports main restricted universe multiverse
+deb http://mirror.visiontech.com.bd/ubuntu/ jammy-security main restricted universe multiverse
+
+deb http://mirror.limda.net/ubuntu-archive/ jammy main restricted universe multiverse
+deb http://mirror.limda.net/ubuntu-archive/ jammy-updates main restricted universe multiverse
+deb http://mirror.limda.net/ubuntu-archive/ jammy-backports main restricted universe multiverse
+deb http://mirror.limda.net/ubuntu-archive/ jammy-security main restricted universe multiverse
+
+# Asian fallback mirror (Singapore)
+deb http://sg.archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
+deb http://sg.archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
+deb http://sg.archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse
+deb http://sg.archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
+
+# Official Ubuntu mirrors (final fallback)
+deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
