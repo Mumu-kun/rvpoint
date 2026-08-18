@@ -37,6 +37,7 @@
 // the per-step cost but is not required for basic correctness.
 
 #include "include/euclidean_clustering.h"
+#include "pointer_octree/pointer_octree.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,6 +72,12 @@ void EuclideanClustering::setMaxClusterSize(int max_size) {
 
 void EuclideanClustering::setNeighborSearch(const Octree *search) {
     searcher_ = search;
+    ptr_searcher_ = nullptr;
+}
+
+void EuclideanClustering::setNeighborSearch(const PointerOctree *search) {
+    ptr_searcher_ = search;
+    searcher_ = nullptr;
 }
 
 // ─── radiusQueryUnvisited ─────────────────────────────────────────────────────
@@ -215,7 +222,17 @@ std::vector<ClusterIndices> EuclideanClustering::extract() const {
 
             // Find unvisited neighbours of 'current'
             neighbors.clear();
-            if (searcher_) {
+            if (ptr_searcher_) {
+                PointXYZ q{px[current], py[current], pz[current]};
+                std::vector<int> raw_neighbors;
+                std::vector<float> dists;
+                ptr_searcher_->radiusSearch(q, clusterTolerance_, raw_neighbors, dists);
+                for (const int nb : raw_neighbors) {
+                    if (nb >= 0 && static_cast<std::size_t>(nb) < n && !visited[static_cast<std::size_t>(nb)]) {
+                        neighbors.push_back(nb);
+                    }
+                }
+            } else if (searcher_) {
                 PointXYZ q{px[current], py[current], pz[current]};
                 std::vector<int> raw_neighbors;
                 std::vector<float> dists;

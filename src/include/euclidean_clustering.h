@@ -53,6 +53,8 @@ struct ClusterIndices {
  * The inner radius-check kernel has an RVV-accelerated and a scalar path
  * selected at compile time via the RVV_PCL_USE_RVV preprocessor guard.
  */
+class PointerOctree;
+
 class EuclideanClustering {
 public:
     EuclideanClustering() = default;
@@ -73,6 +75,7 @@ public:
 
     /// Optional neighbor search structure for accelerated queries.
     void setNeighborSearch(const Octree *search);
+    void setNeighborSearch(const PointerOctree *search);
 
     // ── Accessors ─────────────────────────────────────────────────────────────
     float clusterTolerance()  const { return clusterTolerance_; }
@@ -103,6 +106,7 @@ private:
     // ── State ─────────────────────────────────────────────────────────────────
     const PointCloudSoA *cloud_            = nullptr;
     const Octree        *searcher_         = nullptr;
+    const PointerOctree *ptr_searcher_     = nullptr;
     float                clusterTolerance_ = 0.05f;
     int                  minClusterSize_   = 1;
     int                  maxClusterSize_   = std::numeric_limits<int>::max();

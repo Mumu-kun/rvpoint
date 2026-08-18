@@ -7,7 +7,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#ifdef __riscv_vector
 #include "rvv_pcl.h"
+#else
+namespace rvv_pcl {
+struct PointXYZ {
+  float x, y, z;
+};
+}
+#endif
 
 namespace rvv_pcl {
 

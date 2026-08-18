@@ -1,27 +1,40 @@
 {
-  "name": "RISC-V Development Environment",
+  "name": "RVPoint RISC-V Development Environment",
   "build": {
     "dockerfile": "Dockerfile",
     "context": ".."
   },
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "containerEnv": {
+    "CMAKE_ROOT": "/opt/cmake",
+    "QEMU_ROOT": "/opt/qemu",
+    "RISCV": "/opt/riscv",
+    "RISCV_PATH": "/opt/riscv"
+  },
+  "runArgs": [
+    "--privileged"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-vscode.cpptools",
         "ms-vscode.cmake-tools",
         "twxs.cmake",
-        "ms-vscode.hexeditor"
+        "ms-vscode.hexeditor",
+        "ms-python.python"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "cmake.cmakePath": "/opt/cmake/bin/cmake",
+        "C_Cpp.default.compilerPath": "/opt/riscv/bin/riscv64-unknown-elf-gcc",
+        "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
       }
     }
   },
-  "runArgs": [
-    "--memory=3g"
-  ],
-  "postCreateCommand": "bash /workspace/scripts/download_datasets.sh",
+  "postCreateCommand": "bash -c 'echo \"=== RVPoint Dev Container Ready ===\"'",
   "remoteUser": "root"
 }

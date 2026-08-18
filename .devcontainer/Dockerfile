@@ -11,22 +11,22 @@ COPY env/common.sh env/versions.sh /tmp/env/
 COPY env/linux/install_prereqs.sh /tmp/env/linux/
 
 # Install core apt prerequisites using single source of truth script
-RUN bash /tmp/env/linux/install_prereqs.sh
+RUN sed -i 's/\r$//' /tmp/env/*.sh /tmp/env/linux/*.sh && bash /tmp/env/linux/install_prereqs.sh
 
 # === Stage 2: CMake Builder ===
 FROM base AS cmake-builder
 COPY env/linux/install_cmake.sh /tmp/env/linux/
-RUN bash /tmp/env/linux/install_cmake.sh
+RUN sed -i 's/\r$//' /tmp/env/linux/*.sh && bash /tmp/env/linux/install_cmake.sh
 
 # === Stage 3: QEMU Builder ===
 FROM base AS qemu-builder
 COPY env/linux/install_qemu.sh /tmp/env/linux/
-RUN bash /tmp/env/linux/install_qemu.sh
+RUN sed -i 's/\r$//' /tmp/env/linux/*.sh && bash /tmp/env/linux/install_qemu.sh
 
 # === Stage 4: RISC-V Toolchain Builder ===
 FROM base AS riscv-builder
 COPY env/linux/install_riscv.sh /tmp/env/linux/
-RUN bash /tmp/env/linux/install_riscv.sh
+RUN sed -i 's/\r$//' /tmp/env/linux/*.sh && bash /tmp/env/linux/install_riscv.sh
 
 # === Stage 5: Final DevContainer Image ===
 FROM base AS final

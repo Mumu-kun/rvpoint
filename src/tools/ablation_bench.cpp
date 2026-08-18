@@ -1,3 +1,4 @@
+#include "caravan_radius_search.h"
 #include "euclidean_clustering.h"
 #include "pointer_octree/pointer_octree.h"
 #include "profiler.h"
@@ -147,7 +148,7 @@ void runSORAblation(const PointCloudSoA &soa,
                     std::vector<BenchmarkResult> &results) {
   std::cout << "\n=== [Ablation C: Statistical Outlier Removal (SOR) Variants] ===" << std::endl;
 
-  std::size_t test_n = std::min(soa.n, static_cast<std::size_t>(20000));
+  std::size_t test_n = std::min(soa.n, static_cast<std::size_t>(5000));
   PointCloudSoA sub_soa = {soa.x, soa.y, soa.z, test_n};
   float search_radius = 0.5f;
 
@@ -195,10 +196,10 @@ void runSORAblation(const PointCloudSoA &soa,
   t1 = std::chrono::high_resolution_clock::now();
   double ms_hash = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  // 6. Caravan Query-Pack SOR O(N^2 / VL)
+  // 6. Caravan Query-Pack SOR
   std::vector<PointXYZ> out_caravan(test_n);
   t0 = std::chrono::high_resolution_clock::now();
-  std::size_t count_caravan = sor_caravan(sub_soa, out_caravan.data(), k, alpha);
+  std::size_t count_caravan = sor_grid_caravan(sub_soa, out_caravan.data(), k, alpha, search_radius);
   t1 = std::chrono::high_resolution_clock::now();
   double ms_caravan = std::chrono::duration<double, std::milli>(t1 - t0).count();
 

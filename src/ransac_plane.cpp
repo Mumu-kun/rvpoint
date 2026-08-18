@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
+#include <limits>
 
 namespace rvv_pcl {
 
@@ -27,7 +28,7 @@ static bool compute_plane_coefficients(float x1, float y1, float z1,
     float a = v1y*v2z - v1z*v2y;
     float b = v1z*v2x - v1x*v2z;
     float c = v1x*v2y - v1y*v2x;
-    //
+    
     // Normalize
     float norm = std::sqrt(a*a + b*b + c*c);
     if (norm < collinear_thresh) return false; // Collinear
@@ -49,7 +50,7 @@ static bool compute_plane_coefficients(float x1, float y1, float z1,
 // ============================================================================
 int ransac_plane_sc(const PointXYZ* cloud, std::size_t n, 
                     float dist_thresh, int max_iters, float* model,
-                    float collinear_thresh) 
+                    float collinear_thresh, float probability) 
 {
     if (n < 3) return 0;
     std::srand(0); // Fixed seed for reproducibility
@@ -57,7 +58,10 @@ int ransac_plane_sc(const PointXYZ* cloud, std::size_t n,
     int best_inliers = 0;
     float best_model[4] = {0,0,0,0};
     
-    for(int iter=0; iter<max_iters; ++iter) {
+    int k_iters = max_iters;
+    const double log_p = std::log(1.0 - std::clamp(static_cast<double>(probability), 0.5, 0.9999));
+    
+    for(int iter=0; iter<k_iters && iter<max_iters; ++iter) {
         // 1. Pick 3 random points
         int i1 = std::rand() % n;
         int i2 = std::rand() % n;
@@ -85,6 +89,19 @@ int ransac_plane_sc(const PointXYZ* cloud, std::size_t n,
         if(current_inliers > best_inliers) {
             best_inliers = current_inliers;
             for(int k=0; k<4; k++) best_model[k] = cand_model[k];
+            
+            // Adaptive RANSAC termination update
+            double w = static_cast<double>(best_inliers) / static_cast<double>(n);
+            double p_no_outliers = 1.0 - std::pow(w, 3.0);
+            p_no_outliers = std::max(std::numeric_limits<double>::epsilon(), p_no_outliers);
+            p_no_outliers = std::min(1.0 - std::numeric_limits<double>::epsilon(), p_no_outliers);
+            double log_no_outliers = std::log(p_no_outliers);
+            if (std::abs(log_no_outliers) > 1e-7) {
+                int dynamic_k = static_cast<int>(std::ceil(log_p / log_no_outliers));
+                if (dynamic_k > 0 && dynamic_k < k_iters) {
+                    k_iters = dynamic_k;
+                }
+            }
         }
     }
     
@@ -97,7 +114,7 @@ int ransac_plane_sc(const PointXYZ* cloud, std::size_t n,
 // ============================================================================
 int ransac_plane_rvv(const PointCloudSoA& cloud, 
                      float dist_thresh, int max_iters, float* model,
-                     float collinear_thresh) 
+                     float collinear_thresh, float probability) 
 {
     if (cloud.n < 3) return 0;
     std::srand(0);
@@ -105,7 +122,10 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
     int best_inliers = 0;
     float best_model[4] = {0,0,0,0};
     
-    for(int iter=0; iter<max_iters; ++iter) {
+    int k_iters = max_iters;
+    const double log_p = std::log(1.0 - std::clamp(static_cast<double>(probability), 0.5, 0.9999));
+    
+    for(int iter=0; iter<k_iters && iter<max_iters; ++iter) {
         // 1. Pick 3 random points (Scalar)
         int i1 = std::rand() % cloud.n;
         int i2 = std::rand() % cloud.n;
@@ -141,13 +161,6 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
             dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
             dist = __riscv_vfadd_vf_f32m8(dist, d, vl); // Add D
             
-            // abs(dist)
-            // No direct vfabs in standard arithmetic, but we can do bitwise clear sign?
-            // Or max(x, -x). Let's use vfsgnjx for absolute value if available or just check bounds.
-            // Actually, RISC-V V spec has vfabs.v as pseudo for fsgnjx.
-            // But intrinsic is __riscv_vfabs_v_f32m8? Use pseudo if not sure.
-            // Let's use mask: -thresh <= dist <= thresh.
-            
             vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, dist_thresh, vl);
             vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl);
             vbool4_t mask_in = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
@@ -161,6 +174,19 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
         if(current_inliers > best_inliers) {
             best_inliers = current_inliers;
             for(int k=0; k<4; k++) best_model[k] = cand_model[k];
+            
+            // Adaptive RANSAC termination update
+            double w = static_cast<double>(best_inliers) / static_cast<double>(cloud.n);
+            double p_no_outliers = 1.0 - std::pow(w, 3.0);
+            p_no_outliers = std::max(std::numeric_limits<double>::epsilon(), p_no_outliers);
+            p_no_outliers = std::min(1.0 - std::numeric_limits<double>::epsilon(), p_no_outliers);
+            double log_no_outliers = std::log(p_no_outliers);
+            if (std::abs(log_no_outliers) > 1e-7) {
+                int dynamic_k = static_cast<int>(std::ceil(log_p / log_no_outliers));
+                if (dynamic_k > 0 && dynamic_k < k_iters) {
+                    k_iters = dynamic_k;
+                }
+            }
         }
     }
     

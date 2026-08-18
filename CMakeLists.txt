@@ -63,6 +63,8 @@ function(add_rvv_test src)
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
     target_link_libraries(${name} PRIVATE rvvpcl)
+    target_compile_options(${name} PRIVATE "-fopenmp")
+    target_link_options(${name} PRIVATE "-fopenmp")
     target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 endfunction()
 
@@ -124,3 +126,38 @@ target_link_libraries(ablation_bench PRIVATE rvvpcl)
 add_executable(neighbor_search_sor_bench src/tools/neighbor_search_sor_bench.cpp)
 target_include_directories(neighbor_search_sor_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(neighbor_search_sor_bench PRIVATE rvvpcl)
+
+# Stage-by-Stage Scalar vs RVV Verification Benchmark
+add_executable(pipeline_compare_bench src/tools/pipeline_compare_bench.cpp)
+target_include_directories(pipeline_compare_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_compare_bench PRIVATE rvvpcl)
+
+# Standalone Pure-Scalar PCL Pipeline for RISC-V QEMU Simulation
+add_executable(pcl_standalone_pipeline src/tools/pcl_standalone_pipeline.cpp)
+target_include_directories(pcl_standalone_pipeline PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pcl_standalone_pipeline PRIVATE rvvpcl)
+
+# Ultra-Fast Flat 2.5D Real-Time Perception Pipeline Export Utility
+add_executable(pipeline_fast_export src/tools/pipeline_fast_export.cpp)
+target_include_directories(pipeline_fast_export PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_fast_export PRIVATE rvvpcl)
+
+# Hardware-Accelerated RVV 1.0 Ultra Fast Pipeline
+add_executable(pipeline_rvv_ultra_fast src/tools/pipeline_rvv_ultra_fast.cpp)
+target_include_directories(pipeline_rvv_ultra_fast PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_rvv_ultra_fast PRIVATE rvvpcl)
+
+# Pure SoA Turbo Hardware RVV 1.0 Pipeline
+add_executable(pipeline_rvv_turbo src/tools/pipeline_rvv_turbo.cpp)
+target_include_directories(pipeline_rvv_turbo PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_rvv_turbo PRIVATE rvvpcl)
+
+# Official Reference Open-Source Scalar 2.5D Baseline (No RVV)
+add_executable(scalar_25d_baseline src/tools/scalar_25d_baseline.cpp)
+target_include_directories(scalar_25d_baseline PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(scalar_25d_baseline PRIVATE rvvpcl)
+
+# Accelerated True 3D RVPoint Turbo 10-Stage Pipeline
+add_executable(pipeline_3d_turbo src/tools/pipeline_3d_turbo.cpp)
+target_include_directories(pipeline_3d_turbo PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_3d_turbo PRIVATE rvvpcl)

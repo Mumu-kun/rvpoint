@@ -216,6 +216,14 @@ void normal_estimation_rvv(const PointCloudSoA &in, const SpatialHash &hash,
                            int eigen_iters = 4);
 
 /**
+ * @brief Normal Estimation (RVV + PointerOctree, pre-built tree passed in).
+ */
+void normal_estimation_rvv(const PointCloudSoA &in, const PointerOctree &octree,
+                           float *nx, float *ny, float *nz, int k, float radius,
+                           float vp_x = 0, float vp_y = 0, float vp_z = 0,
+                           int eigen_iters = 4);
+
+/**
  * @brief Normal Estimation (RVV, self-contained — builds Octree internally).
  *
  * Convenience overload that does not require a pre-built Octree.
@@ -288,7 +296,8 @@ std::size_t radius_search_rvv(const PointCloudSoA &cloud, PointXYZ query,
  */
 int ransac_plane_sc(const PointXYZ *cloud, std::size_t n, float dist_thresh,
                     int max_iters, float *model,
-                    float collinear_thresh = 1e-6f);
+                    float collinear_thresh = 1e-6f,
+                    float probability = 0.99f);
 
 /**
  * @brief RANSAC Plane Fitting (RVV Optimized).
@@ -303,11 +312,13 @@ int ransac_plane_sc(const PointXYZ *cloud, std::size_t n, float dist_thresh,
  * @param max_iters Maximum number of RANSAC iterations.
  * @param model Output array of size 4 for plane coefficients.
  * @param collinear_thresh Threshold for collinearity check.
+ * @param probability Confidence probability for adaptive early stopping (default 0.99).
  * @return int Number of inliers found for the best model.
  */
 int ransac_plane_rvv(const PointCloudSoA &cloud, float dist_thresh,
                      int max_iters, float *model,
-                     float collinear_thresh = 1e-6f);
+                     float collinear_thresh = 1e-6f,
+                     float probability = 0.99f);
 
 /**
  * @brief Extract Plane Inliers (RVV Optimized).

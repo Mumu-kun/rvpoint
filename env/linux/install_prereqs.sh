@@ -10,6 +10,8 @@ LINUX_PREREQUISITES=(
     git
     curl
     wget
+    ca-certificates
+    dos2unix
     unzip
     zip
     tar
@@ -21,6 +23,7 @@ LINUX_PREREQUISITES=(
     ninja-build
     libglib2.0-dev
     libpixman-1-dev
+    docker.io
 )
 
 install_prereqs() {

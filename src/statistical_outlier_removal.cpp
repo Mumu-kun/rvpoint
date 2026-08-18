@@ -273,16 +273,21 @@ std::size_t sor_pointer_octree(const PointCloudSoA &in, const PointerOctree &tre
   if (in.n == 0) return 0;
   std::vector<float> mean_dists(in.n);
 
+  std::vector<int> nbr_indices;
+  std::vector<float> nbr_dists;
+  nbr_indices.reserve(256);
+  nbr_dists.reserve(256);
+
   for (size_t i = 0; i < in.n; ++i) {
     PointXYZ query = {in.x[i], in.y[i], in.z[i]};
-    std::vector<int> nbr_indices;
-    std::vector<float> nbr_dists;
+    nbr_indices.clear();
+    nbr_dists.clear();
     tree.radiusSearch(query, search_radius, nbr_indices, nbr_dists);
 
     if (nbr_dists.size() > 1) {
-      std::sort(nbr_dists.begin(), nbr_dists.end());
-      float sum = 0.0f;
       int valid_k = std::min(k, static_cast<int>(nbr_dists.size()) - 1);
+      std::nth_element(nbr_dists.begin(), nbr_dists.begin() + valid_k, nbr_dists.end());
+      float sum = 0.0f;
       for (int j = 1; j <= valid_k; ++j) {
         sum += std::sqrt(nbr_dists[j]);
       }
