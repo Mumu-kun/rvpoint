@@ -43,7 +43,11 @@ run_executable() {
   local target_args=("$@")
 
   # Build target
-  "$SCRIPT_DIR/build.sh" --toolchain linux --backend "$backend" --target "$target_name" >/dev/null 2>&1
+  local build_gem5_flag=""
+  if [[ -n "$GEM5_CONFIG" && -x "$(command -v "$GEM5_BIN")" ]]; then
+    build_gem5_flag="--gem5"
+  fi
+  "$SCRIPT_DIR/build.sh" --toolchain linux --backend "$backend" --target "$target_name" $build_gem5_flag >/dev/null 2>&1
 
   local build_dir="$(get_build_dir)"
   local target_bin="${build_dir}/${backend}/bin/${backend}/${target_name}"

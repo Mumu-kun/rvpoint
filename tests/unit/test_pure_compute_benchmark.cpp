@@ -6,9 +6,15 @@
 // 3. Reference Open-Source Scalar 2.5D Baseline (Standard C++ / No RVV)
 // 4. RVPoint Fused Hardware RVV 1.0 Perception Pipeline (Target: Orange Pi RV2)
 
-#include "simple_pcd_loader.h"
-#include "pointer_octree/pointer_octree.h"
-#include "rvv_pcl.h"
+#include "core/point_types.h"
+#include "core/rvv_common.h"
+#include "search/pointer_octree.h"
+#include "filters/voxel_grid.h"
+#include "filters/statistical_outlier_removal.h"
+#include "features/normal_estimation.h"
+#include "segmentation/ransac_plane.h"
+#include "segmentation/euclidean_clustering.h"
+#include "io/simple_pcd_loader.h"
 
 #include <algorithm>
 #include <chrono>

@@ -4,38 +4,41 @@
 // No SIMD, no tree. Pure O(N·Q) linear scan in scalar C++.
 // Comparable to bench_octree_radius.cpp and bench_caravan_radius.cpp.
 // ─────────────────────────────────────────────────────────────────────────────
-#include "rvv_pcl.h"
+#include "core/point_types.h"
 #include "bench_params.h"
 
 #include <iostream>
 #include <random>
 #include <vector>
 
-using namespace rvv_pcl;
-using namespace rvv_pcl::bench;
+using namespace rvpoint;
+using namespace rvpoint::bench;
 
 int main() {
   std::mt19937 gen(SEED);
   std::normal_distribution<float> dist(0.0f, 2.0f);
 
   // ── Build database cloud (N points) ───────────────────────────────────────
-  PointCloudSoA cloud;
-  cloud.reserve(N);
-  for (std::size_t i = 0; i < N; ++i)
-    cloud.push_back({dist(gen), dist(gen), dist(gen)});
+  std::vector<float> cx(N), cy(N), cz(N);
+  for (std::size_t i = 0; i < N; ++i) {
+    cx[i] = dist(gen);
+    cy[i] = dist(gen);
+    cz[i] = dist(gen);
+  }
+  PointCloudSoA cloud = {cx.data(), cy.data(), cz.data(), N};
 
   // ── Build query points (Q, same seed continuation) ────────────────────────
   std::vector<PointXYZ> queries(Q);
-  for (std::size_t i = 0; i < Q; ++i)
+  for (std::size_t i = 0; i < Q; ++i) {
     queries[i] = {dist(gen), dist(gen), dist(gen)};
+  }
 
   // ── Scalar brute-force: no preprocessing ─────────────────────────────────
   const float r2 = RADIUS * RADIUS;
 
-  // Use SoA arrays directly for best scalar throughput
-  const float *px = cloud.xData();
-  const float *py = cloud.yData();
-  const float *pz = cloud.zData();
+  const float *px = cloud.x;
+  const float *py = cloud.y;
+  const float *pz = cloud.z;
 
   volatile std::size_t total_hits = 0;
   std::vector<int32_t> result_indices;
@@ -51,8 +54,9 @@ int main() {
       const float dx = px[p] - qx;
       const float dy = py[p] - qy;
       const float dz = pz[p] - qz;
-      if (dx * dx + dy * dy + dz * dz <= r2)
+      if (dx * dx + dy * dy + dz * dz <= r2) {
         result_indices.push_back(static_cast<int32_t>(p));
+      }
     }
     total_hits += result_indices.size();
   }

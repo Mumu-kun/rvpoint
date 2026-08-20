@@ -121,8 +121,8 @@ echo "  ${DIM}Binary  :${RESET} $BIN_FILE"
 echo ""
 
 # ─── 1. Build library ─────────────────────────────────────────────────────────
-header "1/3  Building rvvpcl library ($BACKEND)"
-if ! BUILD_LOG="$("$PROJECT_ROOT/scripts/build.sh" --toolchain linux --backend "$BACKEND" 2>&1)"; then
+header "1/3  Building library ($BACKEND)"
+if ! BUILD_LOG="$("$PROJECT_ROOT/scripts/build.sh" --toolchain linux --backend "$BACKEND" --gem5 --target rvpoint 2>&1)"; then
   echo "$BUILD_LOG" | grep -E '(error|warning|Built target|Linking)' | sed 's/^/  /' || echo "$BUILD_LOG"
   echo "${RED}✗ Build failed.${RESET}" >&2
   exit 1
@@ -133,9 +133,12 @@ echo "  ${GREEN}✓ Library up to date ($BACKEND)${RESET}"
 header "2/3  Cross-compiling for RISC-V ($MARCH)"
 riscv64-unknown-linux-gnu-g++ -static -O3 \
   -march="$MARCH" -mabi=lp64d \
+  -DGEM5_BUILD=1 \
+  -I"$PROJECT_ROOT/src" \
   -I"$PROJECT_ROOT/src/include" \
+  -I"$(dirname "$CPP_FILE")" \
   -L"$LIB_DIR" \
-  "$CPP_FILE" -lrvvpcl \
+  "$CPP_FILE" -lrvpoint \
   -o "$BIN_FILE"
 echo "  ${GREEN}✓ Binary ready:${RESET} $BIN_FILE"
 

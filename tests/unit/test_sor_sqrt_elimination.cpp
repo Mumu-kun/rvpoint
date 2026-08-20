@@ -13,9 +13,11 @@
 //   - Point count agreement: > 95% of the same points removed
 //   - Timing: sq-based version is faster (no sqrt hot loop)
 
-#include "pointer_octree/pointer_octree.h"
-#include "rvv_pcl.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "core/rvv_common.h"
+#include "search/pointer_octree.h"
+#include "filters/statistical_outlier_removal.h"
+#include "io/simple_pcd_loader.h"
 
 #include <algorithm>
 #include <cassert>

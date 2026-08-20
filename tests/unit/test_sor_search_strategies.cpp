@@ -10,9 +10,12 @@
 //   D) Reduce K (K=5 instead of K=20 — PCL literature says K=5 is sufficient)
 //   E) KNN instead of radius search: find exactly K nearest (no wasted search)
 
-#include "include/rvv_pcl.h"
-#include "pointer_octree/pointer_octree.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "core/rvv_common.h"
+#include "search/pointer_octree.h"
+#include "search/spatial_hashing.h"
+#include "filters/statistical_outlier_removal.h"
+#include "io/simple_pcd_loader.h"
 
 #include <algorithm>
 #include <chrono>

@@ -41,6 +41,6 @@ env/.wsl/
 .venv/
 AGENTS.md
 DESIGN.md
-/data
+data/
 docs/plans
 .clangd

@@ -1,7 +1,7 @@
-// test_octree_leaf_size_sweep.cpp
-#include "include/rvv_pcl.h"
-#include "pointer_octree/pointer_octree.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "search/pointer_octree.h"
+#include "filters/voxel_grid.h"
+#include "io/simple_pcd_loader.h"
 
 #include <chrono>
 #include <cstdio>

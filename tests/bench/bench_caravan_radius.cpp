@@ -1,51 +1,53 @@
 // tests/bench/bench_caravan_radius.cpp
 // ─────────────────────────────────────────────────────────────────────────────
 // Benchmark: Caravan RVV batch radius search — Q queries on N-point cloud.
-// Comparable to bench_octree_radius.cpp (same N, Q, seed, no verification).
-//
-// Method: N database points in cloud, Q query points in a separate query
-// cloud. batchRadiusSearch runs all Q queries in one vectorized pass.
+// Comparable to bench_octree_radius.cpp and bench_scalar_radius.cpp.
 // ─────────────────────────────────────────────────────────────────────────────
-#include "rvv_pcl.h"
-#include "caravan_radius_search.h"
+#include "core/point_types.h"
+#include "search/caravan_radius_search.h"
 #include "bench_params.h"
 
 #include <iostream>
 #include <random>
 #include <vector>
 
-using namespace rvv_pcl;
-using namespace rvv_pcl::bench;
+using namespace rvpoint;
+using namespace rvpoint::bench;
 
 int main() {
   std::mt19937 gen(SEED);
   std::normal_distribution<float> dist(0.0f, 2.0f);
 
-  // ── Build database cloud (N points) ───────────────────────────────────────
-  auto cloud = std::make_shared<PointCloudSoA>();
-  cloud->reserve(N);
-  for (std::size_t i = 0; i < N; ++i)
-    cloud->push_back({dist(gen), dist(gen), dist(gen)});
+  // ── Build database cloud (N points) in SoA vectors ────────────────────────
+  std::vector<float> cx(N), cy(N), cz(N);
+  for (std::size_t i = 0; i < N; ++i) {
+    cx[i] = dist(gen);
+    cy[i] = dist(gen);
+    cz[i] = dist(gen);
+  }
+  PointCloudSoA cloud = {cx.data(), cy.data(), cz.data(), N};
 
-  // ── Build query cloud (Q points, same seed continuation as octree bench) ──
-  PointCloudSoA queries;
-  queries.reserve(Q);
-  for (std::size_t i = 0; i < Q; ++i)
-    queries.push_back({dist(gen), dist(gen), dist(gen)});
+  // ── Build query cloud (Q points, same seed continuation) ──────────────────
+  std::vector<float> qx(Q), qy(Q), qz(Q);
+  for (std::size_t i = 0; i < Q; ++i) {
+    qx[i] = dist(gen);
+    qy[i] = dist(gen);
+    qz[i] = dist(gen);
+  }
+  PointCloudSoA queries = {qx.data(), qy.data(), qz.data(), Q};
 
-  // ── No index-build step for Caravan (flat scan, no preprocessing) ─────────
+  // ── Caravan batch radius search ───────────────────────────────────────────
   CaravanRadiusSearch caravan;
   caravan.setInputCloud(cloud);
-  caravan.setSearchRadius(RADIUS);
 
-  // ── Run all Q queries as one batch ────────────────────────────────────────
   std::vector<std::vector<int32_t>> results;
   caravan.batchRadiusSearch(queries, RADIUS, results);
 
   // Sink results so the compiler cannot eliminate the calls
   volatile std::size_t total_hits = 0;
-  for (std::size_t q = 0; q < Q; ++q)
+  for (std::size_t q = 0; q < Q; ++q) {
     total_hits += results[q].size();
+  }
 
   std::cout << "[BENCH] caravan  N=" << N << " Q=" << Q
             << "  total_hits=" << total_hits << std::endl;

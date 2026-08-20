@@ -1,7 +1,7 @@
 #pragma once
 
-#include "rvv_pcl.h"
-#include "pointer_octree/pointer_octree.h"
+#include "core/point_types.h"
+#include "search/pointer_octree.h"
 #include <cstdint>
 #include <vector>
 

@@ -14,9 +14,11 @@
 //   - Sequential access → hardware prefetcher kicks in
 //   - Fits in cache lines → reuse across multiple vector instructions
 
-#include "include/rvv_pcl.h"
-#include "pointer_octree/pointer_octree.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "core/rvv_common.h"
+#include "search/pointer_octree.h"
+#include "filters/voxel_grid.h"
+#include "io/simple_pcd_loader.h"
 
 #include <algorithm>
 #include <chrono>

@@ -16,6 +16,7 @@ TOOLCHAIN="linux"
 BACKEND="rvv"
 CLEAN=false
 TARGET=""
+GEM5_BUILD=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -36,8 +37,12 @@ while [[ $# -gt 0 ]]; do
             TARGET="$2"
             shift 2
             ;;
+        --gem5)
+            GEM5_BUILD=true
+            shift
+            ;;
         *)
-            echo "Usage: $0 [--toolchain linux|elf] [--backend rvv|riscv] [--target <cmake-target>] [--clean]"
+            echo "Usage: $0 [--toolchain linux|elf] [--backend rvv|riscv] [--target <cmake-target>] [--gem5] [--clean]"
             exit 1
             ;;
     esac
@@ -101,7 +106,9 @@ build_backend() {
         local cxx_compiler="$(sed -n 's/^CMAKE_CXX_COMPILER:FILEPATH=//p' "$cache_file" | head -n 1)"
         local cache_arch="$(sed -n 's/^RISCV_ARCH:STRING=//p' "$cache_file" | head -n 1)"
         local cache_rvv="$(sed -n 's/^RVV_PCL_USE_RVV:BOOL=//p' "$cache_file" | head -n 1)"
+        local cache_gem5="$(sed -n 's/^GEM5_BUILD:BOOL=//p' "$cache_file" | head -n 1)"
         local cache_build_type="$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' "$cache_file" | head -n 1)"
+        local expected_gem5="$([ "$GEM5_BUILD" = true ] && echo ON || echo OFF)"
         if [ -n "$cxx_compiler" ] && [[ "$cxx_compiler" != *riscv64* ]]; then
             echo "Detected stale host compiler in CMake cache ($cxx_compiler), reconfiguring $b_name..."
             rm -rf "$b_dir"
@@ -111,6 +118,9 @@ build_backend() {
         elif [ -n "$cache_rvv" ] && [ "$cache_rvv" != "$rvv_cmake" ]; then
             echo "Detected stale RVV setting in CMake cache ($cache_rvv -> $rvv_cmake), reconfiguring $b_name..."
             rm -rf "$b_dir"
+        elif [ -n "$cache_gem5" ] && [ "$cache_gem5" != "$expected_gem5" ]; then
+            echo "Detected stale GEM5 setting in CMake cache ($cache_gem5 -> $expected_gem5), reconfiguring $b_name..."
+            rm -rf "$b_dir"
         elif [ -z "$cache_build_type" ] || [ "$cache_build_type" != "Release" ]; then
             echo "Detected non-Release build type in CMake cache ($cache_build_type), reconfiguring $b_name..."
             rm -rf "$b_dir"
@@ -119,13 +129,15 @@ build_backend() {
 
     # Configure if needed
     if [ ! -f "$b_dir/CMakeCache.txt" ]; then
-        echo "Configuring CMake (toolchain: $TOOLCHAIN, backend: $b_name)..."
+        local rvv_gem5_arg="$([ "$GEM5_BUILD" = true ] && echo ON || echo OFF)"
+        echo "Configuring CMake (toolchain: $TOOLCHAIN, backend: $b_name, gem5: $rvv_gem5_arg)..."
         cmake -S "$PROJECT_ROOT" -B "$b_dir" \
             -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
             -DCMAKE_BUILD_TYPE=Release \
             -DRISCV_ARCH="$riscv_arch" \
             -DRISCV_ABI="lp64d" \
-            -DRVV_PCL_USE_RVV="$rvv_cmake"
+            -DRVV_PCL_USE_RVV="$rvv_cmake" \
+            -DGEM5_BUILD="$rvv_gem5_arg"
         echo "$TOOLCHAIN" > "$marker"
     fi
 

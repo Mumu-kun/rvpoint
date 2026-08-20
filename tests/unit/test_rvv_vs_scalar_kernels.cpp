@@ -8,8 +8,12 @@
 // The same ratio on REAL hardware would be ~VLEN/32 = 4× for f32 operations.
 // This lets us PROJECT the expected real-hardware speedup.
 
-#include "include/rvv_pcl.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "core/rvv_common.h"
+#include "filters/voxel_grid.h"
+#include "features/normal_estimation.h"
+#include "segmentation/ransac_plane.h"
+#include "io/simple_pcd_loader.h"
 
 #include <chrono>
 #include <cmath>

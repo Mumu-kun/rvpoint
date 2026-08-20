@@ -1,44 +1,50 @@
 // tests/bench/bench_octree_radius.cpp
 // ─────────────────────────────────────────────────────────────────────────────
 // Benchmark: Octree radius search — Q queries on N-point cloud.
-// Comparable to bench_caravan_radius.cpp (same N, Q, seed, no verification).
-//
-// Method: append Q query points to the cloud, buildTree once, then call
-// radiusSearch(q_index) for each query — matching CaravanRadiusSearch API.
+// Comparable to bench_caravan_radius.cpp and bench_scalar_radius.cpp.
 // ─────────────────────────────────────────────────────────────────────────────
-#include "rvv_pcl.h"
+#include "core/point_types.h"
+#include "search/octree.h"
 #include "bench_params.h"
 
 #include <iostream>
 #include <random>
 #include <vector>
 
-using namespace rvv_pcl;
-using namespace rvv_pcl::bench;
+using namespace rvpoint;
+using namespace rvpoint::bench;
 
 int main() {
   std::mt19937 gen(SEED);
   std::normal_distribution<float> dist(0.0f, 2.0f);
 
-  // ── Build cloud (N database + Q query points appended at the end) ──────────
-  PointCloudSoA cloud;
-  cloud.reserve(N + Q);
-  for (std::size_t i = 0; i < N + Q; ++i)
-    cloud.push_back({dist(gen), dist(gen), dist(gen)});
+  // ── Build database cloud (N points) in SoA vectors ────────────────────────
+  std::vector<float> cx(N), cy(N), cz(N);
+  for (std::size_t i = 0; i < N; ++i) {
+    cx[i] = dist(gen);
+    cy[i] = dist(gen);
+    cz[i] = dist(gen);
+  }
+  PointCloudSoA cloud = {cx.data(), cy.data(), cz.data(), N};
 
-  // ── Build Octree once ──────────────────────────────────────────────────────
-  OctreeNeighborSearch octree;
+  // ── Build query points (Q points, same seed continuation) ─────────────────
+  std::vector<PointXYZ> queries(Q);
+  for (std::size_t i = 0; i < Q; ++i) {
+    queries[i] = {dist(gen), dist(gen), dist(gen)};
+  }
+
+  // ── Build Octree ──────────────────────────────────────────────────────────
+  Octree octree;
   octree.setInputCloud(cloud);
-  octree.setSearchRadius(RADIUS);
-  octree.buildTree();
+  octree.build();
 
-  // ── Q radius searches (query indices = N..N+Q-1) ──────────────────────────
+  // ── Run Q radius searches ─────────────────────────────────────────────────
   volatile std::size_t total_hits = 0;
   std::vector<int> result_indices;
+  std::vector<float> result_dists;
 
   for (std::size_t q = 0; q < Q; ++q) {
-    int query_idx = static_cast<int>(N + q);
-    octree.radiusSearch(query_idx, result_indices, nullptr, 0);
+    octree.radiusSearch(queries[q], RADIUS, result_indices, result_dists);
     total_hits += result_indices.size();
   }
 

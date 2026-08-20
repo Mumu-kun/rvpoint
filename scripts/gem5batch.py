@@ -27,7 +27,7 @@ def prebuild_backends(backends):
     for b in backends:
         print(f"  \033[2mBuilding {b} backend...\033[0m")
         build_script = os.path.join(PROJECT_ROOT, "scripts", "build.sh")
-        cmd = [build_script, "--toolchain", "linux", "--backend", b]
+        cmd = [build_script, "--toolchain", "linux", "--backend", b, "--gem5", "--target", "rvpoint"]
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode != 0:
             print(f"\033[31m✗ Build failed for {b}:\033[0m\n{res.stderr}")

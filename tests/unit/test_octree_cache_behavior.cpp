@@ -8,9 +8,11 @@
 // On real HW, pointer chasing causes L1/L2 misses (4-40 cycles each).
 // This test measures the SPLIT between traversal cost and leaf-compute cost.
 
-#include "include/rvv_pcl.h"
-#include "pointer_octree/pointer_octree.h"
-#include "simple_pcd_loader.h"
+#include "core/point_types.h"
+#include "core/rvv_common.h"
+#include "search/pointer_octree.h"
+#include "filters/voxel_grid.h"
+#include "io/simple_pcd_loader.h"
 
 #include <algorithm>
 #include <chrono>

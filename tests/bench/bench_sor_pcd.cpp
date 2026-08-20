@@ -1,11 +1,15 @@
-#include "rvv_pcl.h"
-#include "caravan_radius_search.h"
+#include "core/point_types.h"
+#include "core/rvv_common.h"
+#include "search/caravan_radius_search.h"
+#include "filters/statistical_outlier_removal.h"
+#include "io/simple_pcd_loader.h"
 
 #include <iostream>
+#include <memory>
 #include <vector>
 #include <string>
 
-using namespace rvv_pcl;
+using namespace rvpoint;
 
 int main(int argc, char **argv) {
   std::string input_file = "output/results/1/01_downsampled.pcd";

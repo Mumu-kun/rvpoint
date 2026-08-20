@@ -1,13 +1,13 @@
 #include "core/point_types.h"
 #include "core/profiler.h"
-#include "filters/voxel_grid.h"
-#include "filters/statistical_outlier_removal.h"
 #include "features/normal_estimation.h"
-#include "segmentation/ransac_plane.h"
-#include "segmentation/euclidean_clustering.h"
+#include "filters/statistical_outlier_removal.h"
+#include "filters/voxel_grid.h"
+#include "io/simple_pcd_loader.h"
 #include "search/octree.h"
 #include "search/pointer_octree.h"
-#include "io/simple_pcd_loader.h"
+#include "segmentation/euclidean_clustering.h"
+#include "segmentation/ransac_plane.h"
 
 #include <array>
 #include <chrono>
@@ -36,7 +36,7 @@ struct StageTiming {
 
 struct PipelineConfig {
   // Voxel grid downsampling
-  float voxel_leaf_size = 0.01f; // Smaller leaf size keeps more points.
+  float voxel_leaf_size = 0.05f; // Smaller leaf size keeps more points.
 
   // Neighbor search
   float search_radius = 0.03f; // Larger radius finds more neighbors.
@@ -44,9 +44,10 @@ struct PipelineConfig {
   // Statistical outlier removal
   int sor_mean_k = 20;            // Larger K smooths local density statistics.
   float sor_std_threshold = 1.0f; // Lower threshold removes more outliers.
-  // Search radius for SOR neighbor queries. Validated at 0.25m with leaf_size=0.10:
-  // 1.69× faster than PCL's SOR, 97.2% inlier agreement. Smaller radius = fewer
-  // octree leaf visits (sphere volume ∝ r³) while still finding enough neighbors.
+  // Search radius for SOR neighbor queries. Validated at 0.25m with
+  // leaf_size=0.10: 1.69× faster than PCL's SOR, 97.2% inlier agreement.
+  // Smaller radius = fewer octree leaf visits (sphere volume ∝ r³) while still
+  // finding enough neighbors.
   float sor_search_radius = 0.25f;
 
   // Normal estimation
@@ -54,7 +55,7 @@ struct PipelineConfig {
 
   // RANSAC dominant plane fitting
   float ransac_distance_threshold =
-      0.2f; // Larger threshold accepts more inliers.
+      0.02f; // Larger threshold accepts more inliers.
   int ransac_max_iterations =
       1000; // More iterations improve robustness but cost time.
   float ransac_probability =
@@ -120,8 +121,8 @@ void printFinalBreakdown(const std::vector<StageTiming> &stages,
     const double pct = total_ms > 0.0 ? (stage.ms * 100.0 / total_ms) : 0.0;
     std::cout << "[progress] [" << stage.index << "/" << kStageCount << "] "
               << stage.label << ": " << std::fixed << std::setprecision(3)
-              << stage.ms << " ms (" << std::setprecision(2) << pct << "%), pts="
-              << stage.point_count << std::endl;
+              << stage.ms << " ms (" << std::setprecision(2) << pct
+              << "%), pts=" << stage.point_count << std::endl;
   }
 
   const double overhead_ms = total_ms - stages_sum_ms;
@@ -138,11 +139,11 @@ void printFinalBreakdown(const std::vector<StageTiming> &stages,
 }
 
 void saveJSONMetrics(const std::filesystem::path &out_path,
-                    const std::vector<StageTiming> &stages,
-                    double total_ms, float leaf_size, bool skip_sor,
-                    float cluster_tolerance) {
+                     const std::vector<StageTiming> &stages, double total_ms,
+                     float leaf_size, bool skip_sor, float cluster_tolerance) {
   std::ofstream ofs(out_path);
-  if (!ofs.is_open()) return;
+  if (!ofs.is_open())
+    return;
 
   ofs << "{\n";
   ofs << "  \"leaf_size\": " << leaf_size << ",\n";
@@ -166,10 +167,11 @@ void saveJSONMetrics(const std::filesystem::path &out_path,
 }
 
 std::size_t sor_pointer_octree_sc(const PointCloudSoA &in,
-                                  const PointerOctree &tree,
-                                  PointXYZ *out, int k, float alpha,
+                                  const PointerOctree &tree, PointXYZ *out,
+                                  int k, float alpha,
                                   float search_radius = 0.5f) {
-  if (in.n == 0) return 0;
+  if (in.n == 0)
+    return 0;
   std::vector<float> mean_dists(in.n);
   std::vector<int> nbr_indices;
   std::vector<float> nbr_dists;
@@ -183,7 +185,8 @@ std::size_t sor_pointer_octree_sc(const PointCloudSoA &in,
     tree.radiusSearchScalar(query, search_radius, nbr_indices, nbr_dists);
     if (nbr_dists.size() > 1) {
       int valid_k = std::min(k, static_cast<int>(nbr_dists.size()) - 1);
-      std::nth_element(nbr_dists.begin(), nbr_dists.begin() + valid_k, nbr_dists.end());
+      std::nth_element(nbr_dists.begin(), nbr_dists.begin() + valid_k,
+                       nbr_dists.end());
       float sum = 0.0f;
       for (int j = 1; j <= valid_k; ++j) {
         sum += std::sqrt(nbr_dists[j]);
@@ -194,11 +197,13 @@ std::size_t sor_pointer_octree_sc(const PointCloudSoA &in,
     }
   }
   float global_sum = 0.0f;
-  for (float d : mean_dists) global_sum += d;
+  for (float d : mean_dists)
+    global_sum += d;
   float global_mean = global_sum / in.n;
 
   float variance_sum = 0.0f;
-  for (float d : mean_dists) variance_sum += (d - global_mean) * (d - global_mean);
+  for (float d : mean_dists)
+    variance_sum += (d - global_mean) * (d - global_mean);
   float global_std = std::sqrt(variance_sum / in.n);
   float thresh = global_mean + alpha * global_std;
 
@@ -231,7 +236,8 @@ int main(int argc, char **argv) {
       progress_enabled = true;
     } else if (arg == "--json") {
       export_json = true;
-    } else if (arg == "--skip-sor" || arg == "--no-sor" || arg == "--without-sor") {
+    } else if (arg == "--skip-sor" || arg == "--no-sor" ||
+               arg == "--without-sor") {
       skip_sor = true;
     } else if (arg == "--scalar") {
       scalar_mode = true;
@@ -331,7 +337,8 @@ int main(int argc, char **argv) {
   const std::size_t n_input = loaded_points.size();
   stage_timings.push_back(
       {1, "Load input cloud",
-       endStage(1, "Load input cloud", stage_start, progress_enabled), n_input});
+       endStage(1, "Load input cloud", stage_start, progress_enabled),
+       n_input});
 
   std::vector<float> ix(n_input), iy(n_input), iz(n_input);
   for (std::size_t i = 0; i < n_input; ++i) {
@@ -346,17 +353,20 @@ int main(int argc, char **argv) {
   saveStagePoints(output_dir / "00_input.pcd", loaded_points, "Input");
   stage_timings.push_back(
       {2, "Write input stage",
-       endStage(2, "Write input stage", stage_start, progress_enabled), n_input});
+       endStage(2, "Write input stage", stage_start, progress_enabled),
+       n_input});
 
   std::vector<PointXYZ> downsampled_pts(n_input);
-  beginStage(3, scalar_mode ? "Downsampling (Scalar)" : "Downsampling (RVV)", progress_enabled);
+  beginStage(3, scalar_mode ? "Downsampling (Scalar)" : "Downsampling (RVV)",
+             progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   std::size_t n_down = 0;
   if (scalar_mode) {
     n_down = voxel_grid_downsamp_sc(loaded_points.data(), loaded_points.size(),
-                                   downsampled_pts.data(), voxel_leaf_size);
+                                    downsampled_pts.data(), voxel_leaf_size);
   } else {
-    n_down = voxel_grid_downsamp_rvv_v2(input_cloud, downsampled_pts.data(), voxel_leaf_size);
+    n_down = voxel_grid_downsamp_rvv_v2(input_cloud, downsampled_pts.data(),
+                                        voxel_leaf_size);
   }
   downsampled_pts.resize(n_down);
   saveStagePoints(output_dir / "01_downsampled.pcd", downsampled_pts,
@@ -384,11 +394,15 @@ int main(int argc, char **argv) {
   stage_timings.push_back(
       {4, "Build search index for downsampled cloud",
        endStage(4, "Build search index for downsampled cloud", stage_start,
-                progress_enabled), n_down});
+                progress_enabled),
+       n_down});
 
   std::vector<PointXYZ> sor_pts(n_down);
   std::size_t n_sor = n_down;
-  beginStage(5, scalar_mode ? "Statistical outlier removal (Scalar)" : "Statistical outlier removal", progress_enabled);
+  beginStage(5,
+             scalar_mode ? "Statistical outlier removal (Scalar)"
+                         : "Statistical outlier removal",
+             progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   if (skip_sor) {
     sor_pts = downsampled_pts;
@@ -398,22 +412,23 @@ int main(int argc, char **argv) {
   } else {
     RVPOINT_PROFILE_SCOPE("SOR_pointer_octree_execution");
     if (scalar_mode) {
-      n_sor = sor_pointer_octree_sc(downsampled_cloud, search, sor_pts.data(),
-                                    kPipelineConfig.sor_mean_k,
-                                    kPipelineConfig.sor_std_threshold,
-                                    kPipelineConfig.sor_search_radius);
+      n_sor = sor_pointer_octree_sc(
+          downsampled_cloud, search, sor_pts.data(), kPipelineConfig.sor_mean_k,
+          kPipelineConfig.sor_std_threshold, kPipelineConfig.sor_search_radius);
     } else {
-      n_sor = sor_pointer_octree(downsampled_cloud, search, sor_pts.data(),
-                                 kPipelineConfig.sor_mean_k,
-                                 kPipelineConfig.sor_std_threshold,
-                                 kPipelineConfig.sor_search_radius);
+      n_sor = sor_pointer_octree(
+          downsampled_cloud, search, sor_pts.data(), kPipelineConfig.sor_mean_k,
+          kPipelineConfig.sor_std_threshold, kPipelineConfig.sor_search_radius);
     }
     sor_pts.resize(n_sor);
   }
   saveStagePoints(output_dir / "02_sor_filtered.pcd", sor_pts, "SOR");
-  stage_timings.push_back({5, scalar_mode ? "Statistical outlier removal (Scalar)" : "Statistical outlier removal",
+  stage_timings.push_back({5,
+                           scalar_mode ? "Statistical outlier removal (Scalar)"
+                                       : "Statistical outlier removal",
                            endStage(5, "Statistical outlier removal",
-                                    stage_start, progress_enabled), n_sor});
+                                    stage_start, progress_enabled),
+                           n_sor});
 
   std::vector<float> sx(n_sor), sy(n_sor), sz(n_sor);
   for (std::size_t i = 0; i < n_sor; ++i) {
@@ -434,15 +449,16 @@ int main(int argc, char **argv) {
   stage_timings.push_back(
       {6, "Rebuild search index for filtered cloud",
        endStage(6, "Rebuild search index for filtered cloud", stage_start,
-                progress_enabled), n_sor});
+                progress_enabled),
+       n_sor});
 
   std::vector<float> nx(n_sor), ny(n_sor), nz(n_sor);
   beginStage(7, "Normal estimation", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   {
     RVPOINT_PROFILE_SCOPE("normal_estimation_rvv");
-    normal_estimation_rvv(sor_cloud, filtered_search, nx.data(), ny.data(), nz.data(),
-                          kPipelineConfig.normal_k,
+    normal_estimation_rvv(sor_cloud, filtered_search, nx.data(), ny.data(),
+                          nz.data(), kPipelineConfig.normal_k,
                           kPipelineConfig.search_radius);
   }
   stage_timings.push_back(
@@ -454,13 +470,16 @@ int main(int argc, char **argv) {
   std::vector<PointXYZ> outlier_pts(n_sor);
   std::size_t n_inliers = 0, n_outliers = 0;
 
-  beginStage(8, scalar_mode ? "RANSAC primitive fitting (Scalar)" : "RANSAC primitive fitting", progress_enabled);
+  beginStage(8,
+             scalar_mode ? "RANSAC primitive fitting (Scalar)"
+                         : "RANSAC primitive fitting",
+             progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
   int ransac_inliers_count = 0;
   if (scalar_mode) {
-    ransac_inliers_count =
-        ransac_plane_sc(sor_pts.data(), n_sor, kPipelineConfig.ransac_distance_threshold,
-                        kPipelineConfig.ransac_max_iterations, model);
+    ransac_inliers_count = ransac_plane_sc(
+        sor_pts.data(), n_sor, kPipelineConfig.ransac_distance_threshold,
+        kPipelineConfig.ransac_max_iterations, model);
     for (std::size_t i = 0; i < n_sor; ++i) {
       float dist = std::abs(model[0] * sor_pts[i].x + model[1] * sor_pts[i].y +
                             model[2] * sor_pts[i].z + model[3]);
@@ -494,8 +513,11 @@ int main(int argc, char **argv) {
   saveStagePoints(output_dir / "05_ground_plane_removed.pcd", outlier_pts,
                   "Dominant plane removed");
   stage_timings.push_back(
-      {8, scalar_mode ? "RANSAC primitive fitting (Scalar)" : "RANSAC primitive fitting",
-       endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled), n_outliers});
+      {8,
+       scalar_mode ? "RANSAC primitive fitting (Scalar)"
+                   : "RANSAC primitive fitting",
+       endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled),
+       n_outliers});
 
   std::cout << "Final plane coefficients: [" << model[0] << ", " << model[1]
             << ", " << model[2] << ", " << model[3] << "]" << std::endl;
@@ -510,7 +532,8 @@ int main(int argc, char **argv) {
     oy[i] = outlier_pts[i].y;
     oz[i] = outlier_pts[i].z;
   }
-  PointCloudSoA non_ground_cloud = {ox.data(), oy.data(), oz.data(), n_outliers};
+  PointCloudSoA non_ground_cloud = {ox.data(), oy.data(), oz.data(),
+                                    n_outliers};
 
   PointerOctree non_ground_search;
   non_ground_search.setInputCloud(non_ground_cloud);
@@ -533,7 +556,8 @@ int main(int argc, char **argv) {
   }
   stage_timings.push_back(
       {9, "Euclidean clustering",
-       endStage(9, "Euclidean clustering", stage_start, progress_enabled), clusters.size()});
+       endStage(9, "Euclidean clustering", stage_start, progress_enabled),
+       clusters.size()});
 
   std::cout << "Extracted " << clusters.size() << " clusters." << std::endl;
 
@@ -563,19 +587,41 @@ int main(int argc, char **argv) {
       float r_f = 0.0f, g_f = 0.0f, b_f = 0.0f;
       int h_i = static_cast<int>(hue * 6.0f) % 6;
       switch (h_i) {
-        case 0: r_f = c; g_f = x; b_f = 0.0f; break;
-        case 1: r_f = x; g_f = c; b_f = 0.0f; break;
-        case 2: r_f = 0.0f; g_f = c; b_f = x; break;
-        case 3: r_f = 0.0f; g_f = x; b_f = c; break;
-        case 4: r_f = x; g_f = 0.0f; b_f = c; break;
-        case 5: r_f = c; g_f = 0.0f; b_f = x; break;
+      case 0:
+        r_f = c;
+        g_f = x;
+        b_f = 0.0f;
+        break;
+      case 1:
+        r_f = x;
+        g_f = c;
+        b_f = 0.0f;
+        break;
+      case 2:
+        r_f = 0.0f;
+        g_f = c;
+        b_f = x;
+        break;
+      case 3:
+        r_f = 0.0f;
+        g_f = x;
+        b_f = c;
+        break;
+      case 4:
+        r_f = x;
+        g_f = 0.0f;
+        b_f = c;
+        break;
+      case 5:
+        r_f = c;
+        g_f = 0.0f;
+        b_f = x;
+        break;
       }
 
-      colors.push_back({
-        static_cast<std::uint8_t>((r_f + m) * 255.0f),
-        static_cast<std::uint8_t>((g_f + m) * 255.0f),
-        static_cast<std::uint8_t>((b_f + m) * 255.0f)
-      });
+      colors.push_back({static_cast<std::uint8_t>((r_f + m) * 255.0f),
+                        static_cast<std::uint8_t>((g_f + m) * 255.0f),
+                        static_cast<std::uint8_t>((b_f + m) * 255.0f)});
     }
     return colors;
   };
@@ -593,14 +639,9 @@ int main(int argc, char **argv) {
     const RGBColor &col = cluster_colors[c_idx];
     for (int pt_idx : clusters[c_idx].indices) {
       if (pt_idx >= 0 && static_cast<std::size_t>(pt_idx) < n_outliers) {
-        colored_cluster_pts.push_back({
-            outlier_pts[pt_idx].x,
-            outlier_pts[pt_idx].y,
-            outlier_pts[pt_idx].z,
-            col.r,
-            col.g,
-            col.b
-        });
+        colored_cluster_pts.push_back(
+            {outlier_pts[pt_idx].x, outlier_pts[pt_idx].y,
+             outlier_pts[pt_idx].z, col.r, col.g, col.b});
       }
     }
   }
@@ -613,7 +654,8 @@ int main(int argc, char **argv) {
 
   stage_timings.push_back(
       {10, "Write cluster stage",
-       endStage(10, "Write cluster stage", stage_start, progress_enabled), total_clustered_pts});
+       endStage(10, "Write cluster stage", stage_start, progress_enabled),
+       total_clustered_pts});
 
   const auto overall_end = std::chrono::high_resolution_clock::now();
   const double total_ms =
@@ -632,4 +674,3 @@ int main(int argc, char **argv) {
   }
   return 0;
 }
-
