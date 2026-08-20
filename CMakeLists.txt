@@ -178,3 +178,13 @@ target_link_libraries(scalar_25d_baseline PRIVATE rvpoint)
 add_executable(pipeline_3d_turbo src/tools/pipeline_3d_turbo.cpp)
 target_include_directories(pipeline_3d_turbo PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(pipeline_3d_turbo PRIVATE rvpoint)
+
+# Ultra-Fast Pure 3D RVPoint Hardware RVV 1.0 Pipeline
+add_executable(pipeline_3d_ultra src/tools/pipeline_3d_ultra.cpp)
+target_include_directories(pipeline_3d_ultra PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_3d_ultra PRIVATE rvvpcl)
+
+# Ultimate Optimized True 3D RVPoint Hardware RVV 1.0 Pipeline
+add_executable(pipeline_3d_ultimate src/tools/pipeline_3d_ultimate.cpp)
+target_include_directories(pipeline_3d_ultimate PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(pipeline_3d_ultimate PRIVATE rvvpcl)

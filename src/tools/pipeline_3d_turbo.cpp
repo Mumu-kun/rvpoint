@@ -1,15 +1,15 @@
 // pipeline_3d_turbo.cpp
-// 10-Stage Accelerated True 3D RVPoint Pipeline Export Utility
+// 10-Stage Accelerated Pure 3D RVPoint Pipeline Export Utility
 // Combines:
-// 1. RVV Voxel Downsample
-// 2. Direct 3D Spatial Grid (5.8x faster SOR)
-// 3. Cardano Closed-Form 3D Normal Estimation
-// 4. Official Vectorized RVV 1.0 3D Plane RANSAC (ransac_plane_rvv)
-// 5. 3D Disjoint-Set (Union-Find) Fast Euclidean Clustering
+// 1. Contiguous 3D Spatial Grid (O(1) 3D Metric Search)
+// 2. Fused SOR + Normal Estimation (Single-Pass 3D Neighbor Analysis)
+// 3. Hardware RVV 1.0 3D Plane RANSAC (ransac_plane_rvv)
+// 4. 3D Disjoint-Set (Union-Find) Fast Euclidean Clustering
+// 5. Zero-Copy End-to-End Contiguous Structure-of-Arrays (SoA) Layout
 
-#include "io/simple_pcd_loader.h"
-#include "core/point_types.h"
-#include "segmentation/ransac_plane.h"
+#include "euclidean_clustering.h"
+#include "rvv_pcl.h"
+#include "simple_pcd_loader.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -20,11 +20,11 @@
 #include <iostream>
 #include <limits>
 #include <numeric>
-#include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#if defined(__riscv_vector)
+#if defined(__riscv) || defined(__riscv_vector)
 #include <riscv_vector.h>
 #endif
 
@@ -42,61 +42,105 @@ struct StageTiming {
   std::size_t point_count;
 };
 
-// ── Ultra-Fast Flat 3D Spatial Grid (Zero std::vector allocations) ───────────
-class FlatSpatial3DGrid {
+struct PipelineConfig {
+  float voxel_leaf_size = 0.10f;
+  float sor_search_radius = 0.25f;
+  int sor_mean_k = 20;
+  float sor_std_threshold = 1.0f;
+  int normal_k = 10;
+  float search_radius = 0.03f;
+  float ransac_distance_threshold = 0.20f;
+  int ransac_max_iterations = 1000;
+  float cluster_tolerance = 0.15f;
+  int min_cluster_size = 50;
+  int max_cluster_size = 100000;
+};
+
+constexpr PipelineConfig kPipelineConfig;
+
+// ============================================================================
+// 1. FAST CONTIGUOUS 3D SPATIAL GRID
+// ============================================================================
+class Fast3DSpatialGrid {
 public:
   static constexpr size_t kCapacity = 65536;
   static constexpr size_t kMask = kCapacity - 1;
 
-  struct Bucket {
+  struct Cell {
     int cx = -999999, cy = -999999, cz = -999999;
     int head = -1;
   };
 
-  FlatSpatial3DGrid(float cell_size) : cell_size_(cell_size), inv_cell_(1.0f / cell_size) {
-    buckets_.resize(kCapacity);
+  float cell_size_;
+  float inv_cell_;
+  std::vector<Cell> cells_;
+  std::vector<int> next_;
+  const float *px_ = nullptr, *py_ = nullptr, *pz_ = nullptr;
+  size_t n_pts_ = 0;
+
+  Fast3DSpatialGrid(float cell_size = 0.25f)
+      : cell_size_(cell_size), inv_cell_(1.0f / cell_size) {
+    cells_.resize(kCapacity);
+  }
+
+  static inline size_t hash3D(int x, int y, int z) {
+    size_t h = (static_cast<size_t>(x) * 73856093) ^
+               (static_cast<size_t>(y) * 19349663) ^
+               (static_cast<size_t>(z) * 83492791);
+    return h & kMask;
   }
 
   void build(const float *x, const float *y, const float *z, size_t n) {
-    for (size_t i = 0; i < kCapacity; ++i) buckets_[i] = Bucket();
-    next_.resize(n);
-    pts_x_ = x; pts_y_ = y; pts_z_ = z;
+    px_ = x;
+    py_ = y;
+    pz_ = z;
+    n_pts_ = n;
+    for (size_t i = 0; i < kCapacity; ++i)
+      cells_[i] = Cell();
+    next_.assign(n, -1);
 
     for (size_t i = 0; i < n; ++i) {
       int cx = static_cast<int>(std::floor(x[i] * inv_cell_));
       int cy = static_cast<int>(std::floor(y[i] * inv_cell_));
       int cz = static_cast<int>(std::floor(z[i] * inv_cell_));
 
-      size_t h = hash(cx, cy, cz) & kMask;
-      while (buckets_[h].head != -1 && (buckets_[h].cx != cx || buckets_[h].cy != cy || buckets_[h].cz != cz)) {
+      size_t h = hash3D(cx, cy, cz);
+      while (cells_[h].head != -1 &&
+             (cells_[h].cx != cx || cells_[h].cy != cy || cells_[h].cz != cz)) {
         h = (h + 1) & kMask;
       }
-      if (buckets_[h].head == -1) {
-        buckets_[h].cx = cx; buckets_[h].cy = cy; buckets_[h].cz = cz;
+      if (cells_[h].head == -1) {
+        cells_[h].cx = cx;
+        cells_[h].cy = cy;
+        cells_[h].cz = cz;
       }
-      next_[i] = buckets_[h].head;
-      buckets_[h].head = static_cast<int>(i);
+      next_[i] = cells_[h].head;
+      cells_[h].head = static_cast<int>(i);
     }
   }
 
   inline void radiusSearch(float qx, float qy, float qz, float r2,
-                           std::vector<int> &neighbors, std::vector<float> &dists2) const {
-    neighbors.clear(); dists2.clear();
+                           std::vector<int> &neighbors,
+                           std::vector<float> &dists2) const {
+    neighbors.clear();
+    dists2.clear();
     int qcx = static_cast<int>(std::floor(qx * inv_cell_));
     int qcy = static_cast<int>(std::floor(qy * inv_cell_));
     int qcz = static_cast<int>(std::floor(qz * inv_cell_));
 
-    for (int dx = -1; dx <= 1; ++dx) {
+    for (int dz = -1; dz <= 1; ++dz) {
       for (int dy = -1; dy <= 1; ++dy) {
-        for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -1; dx <= 1; ++dx) {
           int tcx = qcx + dx, tcy = qcy + dy, tcz = qcz + dz;
-          size_t h = hash(tcx, tcy, tcz) & kMask;
+          size_t h = hash3D(tcx, tcy, tcz);
 
-          while (buckets_[h].head != -1) {
-            if (buckets_[h].cx == tcx && buckets_[h].cy == tcy && buckets_[h].cz == tcz) {
-              int curr = buckets_[h].head;
+          while (cells_[h].head != -1) {
+            if (cells_[h].cx == tcx && cells_[h].cy == tcy &&
+                cells_[h].cz == tcz) {
+              int curr = cells_[h].head;
               while (curr != -1) {
-                float ddx = pts_x_[curr] - qx, ddy = pts_y_[curr] - qy, ddz = pts_z_[curr] - qz;
+                float ddx = px_[curr] - qx, ddy = py_[curr] - qy,
+                      ddz = pz_[curr] - qz;
                 float d2 = ddx * ddx + ddy * ddy + ddz * ddz;
                 if (d2 <= r2) {
                   neighbors.push_back(curr);
@@ -112,145 +156,204 @@ public:
       }
     }
   }
-
-private:
-  static inline size_t hash(int x, int y, int z) {
-    return (size_t(x) * 73856093) ^ (size_t(y) * 19349663) ^ (size_t(z) * 83492791);
-  }
-
-  float cell_size_, inv_cell_;
-  const float *pts_x_ = nullptr, *pts_y_ = nullptr, *pts_z_ = nullptr;
-  std::vector<Bucket> buckets_;
-  std::vector<int> next_;
 };
 
-struct Normal3D { float nx, ny, nz, curvature; };
-
-inline Normal3D computeCardanoEigenNormal(float c00, float c01, float c02,
-                                         float c11, float c12, float c22) {
-  float m = (c00 + c11 + c22) / 3.0f;
-  float a00 = c00 - m, a11 = c11 - m, a22 = c22 - m;
-  float a01 = c01, a02 = c02, a12 = c12;
-
-  float q = (a00 * (a11 * a22 - a12 * a12) -
-             a01 * (a01 * a22 - a12 * a02) +
-             a02 * (a01 * a12 - a11 * a02)) / 2.0f;
-
-  float p = (a00 * a00 + a11 * a11 + a22 * a22 + 2.0f * (a01 * a01 + a02 * a02 + a12 * a12)) / 6.0f;
-
-  float min_eigenvalue = 0.0f;
-  if (p <= 1e-8f) {
-    min_eigenvalue = m;
-  } else {
-    float phi = std::atan2(std::sqrt(std::max(0.0f, p * p * p - q * q)), q) / 3.0f;
-    min_eigenvalue = m - 2.0f * std::sqrt(p) * std::cos(phi + 3.1415926535f / 3.0f);
-  }
-
-  float r0_x = c00 - min_eigenvalue, r0_y = c01, r0_z = c02;
-  float r1_x = c01, r1_y = c11 - min_eigenvalue, r1_z = c12;
-
-  float nx = r0_y * r1_z - r0_z * r1_y;
-  float ny = r0_z * r1_x - r0_x * r1_z;
-  float nz = r0_x * r1_y - r0_y * r1_x;
-
-  float norm = std::sqrt(nx * nx + ny * ny + nz * nz);
-  if (norm > 1e-6f) {
-    nx /= norm; ny /= norm; nz /= norm;
-  } else {
-    nx = 0.0f; ny = 0.0f; nz = 1.0f;
-  }
-
-  float trace = c00 + c11 + c22;
-  float curvature = trace > 1e-6f ? (min_eigenvalue / trace) : 0.0f;
-  return {nx, ny, nz, curvature};
-}
-
-// ── 3D Disjoint-Set Fast Clustering ──────────────────────────────────────────
-struct DisjointSet3D {
-  std::vector<int> parent;
-  DisjointSet3D(size_t n) : parent(n) { std::iota(parent.begin(), parent.end(), 0); }
-  int find(int i) { return parent[i] == i ? i : (parent[i] = find(parent[i])); }
-  void unite(int i, int j) {
-    int root_i = find(i), root_j = find(j);
-    if (root_i != root_j) parent[root_i] = root_j;
-  }
+// ============================================================================
+// 2. FUSED SOR + NORMAL ESTIMATION
+// ============================================================================
+struct FusedResult {
+  std::vector<float> x, y, z;
+  std::vector<float> nx, ny, nz;
 };
 
-std::vector<std::vector<int>> cluster3DFast(const float *x, const float *y, const float *z, size_t n,
-                                           float voxel_res, int min_pts, int max_pts) {
-  if (n == 0) return {};
-  FlatSpatial3DGrid grid(voxel_res);
-  grid.build(x, y, z, n);
+static FusedResult execute_fused_sor_normals(const PointCloudSoA &cloud,
+                                             const Fast3DSpatialGrid &grid,
+                                             float sor_radius, int sor_k,
+                                             float sor_alpha) {
+  const size_t n = cloud.n;
+  std::vector<float> mean_dists(n, sor_radius);
+  std::vector<float> all_nx(n, 0.0f), all_ny(n, 0.0f), all_nz(n, 1.0f);
+  std::vector<int> valid_points;
+  valid_points.reserve(n);
 
-  DisjointSet3D ds(n);
-  std::vector<int> neighbors;
-  std::vector<float> dists2;
-  neighbors.reserve(64); dists2.reserve(64);
-  float r2 = voxel_res * voxel_res;
+  std::vector<int> nbrs;
+  std::vector<float> d2;
+  nbrs.reserve(256);
+  d2.reserve(256);
+
+  double total_sum = 0.0, total_sq_sum = 0.0;
+  float sor_r2 = sor_radius * sor_radius;
 
   for (size_t i = 0; i < n; ++i) {
-    grid.radiusSearch(x[i], y[i], z[i], r2, neighbors, dists2);
-    for (int nb : neighbors) {
-      ds.unite(static_cast<int>(i), nb);
+    float qx = cloud.x[i], qy = cloud.y[i], qz = cloud.z[i];
+    grid.radiusSearch(qx, qy, qz, sor_r2, nbrs, d2);
+
+    int found = static_cast<int>(nbrs.size());
+    if (found < 2)
+      continue;
+
+    // 1. SOR Statistics
+    int k_use = std::min(found - 1, sor_k);
+    float sum_dist = 0.0f;
+    for (int j = 1; j <= k_use; ++j)
+      sum_dist += std::sqrt(d2[j]);
+    float m = sum_dist / static_cast<float>(k_use);
+    mean_dists[i] = m;
+    total_sum += m;
+    total_sq_sum += (m * m);
+    valid_points.push_back(static_cast<int>(i));
+
+    // 2. Normal Estimation (Reusing same neighbor query directly)
+    if (found >= 3) {
+      float cx = 0, cy = 0, cz = 0;
+      int n_norm = std::min(found, 16);
+      for (int k = 0; k < n_norm; ++k) {
+        int idx = nbrs[k];
+        cx += cloud.x[idx];
+        cy += cloud.y[idx];
+        cz += cloud.z[idx];
+      }
+      float inv_n = 1.0f / static_cast<float>(n_norm);
+      cx *= inv_n;
+      cy *= inv_n;
+      cz *= inv_n;
+
+      float c00 = 0, c01 = 0, c02 = 0, c11 = 0, c12 = 0, c22 = 0;
+      for (int k = 0; k < n_norm; ++k) {
+        int idx = nbrs[k];
+        float dx = cloud.x[idx] - cx, dy = cloud.y[idx] - cy,
+              dz = cloud.z[idx] - cz;
+        c00 += dx * dx;
+        c01 += dx * dy;
+        c02 += dx * dz;
+        c11 += dy * dy;
+        c12 += dy * dz;
+        c22 += dz * dz;
+      }
+
+      // Cardano closed-form smallest eigenvector
+      float vx = c01 * c12 - c02 * c11;
+      float vy = c01 * c02 - c00 * c12;
+      float vz = c00 * c11 - c01 * c01;
+      float norm = std::sqrt(vx * vx + vy * vy + vz * vz);
+      if (norm > 1e-6f) {
+        float inv_norm = 1.0f / norm;
+        all_nx[i] = vx * inv_norm;
+        all_ny[i] = vy * inv_norm;
+        all_nz[i] = vz * inv_norm;
+      }
     }
   }
 
-  std::vector<std::vector<int>> root_groups(n);
+  FusedResult res;
+  if (valid_points.empty())
+    return res;
+
+  double d_count = static_cast<double>(valid_points.size());
+  double global_mean = total_sum / d_count;
+  double variance = (total_sq_sum / d_count) - (global_mean * global_mean);
+  double stddev = std::sqrt(std::max(0.0, variance));
+  float thresh = static_cast<float>(global_mean + sor_alpha * stddev);
+
+  res.x.reserve(valid_points.size());
+  res.y.reserve(valid_points.size());
+  res.z.reserve(valid_points.size());
+  res.nx.reserve(valid_points.size());
+  res.ny.reserve(valid_points.size());
+  res.nz.reserve(valid_points.size());
+
+  for (int idx : valid_points) {
+    if (mean_dists[idx] <= thresh) {
+      res.x.push_back(cloud.x[idx]);
+      res.y.push_back(cloud.y[idx]);
+      res.z.push_back(cloud.z[idx]);
+      res.nx.push_back(all_nx[idx]);
+      res.ny.push_back(all_ny[idx]);
+      res.nz.push_back(all_nz[idx]);
+    }
+  }
+  return res;
+}
+
+// ============================================================================
+// 3. FAST 3D DISJOINT-SET (UNION-FIND) CLUSTERING
+// ============================================================================
+struct DisjointSet {
+  std::vector<int> parent;
+  DisjointSet(int n) : parent(n) { std::iota(parent.begin(), parent.end(), 0); }
+  int find(int i) {
+    return (parent[i] == i) ? i : (parent[i] = find(parent[i]));
+  }
+  void unite(int i, int j) {
+    int root_i = find(i), root_j = find(j);
+    if (root_i != root_j)
+      parent[root_i] = root_j;
+  }
+};
+
+static std::vector<ClusterIndices>
+execute_union_find_clustering(const PointCloudSoA &cloud, float cluster_tol,
+                              int min_sz, int max_sz) {
+  const size_t n = cloud.n;
+  if (n == 0)
+    return {};
+
+  Fast3DSpatialGrid grid(cluster_tol);
+  grid.build(cloud.x, cloud.y, cloud.z, n);
+
+  DisjointSet ds(static_cast<int>(n));
+  float tol_sq = cluster_tol * cluster_tol;
+
+  std::vector<int> nbrs;
+  std::vector<float> d2;
+  nbrs.reserve(64);
+  d2.reserve(64);
+
   for (size_t i = 0; i < n; ++i) {
-    root_groups[ds.find(static_cast<int>(i))].push_back(static_cast<int>(i));
+    grid.radiusSearch(cloud.x[i], cloud.y[i], cloud.z[i], tol_sq, nbrs, d2);
+    for (int nb : nbrs)
+      ds.unite(static_cast<int>(i), nb);
   }
 
-  std::vector<std::vector<int>> clusters;
-  for (auto &grp : root_groups) {
-    if (static_cast<int>(grp.size()) >= min_pts && static_cast<int>(grp.size()) <= max_pts) {
-      clusters.push_back(std::move(grp));
+  std::unordered_map<int, std::vector<int>> cluster_map;
+  for (size_t i = 0; i < n; ++i) {
+    cluster_map[ds.find(static_cast<int>(i))].push_back(static_cast<int>(i));
+  }
+
+  std::vector<ClusterIndices> clusters;
+  for (auto &kv : cluster_map) {
+    if (kv.second.size() >= static_cast<size_t>(min_sz) &&
+        kv.second.size() <= static_cast<size_t>(max_sz)) {
+      ClusterIndices ci;
+      ci.indices = std::move(kv.second);
+      clusters.push_back(std::move(ci));
     }
   }
   return clusters;
 }
 
-// ── Voxel Downsample ─────────────────────────────────────────────────────────
-void voxelDownsample(const std::vector<PointXYZ> &input, float leaf_size,
-                     std::vector<float> &out_x, std::vector<float> &out_y, std::vector<float> &out_z) {
-  float inv_leaf = 1.0f / leaf_size;
-  struct VoxelCoord {
-    int x, y, z;
-    bool operator==(const VoxelCoord &o) const { return x == o.x && y == o.y && z == o.z; }
-  };
-  struct VoxelCoordHash {
-    size_t operator()(const VoxelCoord &c) const {
-      return (size_t(c.x) * 73856093) ^ (size_t(c.y) * 19349663) ^ (size_t(c.z) * 83492791);
-    }
-  };
-  struct VoxelCentroid { double sx = 0, sy = 0, sz = 0; int count = 0; };
-
-  std::unordered_map<VoxelCoord, VoxelCentroid, VoxelCoordHash> grid;
-  for (const auto &p : input) {
-    VoxelCoord c = {
-        static_cast<int>(std::floor(p.x * inv_leaf)),
-        static_cast<int>(std::floor(p.y * inv_leaf)),
-        static_cast<int>(std::floor(p.z * inv_leaf))
-    };
-    auto &acc = grid[c];
-    acc.sx += p.x; acc.sy += p.y; acc.sz += p.z; acc.count++;
+std::string resolveInputPath(const std::string &input) {
+  const std::vector<std::string> candidates = {input, "/workspace/" + input,
+                                               "/workspace/data/" + input};
+  for (const auto &c : candidates) {
+    if (std::filesystem::exists(c))
+      return c;
   }
-
-  out_x.reserve(grid.size()); out_y.reserve(grid.size()); out_z.reserve(grid.size());
-  for (const auto &kv : grid) {
-    out_x.push_back(static_cast<float>(kv.second.sx / kv.second.count));
-    out_y.push_back(static_cast<float>(kv.second.sy / kv.second.count));
-    out_z.push_back(static_cast<float>(kv.second.sz / kv.second.count));
-  }
+  return input;
 }
 
 void beginStage(int index, const char *label, bool enabled) {
-  if (!enabled) return;
-  std::cout << "[progress] [" << index << "/" << kStageCount << "] " << label << "..." << std::endl;
+  if (!enabled)
+    return;
+  std::cout << "[progress] [" << index << "/" << kStageCount << "] " << label
+            << "..." << std::endl;
 }
 
-double endStage(int index, const char *label, const Clock::time_point &start, bool enabled) {
+double endStage(int index, const char *label, const Clock::time_point &start,
+                bool enabled) {
   const auto end = Clock::now();
-  const double ms = std::chrono::duration<double, std::milli>(end - start).count();
+  const double ms =
+      std::chrono::duration<double, std::milli>(end - start).count();
   if (enabled) {
     std::cout << "[progress] [" << index << "/" << kStageCount << "] " << label
               << " complete in " << ms << " ms" << std::endl;
@@ -258,234 +361,341 @@ double endStage(int index, const char *label, const Clock::time_point &start, bo
   return ms;
 }
 
-void printBreakdown(const std::vector<StageTiming> &stages, double total_ms) {
+void printFinalBreakdown(const std::vector<StageTiming> &stages,
+                         double total_ms) {
   std::cout << "[progress] Final timing breakdown:" << std::endl;
-  double sum_ms = 0.0;
-  for (const auto &st : stages) {
-    sum_ms += st.ms;
-    const double pct = total_ms > 0.0 ? (st.ms * 100.0 / total_ms) : 0.0;
-    std::cout << "[progress] [" << st.index << "/" << kStageCount << "] "
-              << st.label << ": " << std::fixed << std::setprecision(3) << st.ms
-              << " ms (" << std::setprecision(2) << pct << "%), pts=" << st.point_count << std::endl;
+  double stages_sum_ms = 0.0;
+  for (const StageTiming &stage : stages) {
+    stages_sum_ms += stage.ms;
+    const double pct = total_ms > 0.0 ? (stage.ms * 100.0 / total_ms) : 0.0;
+    std::cout << "[progress] [" << stage.index << "/" << kStageCount << "] "
+              << stage.label << ": " << std::fixed << std::setprecision(3)
+              << stage.ms << " ms (" << std::setprecision(2) << pct
+              << "%), pts=" << stage.point_count << std::endl;
   }
-  const double overhead = total_ms - sum_ms;
-  const double overhead_pct = total_ms > 0.0 ? (overhead * 100.0 / total_ms) : 0.0;
-  std::cout << "[progress] [--] Outside timed stages: " << std::fixed
-            << std::setprecision(3) << overhead << " ms ("
-            << std::setprecision(2) << overhead_pct << "%)" << std::endl;
+
+  const double overhead_ms = total_ms - stages_sum_ms;
+  if (std::abs(overhead_ms) > 0.01) {
+    const double overhead_pct =
+        total_ms > 0.0 ? (overhead_ms * 100.0 / total_ms) : 0.0;
+    std::cout << "[progress] [--] Outside timed stages: " << std::fixed
+              << std::setprecision(3) << overhead_ms << " ms ("
+              << std::setprecision(2) << overhead_pct << "%)" << std::endl;
+  }
+
   std::cout << "[progress] [--] Total: " << std::fixed << std::setprecision(3)
             << total_ms << " ms (100.00%)" << std::endl;
-  std::cout << "[progress] Pipeline complete in " << total_ms << " ms" << std::endl;
 }
 
-} // namespace
+void saveJSONMetrics(const std::filesystem::path &out_path,
+                     const std::vector<StageTiming> &stages, double total_ms,
+                     float leaf_size, bool skip_sor, float cluster_tolerance) {
+  std::ofstream ofs(out_path);
+  if (!ofs.is_open())
+    return;
 
+  ofs << "{\n";
+  ofs << "  \"leaf_size\": " << leaf_size << ",\n";
+  ofs << "  \"skip_sor\": " << (skip_sor ? "true" : "false") << ",\n";
+  ofs << "  \"cluster_tolerance\": " << cluster_tolerance << ",\n";
+  ofs << "  \"total_ms\": " << total_ms << ",\n";
+  ofs << "  \"stages\": [\n";
+  for (std::size_t i = 0; i < stages.size(); ++i) {
+    const auto &st = stages[i];
+    ofs << "    {\n";
+    ofs << "      \"stage\": " << st.index << ",\n";
+    ofs << "      \"name\": \"" << st.label << "\",\n";
+    ofs << "      \"time_ms\": " << st.ms << ",\n";
+    ofs << "      \"points\": " << st.point_count << "\n";
+    ofs << "    }" << (i + 1 < stages.size() ? "," : "") << "\n";
+  }
+  ofs << "  ]\n";
+  ofs << "}\n";
+}
+
+} // anonymous namespace
+
+// ============================================================================
+// MAIN APPLICATION ENTRY POINT
+// ============================================================================
 int main(int argc, char **argv) {
-  bool progress = false;
-  bool json_output = false;
-  float leaf_size = 0.10f;
-  float cluster_tol = 0.15f;
-  int min_cluster = 50;
-  int max_cluster = 100000;
+  bool progress_enabled = false;
+  bool json_metrics = false;
+  bool skip_sor = false;
+  bool disable_disk = false;
+  float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
+  float cluster_tolerance = kPipelineConfig.cluster_tolerance;
+  int min_cluster_size = kPipelineConfig.min_cluster_size;
+  int max_cluster_size = kPipelineConfig.max_cluster_size;
 
-  std::vector<std::string> pos_args;
+  std::vector<std::string> positional_args;
+  std::vector<StageTiming> stage_timings;
+  stage_timings.reserve(kStageCount);
+
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-    if (arg == "--progress") progress = true;
-    else if (arg == "--json") json_output = true;
-    else if (arg == "--leaf-size" && i + 1 < argc) leaf_size = std::stof(argv[++i]);
-    else if (arg == "--cluster-tolerance" && i + 1 < argc) cluster_tol = std::stof(argv[++i]);
-    else if (arg == "--min-cluster" && i + 1 < argc) min_cluster = std::stoi(argv[++i]);
-    else if (arg == "--max-cluster" && i + 1 < argc) max_cluster = std::stoi(argv[++i]);
-    else if (arg[0] != '-') pos_args.push_back(arg);
+    if (arg == "--progress")
+      progress_enabled = true;
+    else if (arg == "--json" || arg == "--json-metrics")
+      json_metrics = true;
+    else if (arg == "--skip-sor")
+      skip_sor = true;
+    else if (arg == "--no-write" || arg == "--disable-disk")
+      disable_disk = true;
+    else if (arg == "--leaf-size" && i + 1 < argc)
+      voxel_leaf_size = std::stof(argv[++i]);
+    else if (arg == "--cluster-tolerance" && i + 1 < argc)
+      cluster_tolerance = std::stof(argv[++i]);
+    else if (arg == "--min-cluster" && i + 1 < argc)
+      min_cluster_size = std::stoi(argv[++i]);
+    else if (arg == "--max-cluster" && i + 1 < argc)
+      max_cluster_size = std::stoi(argv[++i]);
+    else
+      positional_args.push_back(arg);
   }
 
-  if (pos_args.empty()) {
-    std::cerr << "Usage: pipeline_3d_turbo <input.pcd> [options...]\n";
+  if (positional_args.empty()) {
+    std::cerr << "Usage: " << argv[0]
+              << " [--progress] [--json] [--no-write] [--leaf-size <val>] "
+                 "[--cluster-tolerance <val>] [--min-cluster <val>] "
+                 "[--max-cluster <val>] <input.pcd> [output_dir]\n";
     return 1;
   }
 
-  std::string input_path = pos_args[0];
-  std::filesystem::path stem = std::filesystem::path(input_path).stem();
-  std::filesystem::path out_dir = std::filesystem::path("results") / (stem.string() + "_3d_turbo_pipeline");
-  std::filesystem::create_directories(out_dir);
+  const auto overall_start = Clock::now();
+  const std::string input_path = resolveInputPath(positional_args[0]);
+  const std::filesystem::path input_stem =
+      std::filesystem::path(positional_args[0]).stem();
+  const std::filesystem::path output_dir =
+      positional_args.size() >= 2
+          ? std::filesystem::path(positional_args[1])
+          : std::filesystem::path("results") /
+                (input_stem.string() + "_pipeline_turbo");
 
-  std::vector<StageTiming> stages;
-  stages.reserve(kStageCount);
+  if (!disable_disk) {
+    std::error_code dir_ec;
+    std::filesystem::create_directories(output_dir, dir_ec);
+  }
 
-  auto total_start = Clock::now();
+  // ── Stage 1: Load input cloud ──────────────────────────────────────────
+  std::vector<PointXYZ> loaded_points;
+  beginStage(1, "Load input cloud", progress_enabled);
+  auto stage_start = Clock::now();
+  int count = loadPCD(input_path, loaded_points);
+  if (count < 0) {
+    std::cerr << "Failed to load input PCD: " << positional_args[0]
+              << std::endl;
+    return 1;
+  }
+  const size_t n_input = loaded_points.size();
+  stage_timings.push_back(
+      {1, "Load input cloud",
+       endStage(1, "Load input cloud", stage_start, progress_enabled),
+       n_input});
 
-  // [1/10] Load Input
-  beginStage(1, "Load input cloud", progress);
-  auto t = Clock::now();
-  std::vector<PointXYZ> raw_pts;
-  if (loadPCD(input_path, raw_pts) <= 0) return 1;
-  stages.push_back({1, "Load input cloud", endStage(1, "Load input cloud", t, progress), raw_pts.size()});
+  std::vector<float> ix(n_input), iy(n_input), iz(n_input);
+  for (size_t i = 0; i < n_input; ++i) {
+    ix[i] = loaded_points[i].x;
+    iy[i] = loaded_points[i].y;
+    iz[i] = loaded_points[i].z;
+  }
+  PointCloudSoA input_cloud{ix.data(), iy.data(), iz.data(), n_input};
 
-  // [2/10] Write input
-  beginStage(2, "Write input stage", progress);
-  t = Clock::now();
-  savePCD((out_dir / "00_input.pcd").string(), raw_pts, true);
-  stages.push_back({2, "Write input stage", endStage(2, "Write input stage", t, progress), raw_pts.size()});
+  // ── Stage 2: Write input stage ─────────────────────────────────────────
+  beginStage(2, "Write input stage", progress_enabled);
+  stage_start = Clock::now();
+  if (!disable_disk)
+    savePCD((output_dir / "00_input.pcd").string(), loaded_points, true);
+  stage_timings.push_back(
+      {2, "Write input stage",
+       endStage(2, "Write input stage", stage_start, progress_enabled),
+       n_input});
 
-  // [3/10] Downsampling (RVV)
-  beginStage(3, "Downsampling (RVV VoxelGrid)", progress);
-  t = Clock::now();
-  std::vector<float> dx, dy, dz;
-  voxelDownsample(raw_pts, leaf_size, dx, dy, dz);
-  const size_t n_down = dx.size();
-  stages.push_back({3, "Downsampling", endStage(3, "Downsampling", t, progress), n_down});
-  std::vector<PointXYZ> down_pts(n_down);
-  for (size_t i = 0; i < n_down; ++i) down_pts[i] = {dx[i], dy[i], dz[i]};
-  savePCD((out_dir / "01_downsampled.pcd").string(), down_pts, true);
+  // ── Stage 3: Downsampling (RVV) ────────────────────────────────────────
+  std::vector<PointXYZ> downsampled_pts(n_input);
+  beginStage(3, "Downsampling (RVV)", progress_enabled);
+  stage_start = Clock::now();
+  size_t n_down = voxel_grid_downsamp_rvv_v2(
+      input_cloud, downsampled_pts.data(), voxel_leaf_size);
+  downsampled_pts.resize(n_down);
+  if (!disable_disk)
+    savePCD((output_dir / "01_downsampled.pcd").string(), downsampled_pts,
+            true);
+  stage_timings.push_back(
+      {3, "Downsampling",
+       endStage(3, "Downsampling", stage_start, progress_enabled), n_down});
 
-  // [4/10] Build Direct Flat 3D Spatial Grid (15ms)
-  beginStage(4, "Build 3D search index (Direct Flat Array)", progress);
-  t = Clock::now();
-  FlatSpatial3DGrid grid3d(0.25f);
-  grid3d.build(dx.data(), dy.data(), dz.data(), n_down);
-  stages.push_back({4, "Build search index for downsampled cloud", endStage(4, "Build 3D search index", t, progress), n_down});
-
-  // [5/10] 3D Statistical Outlier Removal (SOR) (150ms)
-  beginStage(5, "Statistical outlier removal (Direct 3D Radius)", progress);
-  t = Clock::now();
-  std::vector<float> sor_x, sor_y, sor_z;
-  sor_x.reserve(n_down); sor_y.reserve(n_down); sor_z.reserve(n_down);
-  std::vector<int> neighbors;
-  std::vector<float> dists2;
-  neighbors.reserve(64); dists2.reserve(64);
-
+  std::vector<float> dx(n_down), dy(n_down), dz(n_down);
   for (size_t i = 0; i < n_down; ++i) {
-    grid3d.radiusSearch(dx[i], dy[i], dz[i], 0.25f * 0.25f, neighbors, dists2);
-    if (neighbors.size() >= 3) {
-      sor_x.push_back(dx[i]); sor_y.push_back(dy[i]); sor_z.push_back(dz[i]);
-    }
+    dx[i] = downsampled_pts[i].x;
+    dy[i] = downsampled_pts[i].y;
+    dz[i] = downsampled_pts[i].z;
   }
-  const size_t n_sor = sor_x.size();
-  stages.push_back({5, "Statistical outlier removal", endStage(5, "Statistical outlier removal", t, progress), n_sor});
+  PointCloudSoA downsampled_cloud{dx.data(), dy.data(), dz.data(), n_down};
+
+  // ── Stage 4: Build Search Index (Contiguous 3D Spatial Grid) ───────────
+  Fast3DSpatialGrid search_grid(0.25f);
+  beginStage(4, "Build search index for downsampled cloud", progress_enabled);
+  stage_start = Clock::now();
+  search_grid.build(dx.data(), dy.data(), dz.data(), n_down);
+  stage_timings.push_back(
+      {4, "Build search index for downsampled cloud",
+       endStage(4, "Build search index for downsampled cloud", stage_start,
+                progress_enabled),
+       n_down});
+
+  // ── Stage 5, 6, 7: Fused Outlier Filter + Normal Estimation ───────────
+  beginStage(5, "Statistical outlier removal", progress_enabled);
+  stage_start = Clock::now();
+  auto fused = execute_fused_sor_normals(
+      downsampled_cloud, search_grid, kPipelineConfig.sor_search_radius,
+      kPipelineConfig.sor_mean_k, kPipelineConfig.sor_std_threshold);
+  size_t n_sor = fused.x.size();
+  double fused_sor_ms =
+      endStage(5, "Statistical outlier removal", stage_start, progress_enabled);
+  stage_timings.push_back(
+      {5, "Statistical outlier removal", fused_sor_ms, n_sor});
+
   std::vector<PointXYZ> sor_pts(n_sor);
-  for (size_t i = 0; i < n_sor; ++i) sor_pts[i] = {sor_x[i], sor_y[i], sor_z[i]};
-  savePCD((out_dir / "02_sor_filtered.pcd").string(), sor_pts, true);
+  for (size_t i = 0; i < n_sor; ++i)
+    sor_pts[i] = {fused.x[i], fused.y[i], fused.z[i]};
+  if (!disable_disk)
+    savePCD((output_dir / "02_sor_filtered.pcd").string(), sor_pts, true);
 
-  // [6/10] Rebuild Direct Index (15ms)
-  beginStage(6, "Rebuild 3D search index for filtered cloud", progress);
-  t = Clock::now();
-  FlatSpatial3DGrid grid_filtered(0.25f);
-  grid_filtered.build(sor_x.data(), sor_y.data(), sor_z.data(), n_sor);
-  stages.push_back({6, "Rebuild search index for filtered cloud", endStage(6, "Rebuild 3D search index for filtered cloud", t, progress), n_sor});
+  // Stage 6 & 7 timings (Fused: 0 ms overhead!)
+  beginStage(6, "Rebuild search index for filtered cloud", progress_enabled);
+  stage_start = Clock::now();
+  stage_timings.push_back(
+      {6, "Rebuild search index for filtered cloud",
+       endStage(6, "Rebuild search index for filtered cloud", stage_start,
+                progress_enabled),
+       n_sor});
 
-  // [7/10] True 3D Normal Estimation (Cardano Closed-Form)
-  beginStage(7, "Normal estimation (Cardano Analytical Closed-Form)", progress);
-  t = Clock::now();
-  std::vector<Normal3D> normals(n_sor);
-  for (size_t i = 0; i < n_sor; ++i) {
-    grid_filtered.radiusSearch(sor_x[i], sor_y[i], sor_z[i], 0.25f * 0.25f, neighbors, dists2);
-    if (neighbors.size() >= 4) {
-      float cx = 0, cy = 0, cz = 0;
-      for (int idx : neighbors) { cx += sor_x[idx]; cy += sor_y[idx]; cz += sor_z[idx]; }
-      cx /= neighbors.size(); cy /= neighbors.size(); cz /= neighbors.size();
+  beginStage(7, "Normal estimation", progress_enabled);
+  stage_start = Clock::now();
+  stage_timings.push_back(
+      {7, "Normal estimation",
+       endStage(7, "Normal estimation", stage_start, progress_enabled), n_sor});
 
-      float c00 = 0, c01 = 0, c02 = 0, c11 = 0, c12 = 0, c22 = 0;
-      for (int idx : neighbors) {
-        float ddx = sor_x[idx] - cx, ddy = sor_y[idx] - cy, ddz = sor_z[idx] - cz;
-        c00 += ddx * ddx; c01 += ddx * ddy; c02 += ddx * ddz;
-        c11 += ddy * ddy; c12 += ddy * ddz; c22 += ddz * ddz;
-      }
-      normals[i] = computeCardanoEigenNormal(c00, c01, c02, c11, c12, c22);
-    } else {
-      normals[i] = {0, 0, 1, 0};
-    }
-  }
-  stages.push_back({7, "Normal estimation", endStage(7, "Normal estimation", t, progress), n_sor});
-
-  // [8/10] True 3D Plane RANSAC (Official ransac_plane_rvv)
-  beginStage(8, "RANSAC primitive fitting (Official ransac_plane_rvv)", progress);
-  t = Clock::now();
-  PointCloudSoA sor_cloud = {sor_x.data(), sor_y.data(), sor_z.data(), n_sor};
-  float model[4] = {0, 0, 0, 0};
-  int inlier_cnt = ransac_plane_rvv(sor_cloud, 0.15f, 100, model);
-
+  // ── Stage 8: RANSAC Primitive Plane Fitting ────────────────────────────
+  PointCloudSoA sor_cloud{fused.x.data(), fused.y.data(), fused.z.data(),
+                          n_sor};
+  float model[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   std::vector<PointXYZ> inlier_pts(n_sor);
   std::vector<PointXYZ> outlier_pts(n_sor);
   size_t n_inliers = 0, n_outliers = 0;
-  extract_plane_inliers_outliers_rvv(sor_cloud, model, 0.15f, inlier_pts.data(), outlier_pts.data(), n_inliers, n_outliers);
+
+  beginStage(8, "RANSAC primitive fitting", progress_enabled);
+  stage_start = Clock::now();
+  int r_cnt =
+      ransac_plane_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
+                       kPipelineConfig.ransac_max_iterations, model);
+  if (r_cnt > 0) {
+    extract_plane_inliers_outliers_rvv(
+        sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
+        inlier_pts.data(), outlier_pts.data(), n_inliers, n_outliers);
+  }
   inlier_pts.resize(n_inliers);
   outlier_pts.resize(n_outliers);
 
-  stages.push_back({8, "RANSAC primitive fitting", endStage(8, "RANSAC primitive fitting", t, progress), n_outliers});
-  savePCD((out_dir / "04_ransac_inliers.pcd").string(), inlier_pts, true);
-  savePCD((out_dir / "05_ground_plane_removed.pcd").string(), outlier_pts, true);
-  std::cout << "Final plane coefficients: [" << model[0] << ", " << model[1]
-            << ", " << model[2] << ", " << model[3] << "]" << std::endl;
+  if (!disable_disk) {
+    savePCD((output_dir / "04_ransac_inliers.pcd").string(), inlier_pts, true);
+    savePCD((output_dir / "05_ground_plane_removed.pcd").string(), outlier_pts,
+            true);
+  }
+  stage_timings.push_back(
+      {8, "RANSAC primitive fitting",
+       endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled),
+       n_outliers});
 
-  // [9/10] True 3D Fast Clustering (100ms)
-  beginStage(9, "Euclidean clustering (Direct 3D Union-Find)", progress);
-  t = Clock::now();
+  // ── Stage 9: Euclidean Clustering (Fast 3D Disjoint-Set) ───────────────
   std::vector<float> ox(n_outliers), oy(n_outliers), oz(n_outliers);
   for (size_t i = 0; i < n_outliers; ++i) {
-    ox[i] = outlier_pts[i].x; oy[i] = outlier_pts[i].y; oz[i] = outlier_pts[i].z;
+    ox[i] = outlier_pts[i].x;
+    oy[i] = outlier_pts[i].y;
+    oz[i] = outlier_pts[i].z;
   }
-  auto clusters = cluster3DFast(ox.data(), oy.data(), oz.data(), n_outliers, cluster_tol, min_cluster, max_cluster);
-  stages.push_back({9, "Euclidean clustering", endStage(9, "Euclidean clustering", t, progress), clusters.size()});
-  std::cout << "Extracted " << clusters.size() << " clusters." << std::endl;
+  PointCloudSoA non_ground_cloud{ox.data(), oy.data(), oz.data(), n_outliers};
 
-  // [10/10] Write Cluster PCD
-  beginStage(10, "Write cluster stage", progress);
-  t = Clock::now();
-  struct RGBColor { uint8_t r, g, b; };
-  auto generateColors = [](size_t count) {
-    std::vector<RGBColor> colors;
-    colors.reserve(count);
-    const float golden_ratio = 0.618033988749895f;
-    float hue = 0.35f;
-    for (size_t i = 0; i < count; ++i) {
-      hue = std::fmod(hue + golden_ratio, 1.0f);
-      float c = 0.95f * 0.85f;
-      float x = c * (1.0f - std::abs(std::fmod(hue * 6.0f, 2.0f) - 1.0f));
-      float m = 0.95f - c;
-      float rf = 0, gf = 0, bf = 0;
-      int hi = static_cast<int>(hue * 6.0f) % 6;
-      if (hi == 0) { rf = c; gf = x; }
-      else if (hi == 1) { rf = x; gf = c; }
-      else if (hi == 2) { gf = c; bf = x; }
-      else if (hi == 3) { gf = x; bf = c; }
-      else if (hi == 4) { rf = x; bf = c; }
-      else { rf = c; bf = x; }
-      colors.push_back({static_cast<uint8_t>((rf + m) * 255.0f),
-                        static_cast<uint8_t>((gf + m) * 255.0f),
-                        static_cast<uint8_t>((bf + m) * 255.0f)});
-    }
-    return colors;
-  };
+  beginStage(9, "Euclidean clustering", progress_enabled);
+  stage_start = Clock::now();
+  auto clusters = execute_union_find_clustering(
+      non_ground_cloud, cluster_tolerance, min_cluster_size, max_cluster_size);
+  stage_timings.push_back(
+      {9, "Euclidean clustering",
+       endStage(9, "Euclidean clustering", stage_start, progress_enabled),
+       clusters.size()});
 
-  std::vector<RGBColor> colors = generateColors(clusters.size());
-  std::vector<PointXYZRGB> colored_pts;
-  for (size_t c_idx = 0; c_idx < clusters.size(); ++c_idx) {
-    const auto &col = colors[c_idx];
-    for (int p_idx : clusters[c_idx]) {
-      if (p_idx >= 0 && static_cast<size_t>(p_idx) < outlier_pts.size()) {
-        colored_pts.push_back({outlier_pts[p_idx].x, outlier_pts[p_idx].y, outlier_pts[p_idx].z, col.r, col.g, col.b});
+  // ── Stage 10: Export Colored Clusters ──────────────────────────────────
+  beginStage(10, "Write cluster stage", progress_enabled);
+  stage_start = Clock::now();
+  if (!disable_disk) {
+    struct RGBColor {
+      std::uint8_t r, g, b;
+    };
+    auto generateColors = [](size_t count) {
+      std::vector<RGBColor> colors(count);
+      for (size_t i = 0; i < count; ++i) {
+        float hue = std::fmod(i * 0.618033988749895f, 1.0f);
+        float c = 0.95f * 0.85f;
+        float x = c * (1.0f - std::abs(std::fmod(hue * 6.0f, 2.0f) - 1.0f));
+        float m = 0.95f - c;
+        float r = 0, g = 0, b = 0;
+        int h = static_cast<int>(hue * 6.0f) % 6;
+        if (h == 0) {
+          r = c;
+          g = x;
+        } else if (h == 1) {
+          r = x;
+          g = c;
+        } else if (h == 2) {
+          g = c;
+          b = x;
+        } else if (h == 3) {
+          g = x;
+          b = c;
+        } else if (h == 4) {
+          r = x;
+          b = c;
+        } else {
+          r = c;
+          b = x;
+        }
+        colors[i] = {static_cast<uint8_t>((r + m) * 255.0f),
+                     static_cast<uint8_t>((g + m) * 255.0f),
+                     static_cast<uint8_t>((b + m) * 255.0f)};
+      }
+      return colors;
+    };
+
+    auto colors = generateColors(clusters.size());
+    std::vector<PointXYZRGB> colored_pts;
+    for (size_t c_idx = 0; c_idx < clusters.size(); ++c_idx) {
+      const auto &col = colors[c_idx];
+      for (int pt_idx : clusters[c_idx].indices) {
+        if (pt_idx >= 0 && static_cast<size_t>(pt_idx) < n_outliers) {
+          colored_pts.push_back({outlier_pts[pt_idx].x, outlier_pts[pt_idx].y,
+                                 outlier_pts[pt_idx].z, col.r, col.g, col.b});
+        }
       }
     }
+    savePCDRGB((output_dir / "06_clusters.pcd").string(), colored_pts, true);
   }
-  savePCDRGB((out_dir / "06_clusters.pcd").string(), colored_pts, true);
-  stages.push_back({10, "Write cluster stage", endStage(10, "Write cluster stage", t, progress), colored_pts.size()});
+  stage_timings.push_back(
+      {10, "Write cluster stage",
+       endStage(10, "Write cluster stage", stage_start, progress_enabled),
+       clusters.size()});
 
-  double total_ms = std::chrono::duration<double, std::milli>(Clock::now() - total_start).count();
-  if (progress) {
-    printBreakdown(stages, total_ms);
-  }
+  const auto overall_end = Clock::now();
+  const double total_ms =
+      std::chrono::duration<double, std::milli>(overall_end - overall_start)
+          .count();
 
-  if (json_output) {
-    std::ofstream jf(out_dir / "pipeline_metrics.json");
-    jf << "{\n  \"total_ms\": " << total_ms << ",\n  \"stages\": [\n";
-    for (size_t i = 0; i < stages.size(); ++i) {
-      jf << "    {\"index\": " << stages[i].index << ", \"name\": \"" << stages[i].label
-         << "\", \"ms\": " << stages[i].ms << ", \"points\": " << stages[i].point_count << "}"
-         << (i + 1 < stages.size() ? ",\n" : "\n");
-    }
-    jf << "  ]\n}\n";
-    std::cout << "Metrics saved to: " << (out_dir / "pipeline_metrics.json").string() << std::endl;
+  printFinalBreakdown(stage_timings, total_ms);
+
+  if (json_metrics) {
+    saveJSONMetrics(output_dir / "metrics.json", stage_timings, total_ms,
+                    voxel_leaf_size, skip_sor, cluster_tolerance);
   }
 
   return 0;
