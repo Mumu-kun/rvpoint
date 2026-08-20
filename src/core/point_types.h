@@ -29,3 +29,5 @@ struct PointCloudSoA {
 };
 
 } // namespace rvpoint
+
+namespace rvv_pcl = rvpoint;

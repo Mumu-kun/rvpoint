@@ -26,11 +26,9 @@ Options:
 
 Examples:
   ./run.sh test_voxel_grid
-  ./run.sh voxel_grid
-  ./run.sh pipeline_export --progress --skip-sor ./data/indoor_scene.pcd ./output/results/indoor/
-  ./run.sh --backend scalar src/tools/pipeline_export.cpp --progress ./data/indoor_scene.pcd
-  ./run.sh benchmark
-  ./run.sh pointer_octree data/0000000010.pcd
+  ./run.sh pipeline_3d_ultimate data/pcd_compressed/0000000090.pcd --progress --no-write
+  ./run.sh ablation_bench
+  ./run.sh --backend scalar pipeline_export
 EOF
     exit 0
 }
@@ -81,10 +79,18 @@ TARGET_NAME="${TARGET_NAME%.cpp}"
 TARGET_NAME="${TARGET_NAME%.c}"
 TARGET_NAME="${TARGET_NAME%.cc}"
 
-if [[ "$TARGET_NAME" == "pointer_octree" || "$TARGET_NAME" == "pointer_octree_bench" || "$TARGET_NAME" == "pointer_octree_real" ]]; then
-    TARGET_NAME="benchmark_pointer_octree_real"
-elif [[ "$TARGET_NAME" != test_* && "$TARGET_NAME" != rvv_test && "$TARGET_NAME" != benchmark && "$TARGET_NAME" != benchmark_* && "$TARGET_NAME" != pipeline_export && "$TARGET_NAME" != pipeline_fast_export && "$TARGET_NAME" != pipeline_rvv_ultra_fast && "$TARGET_NAME" != pipeline_rvv_turbo && "$TARGET_NAME" != pipeline_3d_turbo && "$TARGET_NAME" != pipeline_3d_ultra && "$TARGET_NAME" != pipeline_3d_ultimate && "$TARGET_NAME" != scalar_25d_baseline && "$TARGET_NAME" != ablation_bench && "$TARGET_NAME" != neighbor_search_sor_bench && "$TARGET_NAME" != pipeline_compare_bench && "$TARGET_NAME" != pcl_standalone_pipeline ]]; then
-    TARGET_NAME="test_$TARGET_NAME"
+if [[ -f "${PROJECT_ROOT}/eval/pipelines/${TARGET_NAME}.cpp" ]]; then
+    :
+elif [[ -f "${PROJECT_ROOT}/eval/benchmarks/${TARGET_NAME}.cpp" ]]; then
+    :
+elif [[ -f "${PROJECT_ROOT}/eval/tests/fast/${TARGET_NAME}.cpp" || -f "${PROJECT_ROOT}/eval/tests/fast/${TARGET_NAME}.c" ]]; then
+    :
+elif [[ -f "${PROJECT_ROOT}/eval/tests/experimental/${TARGET_NAME}.cpp" ]]; then
+    :
+elif [[ -f "${PROJECT_ROOT}/eval/tests/fast/test_${TARGET_NAME}.cpp" ]]; then
+    TARGET_NAME="test_${TARGET_NAME}"
+elif [[ -f "${PROJECT_ROOT}/eval/tests/experimental/test_${TARGET_NAME}.cpp" ]]; then
+    TARGET_NAME="test_${TARGET_NAME}"
 fi
 
 # --- Build target and dependencies ---

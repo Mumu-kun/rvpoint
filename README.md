@@ -126,31 +126,28 @@ After building, you can run specific tests using QEMU:
 ## 📂 Project Structure
 
 ```
-.
-├── src/
-│   ├── include/rvv_pcl.h       # Public API Header
-│   ├── rvv_common.cpp          # Reusable RVV Kernels (Distance, etc.)
-│   ├── voxel_grid_downsamp.cpp # Voxel Grid Implementation
-│   ├── statistical_outlier...  # SOR Implementation
-│   ├── normal_estimation.cpp   # Normal Estimation Implementation
-│   ├── radius_search.cpp       # Radius Search Implementation
-│   ├── octree.cpp              # Octree spatial index
-│   ├── spatial_hashing.cpp     # RVV Optimized Hash Grid
-│   └── ransac_plane.cpp        # RANSAC Implementation
-├── tests/                      # Unit Tests (C++)
-├── scripts/
-│   ├── bench                   # gem5 benchmark wrapper
-│   ├── build.sh                # Build wrapper
-│   ├── export_pipeline.sh      # Pipeline execution exporter
-│   ├── pipeline_render.py      # Open3D PCD renderer & viewer
-│   ├── run.sh                  # Test runner
-│   ├── setup_git_hooks.sh      # Git hook installer
-│   ├── verify_container.sh     # Master CI/CD script
-│   └── lib/
-│       └── common.sh           # Shared functions
-├── .devcontainer/              # Docker Environment Config
-└── .github/workflows/          # GitHub Actions CI
+rvpoint/
+├── src/                        # [1] 100% Pure Library Code (librvpoint.a)
+│   ├── core/                   # Point types, SoA structures, RVV primitives, profiler
+│   ├── features/               # Surface normal estimation (Cardano closed-form)
+│   ├── filters/                # Voxel downsampling (v2) & Statistical Outlier Removal
+│   ├── search/                 # Octree, SpatialHash, PointerOctree, Caravan search
+│   ├── segmentation/           # RANSAC plane fitting & Euclidean clustering
+│   ├── io/                     # Zero-dependency simple PCD file reader & writer
+│   └── include/                # Public umbrella header (rvpoint.h)
+├── eval/                       # [2] Executables, Pipelines, Benchmarks & Tests
+│   ├── pipelines/              # Standalone perception pipelines (pipeline_3d_ultimate, etc.)
+│   ├── benchmarks/             # Standalone benchmark utilities (ablation_bench, etc.)
+│   ├── tests/                  # Two-tier test suite (fast/ and experimental/)
+│   └── notebooks/              # Research & Kaggle/gem5 notebooks
+├── env/                        # [3] Environment & Toolchains (env/cmake/, env/linux/)
+├── scripts/                    # [4] Automation & Runners (build.sh, run.sh, test.sh, export_mcap.py)
+├── docs/                       # [5] Documentation & Specs (ARCHITECTURE.md, WORKSPACE.md)
+├── data/                       # [6] Input Point Cloud Datasets
+└── output/                     # [7] Unified Output Destination (git-ignored)
 ```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full architectural specifications and [docs/WORKSPACE.md](docs/WORKSPACE.md) for the developer reference.
 
 ## 🤖 CI/CD Pipeline
 

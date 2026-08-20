@@ -23,7 +23,7 @@ This document maintains a detailed, conceptually structured record of all archit
 
 #### Uniform API Signature Standardization
 * **Structure of Arrays (SoA) vs. Array of Structures (AoS)**: Explicitly partitioned C-style interface functions into scalar baseline calls (`*_sc`) operating on AoS (`PointXYZ*`) and vector calls (`*_rvv`, `*_rvv_v2`) operating on SoA (`PointCloudSoA`).
-* **Coverage**: Standardized across [rvv_pcl.h](file:///e:/FahadProject/rvpoint/src/include/rvv_pcl.h), `normal_estimation.cpp`, `octree.cpp`, `ransac_plane.cpp`, `spatial_hashing.cpp`, `statistical_outlier_removal.cpp`, and `voxel_grid_downsamp.cpp`.
+* **Coverage**: Standardized across [rvv_pcl.h](src/include/rvv_pcl.h), `normal_estimation.cpp`, `octree.cpp`, `ransac_plane.cpp`, `spatial_hashing.cpp`, `statistical_outlier_removal.cpp`, and `voxel_grid_downsamp.cpp`.
 
 ---
 
@@ -34,9 +34,9 @@ This document maintains a detailed, conceptually structured record of all archit
 * **Environment Setup (`docs/setup.md`)**: Created comprehensive setup documentation covering Docker environment setup, gem5 Docker-in-Docker integration, and `manuel313/gem5_v25` container paths.
 
 #### Automated Experiment & Benchmark Harnesses
-* **Batch Workload Processing**: Added [scripts/run_batch_pcd_compressed.sh](file:///e:/FahadProject/rvpoint/scripts/run_batch_pcd_compressed.sh) to execute pipeline workloads across compressed point cloud archives.
-* **Pointer Octree Evaluation**: Added [scripts/run_pointer_octree_bench.sh](file:///e:/FahadProject/rvpoint/scripts/run_pointer_octree_bench.sh) and [tests/benchmark_pointer_octree_real.cpp](file:///e:/FahadProject/rvpoint/tests/benchmark_pointer_octree_real.cpp).
-* **Gem5 Microarchitecture Comparison**: Added [scripts/run_gem5_compare.sh](file:///e:/FahadProject/rvpoint/scripts/run_gem5_compare.sh) to capture detailed cycle, instruction count, and vector register usage metrics.
+* **Batch Workload Processing**: Added [scripts/run_batch_pcd_compressed.sh](scripts/run_batch_pcd_compressed.sh) to execute pipeline workloads across compressed point cloud archives.
+* **Pointer Octree Evaluation**: Added [scripts/run_pointer_octree_bench.sh](scripts/run_pointer_octree_bench.sh) and [tests/benchmark_pointer_octree_real.cpp](tests/benchmark_pointer_octree_real.cpp).
+* **Gem5 Microarchitecture Comparison**: Added [scripts/run_gem5_compare.sh](scripts/run_gem5_compare.sh) to capture detailed cycle, instruction count, and vector register usage metrics.
 
 ---
 

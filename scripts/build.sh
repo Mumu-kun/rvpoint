@@ -76,10 +76,10 @@ build_backend() {
     local toolchain_file=""
     case "$TOOLCHAIN" in
         linux)
-            toolchain_file="${PROJECT_ROOT}/src/cmake/riscv_linux.cmake"
+            toolchain_file="${PROJECT_ROOT}/env/cmake/riscv_linux.cmake"
             ;;
         elf)
-            toolchain_file="${PROJECT_ROOT}/src/cmake/riscv.cmake"
+            toolchain_file="${PROJECT_ROOT}/env/cmake/riscv.cmake"
             ;;
         *)
             echo "Error: unknown toolchain '$TOOLCHAIN'. Use 'linux' or 'elf'."
