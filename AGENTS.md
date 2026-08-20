@@ -26,6 +26,7 @@ RVPoint targets RISC-V 64-bit vector architectures (`rv64gcv`) and requires GCC 
    wsl -d rvpoint bash -c "source env/activate.sh && ./scripts/run.sh <target_name>"
    ```
    *(Or interactively using `./env/wsl.sh`)*.
+   run common windows tools/commands using git bash not wsl
 
 3. **General Agent Invariants**:
    - **Environment Agnostic**: Never hardcode host machine paths, user directories, or drive letters. Use repository-relative paths.

@@ -2,6 +2,6 @@
 #define RVV_PCL_H
 
 // Forwarding header for backward compatibility
-#include "include/rvpoint.h"
+#include "include/rvpoint.h" // IWYU pragma: export
 
 #endif // RVV_PCL_H

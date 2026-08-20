@@ -1,10 +1,8 @@
 #include "include/rvpoint.h"
-#include "simple_pcd_loader.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ctime>
-#include <fstream>
 #include <iostream>
 #include <random>
 #include <vector>
@@ -40,24 +38,24 @@ int main(int argc, char **argv) {
   std::string output_file =
       output_dir + stem + "_" + timestamp + "_voxelized.pcd";
 
-  // 1. Load Cloud
   std::cout << "\n[Step 1] Loading " << input_file << "..." << std::endl;
   std::vector<PointXYZ> loaded_points;
-  int n = loadPCD(input_file, loaded_points);
-  if (n < 0) n = loadPCD("data/" + input_file, loaded_points);
-  if (n < 0) n = loadPCD("data/pcd_compressed/0000000090.pcd", loaded_points);
-  if (n < 0) n = loadPCD("../" + input_file, loaded_points);
-  if (n < 0) n = loadPCD("../data/0000000000.pcd", loaded_points);
+  bool ok = loadPCD(input_file, loaded_points);
+  if (!ok) ok = loadPCD("data/" + input_file, loaded_points);
+  if (!ok) ok = loadPCD("data/pcd_compressed/0000000090.pcd", loaded_points);
+  if (!ok) ok = loadPCD("../" + input_file, loaded_points);
+  if (!ok) ok = loadPCD("../data/0000000000.pcd", loaded_points);
 
-  if (n < 0) {
+  if (!ok || loaded_points.empty()) {
     std::cerr << "[FAIL] Could not load " << input_file << std::endl;
     return 1;
   }
+  size_t n = loaded_points.size();
   std::cout << "Loaded " << n << " points." << std::endl;
 
   // Convert to SoA for processing
   std::vector<float> x(n), y(n), z(n);
-  for (int i = 0; i < n; ++i) {
+  for (size_t i = 0; i < n; ++i) {
     x[i] = loaded_points[i].x;
     y[i] = loaded_points[i].y;
     z[i] = loaded_points[i].z;

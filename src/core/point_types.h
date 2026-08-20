@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include <vector>
+#include <cstdint>
 
 namespace rvpoint {
 
@@ -13,13 +13,29 @@ struct PointXYZ {
   float x, y, z;
 };
 
+struct PointXYZI {
+  float x, y, z;
+  float intensity;
+};
+
+struct PointXYZRGB {
+  float x, y, z;
+  uint8_t r, g, b;
+};
+
+struct Normal {
+  float normal_x, normal_y, normal_z;
+  float curvature;
+};
+
+struct PointNormal {
+  float x, y, z;
+  float normal_x, normal_y, normal_z;
+  float curvature;
+};
+
 /**
  * @brief Point Cloud stored in Structure of Arrays (SoA) layout.
- *
- * This layout is critical for RISC-V Vector (RVV) performance as it allows
- * for unit-stride loads/stores (vle32.v / vse32.v), which are significantly
- * faster than strided gather/scatter operations required for Array of
- * Structures (AoS).
  */
 struct PointCloudSoA {
   float *x = nullptr;      /**< Pointer to array of X coordinates */

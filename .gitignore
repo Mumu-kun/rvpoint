@@ -42,3 +42,4 @@ env/.wsl/
 data/
 docs/plans
 .clangd
+.agents/
