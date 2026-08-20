@@ -113,6 +113,7 @@ static int g_failed = 0;
 // ─── test cases ───────────────────────────────────────────────────────────────
 
 static void test_empty_cloud() {
+    std::cout << "[DEBUG] Running test_empty_cloud..." << std::endl;
     PointCloudSoA cloud; // empty
     EuclideanClustering ec;
     ec.setInputCloud(cloud);
@@ -123,6 +124,7 @@ static void test_empty_cloud() {
 }
 
 static void test_single_point() {
+    std::cout << "[DEBUG] Running test_single_point..." << std::endl;
     auto buf = make_cloud({{1.0f, 2.0f, 3.0f}});
     EuclideanClustering ec;
     ec.setInputCloud(buf.cloud);

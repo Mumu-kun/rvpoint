@@ -147,7 +147,7 @@ inline bool readFloat(const unsigned char* src, int size, float& value) {
 
 } // namespace detail
 
-inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) {
+inline int64_t loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) {
     std::ifstream file(file_path, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << file_path << std::endl;
@@ -157,6 +157,11 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
     detail::PCDHeader header;
     if (!detail::parsePCDHeader(file, header)) {
         std::cerr << "Error: Failed to parse PCD header." << std::endl;
+        return -1;
+    }
+
+    if (header.points > 100000000ULL) {
+        std::cerr << "Error: Declared PCD points count exceeds safety limit (100M)." << std::endl;
         return -1;
     }
 
@@ -170,25 +175,41 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
 
     if (header.data_type == "ascii") {
         points.clear();
-        points.reserve(header.points);
+        points.reserve(std::min(header.points, static_cast<std::size_t>(10000000ULL)));
         std::string line;
+        
+        // Calculate total float elements per line taking COUNT into account
+        std::vector<std::size_t> field_elem_offsets(header.fields.size(), 0);
+        std::size_t total_elements = 0;
+        for (std::size_t i = 0; i < header.fields.size(); ++i) {
+            field_elem_offsets[i] = total_elements;
+            total_elements += static_cast<std::size_t>(std::max(1, header.counts[i]));
+        }
+
         while (std::getline(file, line)) {
-            if (line.empty()) {
+            if (line.empty() || line[0] == '#') {
                 continue;
             }
             std::stringstream ss(line);
-            std::vector<float> values(header.fields.size(), 0.0f);
-            for (std::size_t i = 0; i < header.fields.size(); ++i) {
-                ss >> values[i];
+            std::vector<float> values(total_elements, 0.0f);
+            bool parse_ok = true;
+            for (std::size_t i = 0; i < total_elements; ++i) {
+                if (!(ss >> values[i])) {
+                    parse_ok = false;
+                    break;
+                }
             }
-            if (!ss.fail()) {
-                points.push_back({values[static_cast<std::size_t>(x_index)],
-                                  values[static_cast<std::size_t>(y_index)],
-                                  values[static_cast<std::size_t>(z_index)]});
+            if (parse_ok) {
+                float x = values[field_elem_offsets[static_cast<std::size_t>(x_index)]];
+                float y = values[field_elem_offsets[static_cast<std::size_t>(y_index)]];
+                float z = values[field_elem_offsets[static_cast<std::size_t>(z_index)]];
+                if (std::isfinite(x) && std::isfinite(y) && std::isfinite(z)) {
+                    points.push_back({x, y, z});
+                }
             }
         }
         std::cout << "Loaded " << points.size() << " points (ASCII)." << std::endl;
-        return static_cast<int>(points.size());
+        return static_cast<int64_t>(points.size());
     }
 
     points.clear();
@@ -198,15 +219,22 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
     std::size_t point_stride = 0;
     for (std::size_t i = 0; i < header.fields.size(); ++i) {
         point_offsets[i] = point_stride;
-        point_stride += static_cast<std::size_t>(header.sizes[i] * header.counts[i]);
+        std::size_t field_sz = static_cast<std::size_t>(std::max(1, header.sizes[i]));
+        std::size_t field_cnt = static_cast<std::size_t>(std::max(1, header.counts[i]));
+        point_stride += field_sz * field_cnt;
+    }
+
+    if (point_stride == 0) {
+        std::cerr << "Error: PCD point stride is zero." << std::endl;
+        return -1;
     }
 
     if (header.data_type == "binary") {
-        std::size_t total_bytes = point_stride * header.points;
-        if (header.points > 0 && total_bytes / header.points != point_stride) {
+        if (header.points > 0 && (SIZE_MAX / header.points < point_stride)) {
             std::cerr << "Error: PCD payload size arithmetic overflow." << std::endl;
             return -1;
         }
+        std::size_t total_bytes = point_stride * header.points;
         std::vector<unsigned char> raw(total_bytes);
         file.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(raw.size()));
         if (static_cast<std::size_t>(file.gcount()) != raw.size()) {
@@ -235,7 +263,7 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
         }
         points.resize(valid_cnt);
         std::cout << "Loaded " << points.size() << " points (Binary)." << std::endl;
-        return static_cast<int>(points.size());
+        return static_cast<int64_t>(points.size());
     }
 
     if (header.data_type == "binary_compressed") {
@@ -243,8 +271,8 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
         std::uint32_t uncompressed_size = 0;
         file.read(reinterpret_cast<char*>(&compressed_size), sizeof(compressed_size));
         file.read(reinterpret_cast<char*>(&uncompressed_size), sizeof(uncompressed_size));
-        if (!file) {
-            std::cerr << "Error: Could not read compressed PCD sizes." << std::endl;
+        if (!file || compressed_size == 0 || uncompressed_size == 0 || uncompressed_size > 1000000000U) {
+            std::cerr << "Error: Invalid compressed PCD payload sizes." << std::endl;
             return -1;
         }
 
@@ -267,7 +295,13 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
         std::size_t cursor = 0;
         for (std::size_t i = 0; i < header.fields.size(); ++i) {
             field_block_offsets[i] = cursor;
-            cursor += static_cast<std::size_t>(header.sizes[i] * header.counts[i]) * header.points;
+            std::size_t f_sz = static_cast<std::size_t>(std::max(1, header.sizes[i]));
+            std::size_t f_cnt = static_cast<std::size_t>(std::max(1, header.counts[i]));
+            if (header.points > 0 && SIZE_MAX / header.points < (f_sz * f_cnt)) {
+                std::cerr << "Error: Compressed PCD field offset overflow." << std::endl;
+                return -1;
+            }
+            cursor += (f_sz * f_cnt) * header.points;
         }
         if (cursor > uncompressed.size()) {
             std::cerr << "Error: Decompressed PCD payload is smaller than expected."
@@ -305,19 +339,19 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
         }
         points.resize(valid_cnt);
         std::cout << "Loaded " << points.size() << " points (Binary Compressed)." << std::endl;
-        return static_cast<int>(points.size());
+        return static_cast<int64_t>(points.size());
     }
 
     std::cerr << "Error: Unsupported PCD DATA mode '" << header.data_type << "'." << std::endl;
     return -1;
 }
 
-inline void savePCD(const std::string& filename, const std::vector<PointXYZ>& points,
+inline bool savePCD(const std::string& filename, const std::vector<PointXYZ>& points,
                     bool binary = false) {
     std::ofstream file(filename, binary ? (std::ios::binary | std::ios::out) : std::ios::out);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
-        return;
+        return false;
     }
     
     file << "# .PCD v.7 - Point Cloud Data file format\n";
@@ -344,8 +378,14 @@ inline void savePCD(const std::string& filename, const std::vector<PointXYZ>& po
         }
     }
     
+    file.flush();
+    if (!file.good()) {
+        std::cerr << "Error: File stream error while writing " << filename << std::endl;
+        return false;
+    }
     file.close();
     std::cout << "Saved " << points.size() << " points to " << filename << std::endl;
+    return true;
 }
 
 struct PointXYZRGB {
@@ -357,12 +397,12 @@ struct PointXYZRGB {
     std::uint8_t b;
 };
 
-inline void savePCDRGB(const std::string& filename, const std::vector<PointXYZRGB>& points,
+inline bool savePCDRGB(const std::string& filename, const std::vector<PointXYZRGB>& points,
                        bool binary = false) {
     std::ofstream file(filename, binary ? (std::ios::binary | std::ios::out) : std::ios::out);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
-        return;
+        return false;
     }
     
     file << "# .PCD v.7 - Point Cloud Data file format\n";
@@ -401,8 +441,14 @@ inline void savePCDRGB(const std::string& filename, const std::vector<PointXYZRG
         }
     }
     
+    file.flush();
+    if (!file.good()) {
+        std::cerr << "Error: File stream error while writing " << filename << std::endl;
+        return false;
+    }
     file.close();
     std::cout << "Saved " << points.size() << " colored points to " << filename << std::endl;
+    return true;
 }
 
 } // namespace rvv_pcl

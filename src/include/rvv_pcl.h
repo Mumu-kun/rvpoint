@@ -35,10 +35,10 @@ struct PointXYZ {
  * Structures (AoS).
  */
 struct PointCloudSoA {
-  float *x;      /**< Pointer to array of X coordinates */
-  float *y;      /**< Pointer to array of Y coordinates */
-  float *z;      /**< Pointer to array of Z coordinates */
-  std::size_t n; /**< Number of points in the cloud */
+  float *x = nullptr;      /**< Pointer to array of X coordinates */
+  float *y = nullptr;      /**< Pointer to array of Y coordinates */
+  float *z = nullptr;      /**< Pointer to array of Z coordinates */
+  std::size_t n = 0;       /**< Number of points in the cloud */
 };
 
 class Octree;         // Forward declaration
