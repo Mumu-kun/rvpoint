@@ -117,6 +117,7 @@ void saveJSONMetrics(const std::filesystem::path &out_path,
 
 int main(int argc, char **argv) {
   bool progress_enabled = true;
+  bool disable_disk = false;
   bool skip_sor = false;
   bool export_json = false;
   PCLPipelineConfig config;
@@ -130,6 +131,8 @@ int main(int argc, char **argv) {
       export_json = true;
     } else if (arg == "--skip-sor" || arg == "--no-sor" || arg == "--without-sor") {
       skip_sor = true;
+    } else if (arg == "--no-write" || arg == "--disable-disk" || arg == "--no-disk") {
+      disable_disk = true;
     } else if (arg == "--leaf-size") {
       if (i + 1 < argc) config.voxel_leaf_size = std::stof(argv[++i]);
     } else if (arg == "--cluster-tolerance") {
@@ -148,6 +151,7 @@ int main(int argc, char **argv) {
               << "Options:\n"
               << "  --leaf-size <val>         Voxel leaf size (default: 0.01)\n"
               << "  --skip-sor                Bypass Statistical Outlier Removal\n"
+              << "  --no-write                Bypass intermediate & result PCD disk writes\n"
               << "  --cluster-tolerance <val> Euclidean cluster tolerance (default: 0.15)\n"
               << "  --min-cluster <val>       Min points per cluster (default: 50)\n"
               << "  --max-cluster <val>       Max points per cluster (default: 100000)\n"
@@ -162,8 +166,10 @@ int main(int argc, char **argv) {
       ? std::filesystem::path(positional_args[1])
       : std::filesystem::path("results") / (input_stem.string() + "_pcl_pipeline");
 
-  std::filesystem::create_directories(output_dir);
-  std::filesystem::create_directories("results/pcl_pipeline");
+  if (!disable_disk) {
+    std::filesystem::create_directories(output_dir);
+    std::filesystem::create_directories("results/pcl_pipeline");
+  }
 
   std::vector<StageTiming> stages;
   stages.reserve(kStageCount);
@@ -184,7 +190,9 @@ int main(int argc, char **argv) {
   // 2. Write input stage
   beginStage(2, "Write input stage", progress_enabled);
   stage_start = std::chrono::high_resolution_clock::now();
-  pcl::io::savePCDFileBinary((output_dir / "00_input.pcd").string(), *input_cloud);
+  if (!disable_disk) {
+    pcl::io::savePCDFileBinary((output_dir / "00_input.pcd").string(), *input_cloud);
+  }
   stages.push_back({2, "Write input stage", endStage(2, "Write input stage", stage_start, progress_enabled), n_input});
 
   // 3. Voxel Grid Downsampling
@@ -196,7 +204,9 @@ int main(int argc, char **argv) {
   vg.setLeafSize(config.voxel_leaf_size, config.voxel_leaf_size, config.voxel_leaf_size);
   vg.filter(*downsampled_cloud);
   const std::size_t n_down = downsampled_cloud->size();
-  pcl::io::savePCDFileBinary((output_dir / "01_downsampled.pcd").string(), *downsampled_cloud);
+  if (!disable_disk) {
+    pcl::io::savePCDFileBinary((output_dir / "01_downsampled.pcd").string(), *downsampled_cloud);
+  }
   stages.push_back({3, "Downsampling", endStage(3, "Downsampling", stage_start, progress_enabled), n_down});
 
   // 4. Build search index for downsampled cloud
@@ -220,7 +230,9 @@ int main(int argc, char **argv) {
     sor.filter(*sor_cloud);
   }
   const std::size_t n_sor = sor_cloud->size();
-  pcl::io::savePCDFileBinary((output_dir / "02_sor_filtered.pcd").string(), *sor_cloud);
+  if (!disable_disk) {
+    pcl::io::savePCDFileBinary((output_dir / "02_sor_filtered.pcd").string(), *sor_cloud);
+  }
   stages.push_back({5, "Statistical outlier removal", endStage(5, "Statistical outlier removal", stage_start, progress_enabled), n_sor});
 
   // 6. Rebuild search index for filtered cloud
@@ -267,8 +279,10 @@ int main(int argc, char **argv) {
   extract.setNegative(true);
   extract.filter(*outlier_pts);
 
-  pcl::io::savePCDFileBinary((output_dir / "04_ransac_inliers.pcd").string(), *inlier_pts);
-  pcl::io::savePCDFileBinary((output_dir / "05_ground_plane_removed.pcd").string(), *outlier_pts);
+  if (!disable_disk) {
+    pcl::io::savePCDFileBinary((output_dir / "04_ransac_inliers.pcd").string(), *inlier_pts);
+    pcl::io::savePCDFileBinary((output_dir / "05_ground_plane_removed.pcd").string(), *outlier_pts);
+  }
 
   stages.push_back({8, "RANSAC primitive fitting", endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled), outlier_pts->size()});
 
@@ -295,50 +309,57 @@ int main(int argc, char **argv) {
   stage_start = std::chrono::high_resolution_clock::now();
 
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_clusters(new pcl::PointCloud<pcl::PointXYZRGB>());
-  const float golden_ratio = 0.618033988749895f;
-  float hue = 0.35f;
+  if (!disable_disk) {
+    const float golden_ratio = 0.618033988749895f;
+    float hue = 0.35f;
 
-  for (const auto &indices : cluster_indices) {
-    hue = std::fmod(hue + golden_ratio, 1.0f);
-    float s = 0.85f, v = 0.95f;
-    float c = v * s;
-    float x = c * (1.0f - std::abs(std::fmod(hue * 6.0f, 2.0f) - 1.0f));
-    float m = v - c;
-    float r_f = 0.0f, g_f = 0.0f, b_f = 0.0f;
-    int h_i = static_cast<int>(hue * 6.0f) % 6;
-    switch (h_i) {
-      case 0: r_f = c; g_f = x; b_f = 0.0f; break;
-      case 1: r_f = x; g_f = c; b_f = 0.0f; break;
-      case 2: r_f = 0.0f; g_f = c; b_f = x; break;
-      case 3: r_f = 0.0f; g_f = x; b_f = c; break;
-      case 4: r_f = x; g_f = 0.0f; b_f = c; break;
-      case 5: r_f = c; g_f = 0.0f; b_f = x; break;
-    }
-    uint8_t r = static_cast<uint8_t>((r_f + m) * 255.0f);
-    uint8_t g = static_cast<uint8_t>((g_f + m) * 255.0f);
-    uint8_t b = static_cast<uint8_t>((b_f + m) * 255.0f);
+    for (const auto &indices : cluster_indices) {
+      hue = std::fmod(hue + golden_ratio, 1.0f);
+      float s = 0.85f, v = 0.95f;
+      float c = v * s;
+      float x = c * (1.0f - std::abs(std::fmod(hue * 6.0f, 2.0f) - 1.0f));
+      float m = v - c;
+      float r_f = 0.0f, g_f = 0.0f, b_f = 0.0f;
+      int h_i = static_cast<int>(hue * 6.0f) % 6;
+      switch (h_i) {
+        case 0: r_f = c; g_f = x; b_f = 0.0f; break;
+        case 1: r_f = x; g_f = c; b_f = 0.0f; break;
+        case 2: r_f = 0.0f; g_f = c; b_f = x; break;
+        case 3: r_f = 0.0f; g_f = x; b_f = c; break;
+        case 4: r_f = x; g_f = 0.0f; b_f = c; break;
+        case 5: r_f = c; g_f = 0.0f; b_f = x; break;
+      }
+      uint8_t r = static_cast<uint8_t>((r_f + m) * 255.0f);
+      uint8_t g = static_cast<uint8_t>((g_f + m) * 255.0f);
+      uint8_t b = static_cast<uint8_t>((b_f + m) * 255.0f);
 
-    for (int idx : indices.indices) {
-      const auto &pt = outlier_pts->points[idx];
-      pcl::PointXYZRGB pt_rgb;
-      pt_rgb.x = pt.x;
-      pt_rgb.y = pt.y;
-      pt_rgb.z = pt.z;
-      pt_rgb.r = r;
-      pt_rgb.g = g;
-      pt_rgb.b = b;
-      colored_clusters->points.push_back(pt_rgb);
+      for (int idx : indices.indices) {
+        const auto &pt = outlier_pts->points[idx];
+        pcl::PointXYZRGB pt_rgb;
+        pt_rgb.x = pt.x;
+        pt_rgb.y = pt.y;
+        pt_rgb.z = pt.z;
+        pt_rgb.r = r;
+        pt_rgb.g = g;
+        pt_rgb.b = b;
+        colored_clusters->points.push_back(pt_rgb);
+      }
     }
+    colored_clusters->width = colored_clusters->points.size();
+    colored_clusters->height = 1;
+    colored_clusters->is_dense = true;
+
+    const std::filesystem::path cluster_out_path = output_dir / "06_clusters.pcd";
+    pcl::io::savePCDFileBinary(cluster_out_path.string(), *colored_clusters);
+    pcl::io::savePCDFileBinary("results/pcl_pipeline/06_clusters.pcd", *colored_clusters);
+    std::cout << "Clusters: " << colored_clusters->points.size() << " points ("
+              << cluster_indices.size() << " clusters) -> " << cluster_out_path.string() << std::endl;
+  } else {
+    size_t total_clustered_pts = 0;
+    for (const auto &indices : cluster_indices) total_clustered_pts += indices.indices.size();
+    std::cout << "Clusters: " << total_clustered_pts << " points ("
+              << cluster_indices.size() << " clusters)" << std::endl;
   }
-  colored_clusters->width = colored_clusters->points.size();
-  colored_clusters->height = 1;
-  colored_clusters->is_dense = true;
-
-  const std::filesystem::path cluster_out_path = output_dir / "06_clusters.pcd";
-  pcl::io::savePCDFileBinary(cluster_out_path.string(), *colored_clusters);
-  pcl::io::savePCDFileBinary("results/pcl_pipeline/06_clusters.pcd", *colored_clusters);
-  std::cout << "Clusters: " << colored_clusters->points.size() << " points ("
-            << cluster_indices.size() << " clusters) -> " << cluster_out_path.string() << std::endl;
   stages.push_back({10, "Write cluster stage", endStage(10, "Write cluster stage", stage_start, progress_enabled), colored_clusters->size()});
 
   const auto overall_end = std::chrono::high_resolution_clock::now();

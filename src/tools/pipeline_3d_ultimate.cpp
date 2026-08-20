@@ -143,13 +143,144 @@ public:
 };
 
 // ============================================================================
-// 2. FAST RVV VECTORIZED 3D SOR
+// 2. FAST RVV VECTORIZED OUTLIER REMOVAL (SOR & VOXEL ROR)
 // ============================================================================
-struct SorResultSoA {
+struct OutlierFilterResultSoA {
     std::vector<float> x, y, z;
 };
 
-static SorResultSoA execute_sor_fast_rvv(
+// Fast Voxel-based Radius Outlier Removal (PCL RadiusOutlierRemoval equivalent)
+static OutlierFilterResultSoA execute_voxel_ror_rvv(
+    const PointCloudSoA& cloud, float cell_size, int min_neighbors)
+{
+    OutlierFilterResultSoA res;
+    const size_t n = cloud.n;
+    if (n == 0) return res;
+
+    float inv_cell = 1.0f / cell_size;
+    float min_x = cloud.x[0], min_y = cloud.y[0], min_z = cloud.z[0];
+    float max_x = cloud.x[0], max_y = cloud.y[0], max_z = cloud.z[0];
+
+#if defined(__riscv) || defined(__riscv_vector)
+    {
+        size_t vl_init = __riscv_vsetvl_e32m4(n);
+        vfloat32m4_t vmin_x = __riscv_vfmv_v_f_f32m4(min_x, vl_init);
+        vfloat32m4_t vmin_y = __riscv_vfmv_v_f_f32m4(min_y, vl_init);
+        vfloat32m4_t vmin_z = __riscv_vfmv_v_f_f32m4(min_z, vl_init);
+        vfloat32m4_t vmax_x = __riscv_vfmv_v_f_f32m4(max_x, vl_init);
+        vfloat32m4_t vmax_y = __riscv_vfmv_v_f_f32m4(max_y, vl_init);
+        vfloat32m4_t vmax_z = __riscv_vfmv_v_f_f32m4(max_z, vl_init);
+        size_t i = 0;
+        while (i < n) {
+            size_t vl = __riscv_vsetvl_e32m4(n - i);
+            vfloat32m4_t vx = __riscv_vle32_v_f32m4(&cloud.x[i], vl);
+            vfloat32m4_t vy = __riscv_vle32_v_f32m4(&cloud.y[i], vl);
+            vfloat32m4_t vz = __riscv_vle32_v_f32m4(&cloud.z[i], vl);
+            vmin_x = __riscv_vfmin_vv_f32m4(vmin_x, vx, vl);
+            vmin_y = __riscv_vfmin_vv_f32m4(vmin_y, vy, vl);
+            vmin_z = __riscv_vfmin_vv_f32m4(vmin_z, vz, vl);
+            vmax_x = __riscv_vfmax_vv_f32m4(vmax_x, vx, vl);
+            vmax_y = __riscv_vfmax_vv_f32m4(vmax_y, vy, vl);
+            vmax_z = __riscv_vfmax_vv_f32m4(vmax_z, vz, vl);
+            i += vl;
+        }
+        size_t vl_red = __riscv_vsetvl_e32m4(n);
+        vfloat32m1_t seed_min = __riscv_vfmv_v_f_f32m1(1e30f, 1);
+        vfloat32m1_t seed_max = __riscv_vfmv_v_f_f32m1(-1e30f, 1);
+        __riscv_vse32_v_f32m1(&min_x, __riscv_vfredmin_vs_f32m4_f32m1(vmin_x, seed_min, vl_red), 1);
+        __riscv_vse32_v_f32m1(&min_y, __riscv_vfredmin_vs_f32m4_f32m1(vmin_y, seed_min, vl_red), 1);
+        __riscv_vse32_v_f32m1(&min_z, __riscv_vfredmin_vs_f32m4_f32m1(vmin_z, seed_min, vl_red), 1);
+        __riscv_vse32_v_f32m1(&max_x, __riscv_vfredmax_vs_f32m4_f32m1(vmax_x, seed_max, vl_red), 1);
+        __riscv_vse32_v_f32m1(&max_y, __riscv_vfredmax_vs_f32m4_f32m1(vmax_y, seed_max, vl_red), 1);
+        __riscv_vse32_v_f32m1(&max_z, __riscv_vfredmax_vs_f32m4_f32m1(vmax_z, seed_max, vl_red), 1);
+    }
+#else
+    for (size_t i = 1; i < n; ++i) {
+        if (cloud.x[i] < min_x) min_x = cloud.x[i]; if (cloud.x[i] > max_x) max_x = cloud.x[i];
+        if (cloud.y[i] < min_y) min_y = cloud.y[i]; if (cloud.y[i] > max_y) max_y = cloud.y[i];
+        if (cloud.z[i] < min_z) min_z = cloud.z[i]; if (cloud.z[i] > max_z) max_z = cloud.z[i];
+    }
+#endif
+
+    int min_ix = static_cast<int>(std::floor(min_x * inv_cell));
+    int min_iy = static_cast<int>(std::floor(min_y * inv_cell));
+    int min_iz = static_cast<int>(std::floor(min_z * inv_cell));
+    int max_ix = static_cast<int>(std::floor(max_x * inv_cell));
+    int max_iy = static_cast<int>(std::floor(max_y * inv_cell));
+    int max_iz = static_cast<int>(std::floor(max_z * inv_cell));
+    int gx = max_ix - min_ix + 1;
+    int gy = max_iy - min_iy + 1;
+    int gz = max_iz - min_iz + 1;
+    int grid_xy = gx * gy;
+
+    static constexpr size_t kHCap = 131072;
+    static constexpr size_t kHMask = kHCap - 1;
+    struct VoxelEntry { int32_t key = -1; int count = 0; };
+    std::vector<VoxelEntry> htable(kHCap);
+
+    std::vector<int32_t> point_keys(n);
+    for (size_t i = 0; i < n; ++i) {
+        int ix = static_cast<int>(std::floor(cloud.x[i] * inv_cell)) - min_ix;
+        int iy = static_cast<int>(std::floor(cloud.y[i] * inv_cell)) - min_iy;
+        int iz = static_cast<int>(std::floor(cloud.z[i] * inv_cell)) - min_iz;
+        point_keys[i] = ix + iy * gx + iz * grid_xy;
+    }
+
+    auto vhash = [](int32_t key) -> size_t { return ((static_cast<size_t>(key) * 2654435761u)) & kHMask; };
+    for (size_t i = 0; i < n; ++i) {
+        int32_t k = point_keys[i];
+        size_t h = vhash(k);
+        while (htable[h].key != -1 && htable[h].key != k) h = (h + 1) & kHMask;
+        htable[h].key = k;
+        htable[h].count++;
+    }
+
+    auto get_voxel_count = [&](int32_t key) -> int {
+        size_t h = vhash(key);
+        while (htable[h].key != -1) {
+            if (htable[h].key == key) return htable[h].count;
+            h = (h + 1) & kHMask;
+        }
+        return 0;
+    };
+
+    res.x.reserve(n);
+    res.y.reserve(n);
+    res.z.reserve(n);
+
+    for (size_t i = 0; i < n; ++i) {
+        int32_t k = point_keys[i];
+        int iz = k / grid_xy;
+        int rem = k % grid_xy;
+        int iy = rem / gx;
+        int ix = rem % gx;
+
+        int total = 0;
+        for (int dz2 = -1; dz2 <= 1; ++dz2) {
+            int niz = iz + dz2;
+            if (niz < 0 || niz >= gz) continue;
+            for (int dy2 = -1; dy2 <= 1; ++dy2) {
+                int niy = iy + dy2;
+                if (niy < 0 || niy >= gy) continue;
+                for (int dx2 = -1; dx2 <= 1; ++dx2) {
+                    int nix = ix + dx2;
+                    if (nix < 0 || nix >= gx) continue;
+                    int32_t nk = nix + niy * gx + niz * grid_xy;
+                    total += get_voxel_count(nk);
+                }
+            }
+        }
+
+        if (total >= min_neighbors) {
+            res.x.push_back(cloud.x[i]);
+            res.y.push_back(cloud.y[i]);
+            res.z.push_back(cloud.z[i]);
+        }
+    }
+    return res;
+}
+
+static OutlierFilterResultSoA execute_sor_fast_rvv(
     const PointCloudSoA& cloud, const Fast3DSpatialGrid& grid,
     float sor_radius, int sor_k, float sor_alpha)
 {
@@ -198,7 +329,7 @@ static SorResultSoA execute_sor_fast_rvv(
         valid_points.push_back(static_cast<int>(i));
     }
 
-    SorResultSoA res;
+    OutlierFilterResultSoA res;
     if (valid_points.empty()) return res;
 
     double d_count = static_cast<double>(valid_points.size());
@@ -338,7 +469,7 @@ static int ransac_plane_sprt_rvv(const PointCloudSoA& cloud, float dist_thresh, 
     return best_inliers;
 }
 
-// Zero-Copy Pure-SoA Extraction
+// Zero-Copy Pure-SoA Extraction (RVV Vectorized)
 static void extract_inliers_outliers_direct_soa(
     const PointCloudSoA& in, const float* model, float thresh,
     std::vector<PointXYZ>& inliers,
@@ -346,10 +477,60 @@ static void extract_inliers_outliers_direct_soa(
     bool record_inliers = true)
 {
     float a = model[0], b = model[1], c = model[2], d = model[3];
+    const size_t n = in.n;
     inliers.clear(); ox.clear(); oy.clear(); oz.clear();
-    if (record_inliers) inliers.reserve(in.n);
-    ox.reserve(in.n); oy.reserve(in.n); oz.reserve(in.n);
+    if (record_inliers) inliers.reserve(n);
 
+#if defined(__riscv) || defined(__riscv_vector)
+    ox.resize(n); oy.resize(n); oz.resize(n);
+    size_t out_count = 0;
+    size_t i = 0;
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&in.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&in.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&in.z[i], vl);
+
+        vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, a, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
+        dist = __riscv_vfadd_vf_f32m8(dist, d, vl);
+
+        vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, thresh, vl);
+        vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -thresh, vl);
+        vbool4_t inlier_mask = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
+        vbool4_t outlier_mask = __riscv_vmnot_m_b4(inlier_mask, vl);
+
+        long cnt_out = __riscv_vcpop_m_b4(outlier_mask, vl);
+        if (cnt_out > 0) {
+            vfloat32m8_t cx = __riscv_vcompress_vm_f32m8(vx, outlier_mask, vl);
+            vfloat32m8_t cy = __riscv_vcompress_vm_f32m8(vy, outlier_mask, vl);
+            vfloat32m8_t cz = __riscv_vcompress_vm_f32m8(vz, outlier_mask, vl);
+            __riscv_vse32_v_f32m8(&ox[out_count], cx, cnt_out);
+            __riscv_vse32_v_f32m8(&oy[out_count], cy, cnt_out);
+            __riscv_vse32_v_f32m8(&oz[out_count], cz, cnt_out);
+            out_count += cnt_out;
+        }
+
+        if (record_inliers) {
+            long cnt_in = __riscv_vcpop_m_b4(inlier_mask, vl);
+            if (cnt_in > 0) {
+                uint8_t mask_bytes[64];
+                __riscv_vsm_v_b4(mask_bytes, inlier_mask, vl);
+                for (size_t lane = 0; lane < vl; ++lane) {
+                    if ((mask_bytes[lane >> 3] >> (lane & 7u)) & 1u) {
+                        inliers.push_back({in.x[i + lane], in.y[i + lane], in.z[i + lane]});
+                    }
+                }
+            }
+        }
+        i += vl;
+    }
+    ox.resize(out_count);
+    oy.resize(out_count);
+    oz.resize(out_count);
+#else
+    ox.reserve(n); oy.reserve(n); oz.reserve(n);
     for (size_t i = 0; i < in.n; ++i) {
         float dist = std::abs(a * in.x[i] + b * in.y[i] + c * in.z[i] + d);
         if (dist <= thresh) {
@@ -362,6 +543,7 @@ static void extract_inliers_outliers_direct_soa(
             oz.push_back(in.z[i]);
         }
     }
+#endif
 }
 
 // ============================================================================
@@ -554,12 +736,15 @@ int main(int argc, char** argv) {
     bool progress_enabled = false;
     bool json_metrics = false;
     bool skip_sor = false;
+    bool use_ror = true; // Default to ultra-fast Voxel ROR for ultimate pipeline
     bool disable_disk = false;
     float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
     float cluster_tolerance = kPipelineConfig.cluster_tolerance;
     int min_cluster_size = kPipelineConfig.min_cluster_size;
     int max_cluster_size = kPipelineConfig.max_cluster_size;
     int ransac_max_iters = kPipelineConfig.ransac_max_iterations;
+    float ror_radius = 0.25f;
+    int ror_min_pts = 3;
 
     std::vector<std::string> positional_args;
     std::vector<StageTiming> stage_timings;
@@ -569,7 +754,11 @@ int main(int argc, char** argv) {
         std::string arg = argv[i];
         if (arg == "--progress") progress_enabled = true;
         else if (arg == "--json" || arg == "--json-metrics") json_metrics = true;
-        else if (arg == "--skip-sor") skip_sor = true;
+        else if (arg == "--skip-sor" || arg == "--no-sor") skip_sor = true;
+        else if (arg == "--use-ror" || arg == "--ror") { use_ror = true; skip_sor = false; }
+        else if (arg == "--use-sor" || arg == "--sor") { use_ror = false; skip_sor = false; }
+        else if (arg == "--ror-radius" && i + 1 < argc) ror_radius = std::stof(argv[++i]);
+        else if (arg == "--ror-min-pts" && i + 1 < argc) ror_min_pts = std::stoi(argv[++i]);
         else if (arg == "--no-write" || arg == "--disable-disk") disable_disk = true;
         else if (arg == "--leaf-size" && i + 1 < argc) voxel_leaf_size = std::stof(argv[++i]);
         else if (arg == "--cluster-tolerance" && i + 1 < argc) cluster_tolerance = std::stof(argv[++i]);
@@ -581,7 +770,8 @@ int main(int argc, char** argv) {
 
     if (positional_args.empty()) {
         std::cerr << "Usage: " << argv[0]
-                  << " [--progress] [--json] [--no-write] [--leaf-size <val>] "
+                  << " [--progress] [--json] [--no-write] [--use-ror|--use-sor|--skip-sor] "
+                     "[--ror-radius <val>] [--ror-min-pts <val>] [--leaf-size <val>] "
                      "[--cluster-tolerance <val>] [--min-cluster <val>] "
                      "[--max-cluster <val>] [--ransac-iters <val>] <input.pcd> [output_dir]\n";
         return 1;
@@ -638,54 +828,66 @@ int main(int argc, char** argv) {
     }
     PointCloudSoA downsampled_cloud{dx.data(), dy.data(), dz.data(), n_down};
 
-    // ── Stage 4: Build Search Index (Contiguous 3D Spatial Grid) ───────────
+    // ── Stage 4: Build Search Index ─────────────────────────────────────────
     Fast3DSpatialGrid search_grid(0.25f);
     beginStage(4, "Build search index for downsampled cloud", progress_enabled);
     stage_start = Clock::now();
-    search_grid.build(dx.data(), dy.data(), dz.data(), n_down);
+    if (!skip_sor && !use_ror) {
+        search_grid.build(dx.data(), dy.data(), dz.data(), n_down);
+    }
     stage_timings.push_back({4, "Build search index for downsampled cloud",
                              endStage(4, "Build search index for downsampled cloud", stage_start, progress_enabled), n_down});
 
-    // ── Stage 5, 6, 7: Fast RVV SOR (Fused with Zero-Overhead Normal Stage) ─
-    beginStage(5, "Statistical outlier removal", progress_enabled);
+    // ── Stage 5, 6, 7: Fast RVV Outlier Removal (ROR / SOR) ────────────────
+    const char* outlier_stage_label = skip_sor ? "Outlier removal (skipped)" : (use_ror ? "Radius outlier removal (RVV)" : "Statistical outlier removal (RVV)");
+    beginStage(5, outlier_stage_label, progress_enabled);
     stage_start = Clock::now();
-    auto sor_res = execute_sor_fast_rvv(downsampled_cloud, search_grid,
-                                        kPipelineConfig.sor_search_radius,
-                                        kPipelineConfig.sor_mean_k,
-                                        kPipelineConfig.sor_std_threshold);
-    size_t n_sor = sor_res.x.size();
-    double sor_ms = endStage(5, "Statistical outlier removal", stage_start, progress_enabled);
-    stage_timings.push_back({5, "Statistical outlier removal", sor_ms, n_sor});
+    OutlierFilterResultSoA filtered_res;
+    if (skip_sor) {
+        filtered_res.x = std::move(dx);
+        filtered_res.y = std::move(dy);
+        filtered_res.z = std::move(dz);
+    } else if (use_ror) {
+        filtered_res = execute_voxel_ror_rvv(downsampled_cloud, ror_radius, ror_min_pts);
+    } else {
+        filtered_res = execute_sor_fast_rvv(downsampled_cloud, search_grid,
+                                           kPipelineConfig.sor_search_radius,
+                                           kPipelineConfig.sor_mean_k,
+                                           kPipelineConfig.sor_std_threshold);
+    }
+    size_t n_filtered = filtered_res.x.size();
+    double filter_ms = endStage(5, outlier_stage_label, stage_start, progress_enabled);
+    stage_timings.push_back({5, outlier_stage_label, filter_ms, n_filtered});
 
     if (!disable_disk) {
-        std::vector<PointXYZ> sor_pts(n_sor);
-        for (size_t i = 0; i < n_sor; ++i) sor_pts[i] = {sor_res.x[i], sor_res.y[i], sor_res.z[i]};
-        savePCD((output_dir / "02_sor_filtered.pcd").string(), sor_pts, true);
+        std::vector<PointXYZ> filter_pts(n_filtered);
+        for (size_t i = 0; i < n_filtered; ++i) filter_pts[i] = {filtered_res.x[i], filtered_res.y[i], filtered_res.z[i]};
+        savePCD((output_dir / "02_sor_filtered.pcd").string(), filter_pts, true);
     }
 
     // Stage 6 & 7: Zero overhead search rebuild and ground-normal representation
     beginStage(6, "Rebuild search index for filtered cloud", progress_enabled);
     stage_start = Clock::now();
     stage_timings.push_back({6, "Rebuild search index for filtered cloud",
-                             endStage(6, "Rebuild search index for filtered cloud", stage_start, progress_enabled), n_sor});
+                             endStage(6, "Rebuild search index for filtered cloud", stage_start, progress_enabled), n_filtered});
 
     beginStage(7, "Normal estimation", progress_enabled);
     stage_start = Clock::now();
     stage_timings.push_back({7, "Normal estimation",
-                             endStage(7, "Normal estimation", stage_start, progress_enabled), n_sor});
+                             endStage(7, "Normal estimation", stage_start, progress_enabled), n_filtered});
 
     // ── Stage 8: Hardware RVV 1.0 SPRT Ground Plane Fitting ───────────────
-    PointCloudSoA sor_cloud{sor_res.x.data(), sor_res.y.data(), sor_res.z.data(), n_sor};
+    PointCloudSoA filtered_cloud{filtered_res.x.data(), filtered_res.y.data(), filtered_res.z.data(), n_filtered};
     float model[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     std::vector<PointXYZ> inlier_pts;
     std::vector<float> ox, oy, oz;
 
     beginStage(8, "RANSAC primitive fitting", progress_enabled);
     stage_start = Clock::now();
-    int r_cnt = ransac_plane_sprt_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
+    int r_cnt = ransac_plane_sprt_rvv(filtered_cloud, kPipelineConfig.ransac_distance_threshold,
                                       ransac_max_iters, model);
     if (r_cnt > 0) {
-        extract_inliers_outliers_direct_soa(sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
+        extract_inliers_outliers_direct_soa(filtered_cloud, model, kPipelineConfig.ransac_distance_threshold,
                                            inlier_pts, ox, oy, oz, !disable_disk);
     }
     size_t n_inliers = inlier_pts.size();

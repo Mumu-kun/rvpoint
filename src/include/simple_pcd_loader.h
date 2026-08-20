@@ -202,13 +202,19 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
     }
 
     if (header.data_type == "binary") {
-        std::vector<unsigned char> raw(point_stride * header.points);
+        std::size_t total_bytes = point_stride * header.points;
+        if (header.points > 0 && total_bytes / header.points != point_stride) {
+            std::cerr << "Error: PCD payload size arithmetic overflow." << std::endl;
+            return -1;
+        }
+        std::vector<unsigned char> raw(total_bytes);
         file.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(raw.size()));
         if (static_cast<std::size_t>(file.gcount()) != raw.size()) {
             std::cerr << "Error: Could not read binary PCD payload." << std::endl;
             return -1;
         }
 
+        std::size_t valid_cnt = 0;
         for (std::size_t i = 0; i < header.points; ++i) {
             float x = 0.0f;
             float y = 0.0f;
@@ -223,8 +229,11 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
                 std::cerr << "Error: Unsupported x/y/z field layout in binary PCD." << std::endl;
                 return -1;
             }
-            points[i] = {x, y, z};
+            if (std::isfinite(x) && std::isfinite(y) && std::isfinite(z)) {
+                points[valid_cnt++] = {x, y, z};
+            }
         }
+        points.resize(valid_cnt);
         std::cout << "Loaded " << points.size() << " points (Binary)." << std::endl;
         return static_cast<int>(points.size());
     }
@@ -266,6 +275,7 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
             return -1;
         }
 
+        std::size_t valid_cnt = 0;
         for (std::size_t i = 0; i < header.points; ++i) {
             float x = 0.0f;
             float y = 0.0f;
@@ -289,8 +299,11 @@ inline int loadPCD(const std::string& file_path, std::vector<PointXYZ>& points) 
                           << std::endl;
                 return -1;
             }
-            points[i] = {x, y, z};
+            if (std::isfinite(x) && std::isfinite(y) && std::isfinite(z)) {
+                points[valid_cnt++] = {x, y, z};
+            }
         }
+        points.resize(valid_cnt);
         std::cout << "Loaded " << points.size() << " points (Binary Compressed)." << std::endl;
         return static_cast<int>(points.size());
     }

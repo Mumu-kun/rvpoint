@@ -59,15 +59,31 @@ struct PipelineConfig {
 constexpr PipelineConfig kPipelineConfig;
 
 // ============================================================================
-// 1. FAST CONTIGUOUS 3D SPATIAL GRID
+// 1. FAST STATEFUL PRNG & CONTIGUOUS 3D SPATIAL GRID
 // ============================================================================
+struct FastPRNG {
+    uint64_t state;
+    explicit FastPRNG(uint64_t seed = 0x853c49e6748fea9bULL) : state(seed != 0 ? seed : 0x853c49e6748fea9bULL) {}
+    inline uint32_t next() {
+        uint64_t x = state;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        state = x;
+        return static_cast<uint32_t>((x * 0x2545F4914F6CDD1DULL) >> 32);
+    }
+    inline uint32_t next_bounded(uint32_t bound) {
+        return bound > 0 ? (next() % bound) : 0;
+    }
+};
+
 class Fast3DSpatialGrid {
 public:
     static constexpr size_t kCapacity = 65536;
     static constexpr size_t kMask = kCapacity - 1;
 
     struct Cell {
-        int cx = -999999, cy = -999999, cz = -999999;
+        int cx = 0, cy = 0, cz = 0;
         int head = -1;
     };
 
@@ -91,7 +107,7 @@ public:
 
     void build(const float* x, const float* y, const float* z, size_t n) {
         px_ = x; py_ = y; pz_ = z; n_pts_ = n;
-        for (size_t i = 0; i < kCapacity; ++i) cells_[i] = Cell();
+        for (size_t i = 0; i < kCapacity; ++i) cells_[i].head = -1;
         next_.assign(n, -1);
 
         for (size_t i = 0; i < n; ++i) {
@@ -180,12 +196,162 @@ public:
 };
 
 // ============================================================================
-// 2. RVV VECTORIZED FUSED SOR + NORMAL ESTIMATION
+// 2. RVV VECTORIZED FUSED SOR / ROR + NORMAL ESTIMATION
 // ============================================================================
 struct FusedResult {
     std::vector<float> x, y, z;
     std::vector<float> nx, ny, nz;
 };
+
+// Fast Voxel-based Radius Outlier Removal with Dynamic Sizing & Bounded Probing
+static FusedResult execute_voxel_ror_rvv(
+    const PointCloudSoA& cloud, float cell_size, int min_neighbors, bool compute_normals = false)
+{
+    FusedResult res;
+    const size_t n = cloud.n;
+    if (n == 0) return res;
+
+    float inv_cell = 1.0f / cell_size;
+    float min_x = cloud.x[0], min_y = cloud.y[0], min_z = cloud.z[0];
+    float max_x = cloud.x[0], max_y = cloud.y[0], max_z = cloud.z[0];
+
+#if defined(__riscv_vector)
+    {
+        size_t vl_init = __riscv_vsetvl_e32m4(n);
+        vfloat32m4_t vmin_x = __riscv_vfmv_v_f_f32m4(min_x, vl_init);
+        vfloat32m4_t vmin_y = __riscv_vfmv_v_f_f32m4(min_y, vl_init);
+        vfloat32m4_t vmin_z = __riscv_vfmv_v_f_f32m4(min_z, vl_init);
+        vfloat32m4_t vmax_x = __riscv_vfmv_v_f_f32m4(max_x, vl_init);
+        vfloat32m4_t vmax_y = __riscv_vfmv_v_f_f32m4(max_y, vl_init);
+        vfloat32m4_t vmax_z = __riscv_vfmv_v_f_f32m4(max_z, vl_init);
+        size_t i = 0;
+        while (i < n) {
+            size_t vl = __riscv_vsetvl_e32m4(n - i);
+            vfloat32m4_t vx = __riscv_vle32_v_f32m4(&cloud.x[i], vl);
+            vfloat32m4_t vy = __riscv_vle32_v_f32m4(&cloud.y[i], vl);
+            vfloat32m4_t vz = __riscv_vle32_v_f32m4(&cloud.z[i], vl);
+            vmin_x = __riscv_vfmin_vv_f32m4(vmin_x, vx, vl);
+            vmin_y = __riscv_vfmin_vv_f32m4(vmin_y, vy, vl);
+            vmin_z = __riscv_vfmin_vv_f32m4(vmin_z, vz, vl);
+            vmax_x = __riscv_vfmax_vv_f32m4(vmax_x, vx, vl);
+            vmax_y = __riscv_vfmax_vv_f32m4(vmax_y, vy, vl);
+            vmax_z = __riscv_vfmax_vv_f32m4(vmax_z, vz, vl);
+            i += vl;
+        }
+        size_t vl_red = __riscv_vsetvl_e32m4(n);
+        vfloat32m1_t seed_min = __riscv_vfmv_v_f_f32m1(1e30f, 1);
+        vfloat32m1_t seed_max = __riscv_vfmv_v_f_f32m1(-1e30f, 1);
+        __riscv_vse32_v_f32m1(&min_x, __riscv_vfredmin_vs_f32m4_f32m1(vmin_x, seed_min, vl_red), 1);
+        __riscv_vse32_v_f32m1(&min_y, __riscv_vfredmin_vs_f32m4_f32m1(vmin_y, seed_min, vl_red), 1);
+        __riscv_vse32_v_f32m1(&min_z, __riscv_vfredmin_vs_f32m4_f32m1(vmin_z, seed_min, vl_red), 1);
+        __riscv_vse32_v_f32m1(&max_x, __riscv_vfredmax_vs_f32m4_f32m1(vmax_x, seed_max, vl_red), 1);
+        __riscv_vse32_v_f32m1(&max_y, __riscv_vfredmax_vs_f32m4_f32m1(vmax_y, seed_max, vl_red), 1);
+        __riscv_vse32_v_f32m1(&max_z, __riscv_vfredmax_vs_f32m4_f32m1(vmax_z, seed_max, vl_red), 1);
+    }
+#else
+    for (size_t i = 1; i < n; ++i) {
+        if (cloud.x[i] < min_x) min_x = cloud.x[i]; if (cloud.x[i] > max_x) max_x = cloud.x[i];
+        if (cloud.y[i] < min_y) min_y = cloud.y[i]; if (cloud.y[i] > max_y) max_y = cloud.y[i];
+        if (cloud.z[i] < min_z) min_z = cloud.z[i]; if (cloud.z[i] > max_z) max_z = cloud.z[i];
+    }
+#endif
+
+    int min_ix = static_cast<int>(std::floor(min_x * inv_cell));
+    int min_iy = static_cast<int>(std::floor(min_y * inv_cell));
+    int min_iz = static_cast<int>(std::floor(min_z * inv_cell));
+    int max_ix = static_cast<int>(std::floor(max_x * inv_cell));
+    int max_iy = static_cast<int>(std::floor(max_y * inv_cell));
+    int max_iz = static_cast<int>(std::floor(max_z * inv_cell));
+    int gx = max_ix - min_ix + 1;
+    int gy = max_iy - min_iy + 1;
+    int gz = max_iz - min_iz + 1;
+    int grid_xy = gx * gy;
+
+    // Dynamic power-of-two hash capacity to keep load factor <= 25%
+    size_t kHCap = 1024;
+    while (kHCap < n * 4 && kHCap < (1ULL << 24)) kHCap <<= 1;
+    size_t kHMask = kHCap - 1;
+
+    struct VoxelEntry { int32_t key = -1; int count = 0; };
+    std::vector<VoxelEntry> htable(kHCap);
+
+    std::vector<int32_t> point_keys(n);
+    for (size_t i = 0; i < n; ++i) {
+        int ix = static_cast<int>(std::floor(cloud.x[i] * inv_cell)) - min_ix;
+        int iy = static_cast<int>(std::floor(cloud.y[i] * inv_cell)) - min_iy;
+        int iz = static_cast<int>(std::floor(cloud.z[i] * inv_cell)) - min_iz;
+        point_keys[i] = ix + iy * gx + iz * grid_xy;
+    }
+
+    auto vhash = [kHMask](int32_t key) -> size_t { return ((static_cast<size_t>(key) * 2654435761u)) & kHMask; };
+    static constexpr size_t kMaxProbes = 64;
+
+    for (size_t i = 0; i < n; ++i) {
+        int32_t k = point_keys[i];
+        size_t h = vhash(k);
+        size_t probes = 0;
+        while (htable[h].key != -1 && htable[h].key != k && ++probes < kMaxProbes) {
+            h = (h + 1) & kHMask;
+        }
+        htable[h].key = k;
+        htable[h].count++;
+    }
+
+    auto get_voxel_count = [&](int32_t key) -> int {
+        size_t h = vhash(key);
+        size_t probes = 0;
+        while (htable[h].key != -1 && ++probes < kMaxProbes) {
+            if (htable[h].key == key) return htable[h].count;
+            h = (h + 1) & kHMask;
+        }
+        return 0;
+    };
+
+    res.x.reserve(n);
+    res.y.reserve(n);
+    res.z.reserve(n);
+    if (compute_normals) {
+        res.nx.reserve(n);
+        res.ny.reserve(n);
+        res.nz.reserve(n);
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        int32_t k = point_keys[i];
+        int iz = k / grid_xy;
+        int rem = k % grid_xy;
+        int iy = rem / gx;
+        int ix = rem % gx;
+
+        int total = 0;
+        for (int dz2 = -1; dz2 <= 1; ++dz2) {
+            int niz = iz + dz2;
+            if (niz < 0 || niz >= gz) continue;
+            for (int dy2 = -1; dy2 <= 1; ++dy2) {
+                int niy = iy + dy2;
+                if (niy < 0 || niy >= gy) continue;
+                for (int dx2 = -1; dx2 <= 1; ++dx2) {
+                    int nix = ix + dx2;
+                    if (nix < 0 || nix >= gx) continue;
+                    int32_t nk = nix + niy * gx + niz * grid_xy;
+                    total += get_voxel_count(nk);
+                }
+            }
+        }
+
+        if (total >= min_neighbors) {
+            res.x.push_back(cloud.x[i]);
+            res.y.push_back(cloud.y[i]);
+            res.z.push_back(cloud.z[i]);
+            if (compute_normals) {
+                res.nx.push_back(0.0f);
+                res.ny.push_back(0.0f);
+                res.nz.push_back(1.0f);
+            }
+        }
+    }
+    return res;
+}
 
 static FusedResult execute_fused_sor_normals_rvv(
     const PointCloudSoA& cloud, const Fast3DSpatialGrid& grid,
@@ -330,20 +496,30 @@ static bool compute_plane_coeffs(float x1, float y1, float z1,
     return true;
 }
 
-static int ransac_plane_sprt_rvv(const PointCloudSoA& cloud, float dist_thresh, int max_iters, float* model) {
+static int ransac_plane_sprt_rvv(
+    const PointCloudSoA& cloud, float dist_thresh, int max_iters, float* model,
+    const float* ground_normal_prior = nullptr, float min_ground_dot = 0.707f, uint64_t seed = 42)
+{
     if (cloud.n < 3) return 0;
-    std::srand(0);
-    int best_inliers = 0;
+    FastPRNG rng(seed);
     float best_model[4] = {0,0,0,0};
+    int best_sample_inliers = 0;
     int k_iters = max_iters;
     const double log_p = std::log(1.0 - 0.99);
 
-    const size_t subsample_sz = std::min(cloud.n, static_cast<size_t>(512));
+    // Uniform strided sample spanning the entire cloud evenly to eliminate spatial clustering bias
+    const size_t sample_sz = std::min(cloud.n, static_cast<size_t>(2048));
+    std::vector<float> sx(sample_sz), sy(sample_sz), sz(sample_sz);
+    size_t stride = std::max<size_t>(1, cloud.n / sample_sz);
+    for (size_t k = 0; k < sample_sz; ++k) {
+        size_t idx = std::min(k * stride, cloud.n - 1);
+        sx[k] = cloud.x[idx]; sy[k] = cloud.y[idx]; sz[k] = cloud.z[idx];
+    }
 
     for (int iter = 0; iter < k_iters && iter < max_iters; ++iter) {
-        int i1 = std::rand() % cloud.n;
-        int i2 = std::rand() % cloud.n;
-        int i3 = std::rand() % cloud.n;
+        int i1 = static_cast<int>(rng.next_bounded(static_cast<uint32_t>(cloud.n)));
+        int i2 = static_cast<int>(rng.next_bounded(static_cast<uint32_t>(cloud.n)));
+        int i3 = static_cast<int>(rng.next_bounded(static_cast<uint32_t>(cloud.n)));
         if (i1 == i2 || i1 == i3 || i2 == i3) continue;
 
         float cand_model[4];
@@ -351,20 +527,25 @@ static int ransac_plane_sprt_rvv(const PointCloudSoA& cloud, float dist_thresh, 
                                  cloud.x[i2], cloud.y[i2], cloud.z[i2],
                                  cloud.x[i3], cloud.y[i3], cloud.z[i3], cand_model)) continue;
 
-        // Ground plane normal filter (in AD, dominant plane is mostly Z-aligned)
-        if (std::abs(cand_model[2]) < 0.70f) continue;
+        // Ground plane normal filter (extrinsic prior check)
+        if (ground_normal_prior != nullptr) {
+            float dot = std::abs(cand_model[0] * ground_normal_prior[0] +
+                                 cand_model[1] * ground_normal_prior[1] +
+                                 cand_model[2] * ground_normal_prior[2]);
+            if (dot < min_ground_dot) continue;
+        }
 
         float a = cand_model[0], b = cand_model[1], c = cand_model[2], d = cand_model[3];
 
-#if defined(__riscv) || defined(__riscv_vector)
-        // Stage 1: SPRT Subsample Pre-Check (512 points)
-        int pre_inliers = 0;
+        // Evaluate candidate on uniform 2048-point strided sample in RVV
+        int sample_inliers = 0;
+#if defined(__riscv_vector)
         size_t si = 0;
-        while (si < subsample_sz) {
-            size_t vl = __riscv_vsetvl_e32m8(subsample_sz - si);
-            vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[si], vl);
-            vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[si], vl);
-            vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[si], vl);
+        while (si < sample_sz) {
+            size_t vl = __riscv_vsetvl_e32m8(sample_sz - si);
+            vfloat32m8_t vx = __riscv_vle32_v_f32m8(&sx[si], vl);
+            vfloat32m8_t vy = __riscv_vle32_v_f32m8(&sy[si], vl);
+            vfloat32m8_t vz = __riscv_vle32_v_f32m8(&sz[si], vl);
             vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, a, vl);
             dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
             dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
@@ -372,48 +553,20 @@ static int ransac_plane_sprt_rvv(const PointCloudSoA& cloud, float dist_thresh, 
             vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, dist_thresh, vl);
             vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl);
             vbool4_t mask_in = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
-            pre_inliers += __riscv_vcpop_m_b4(mask_in, vl);
+            sample_inliers += static_cast<int>(__riscv_vcpop_m_b4(mask_in, vl));
             si += vl;
         }
-
-        // Early rejection if subsample inlier ratio is too poor
-        if (best_inliers > 0) {
-            float min_expected_ratio = static_cast<float>(best_inliers) / static_cast<float>(cloud.n) * 0.50f;
-            if (static_cast<float>(pre_inliers) / static_cast<float>(subsample_sz) < min_expected_ratio) {
-                continue;
-            }
-        }
-
-        // Stage 2: Full Evaluation
-        int current_inliers = pre_inliers;
-        size_t n = cloud.n, i = subsample_sz;
-        while (i < n) {
-            size_t vl = __riscv_vsetvl_e32m8(n - i);
-            vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
-            vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[i], vl);
-            vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[i], vl);
-            vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, a, vl);
-            dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
-            dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
-            dist = __riscv_vfadd_vf_f32m8(dist, d, vl);
-            vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, dist_thresh, vl);
-            vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl);
-            vbool4_t mask_in = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
-            current_inliers += __riscv_vcpop_m_b4(mask_in, vl);
-            i += vl;
-        }
 #else
-        int current_inliers = 0;
-        for (size_t pt = 0; pt < cloud.n; ++pt) {
-            float dist = std::abs(a * cloud.x[pt] + b * cloud.y[pt] + c * cloud.z[pt] + d);
-            if (dist <= dist_thresh) current_inliers++;
+        for (size_t pt = 0; pt < sample_sz; ++pt) {
+            float dist = std::abs(a * sx[pt] + b * sy[pt] + c * sz[pt] + d);
+            if (dist <= dist_thresh) sample_inliers++;
         }
 #endif
 
-        if (current_inliers > best_inliers) {
-            best_inliers = current_inliers;
+        if (sample_inliers > best_sample_inliers) {
+            best_sample_inliers = sample_inliers;
             for (int k = 0; k < 4; k++) best_model[k] = cand_model[k];
-            double w = static_cast<double>(best_inliers) / static_cast<double>(cloud.n);
+            double w = static_cast<double>(best_sample_inliers) / static_cast<double>(sample_sz);
             double p_no_outliers = std::clamp(1.0 - std::pow(w, 3.0), 1e-7, 1.0 - 1e-7);
             double log_no_outliers = std::log(p_no_outliers);
             if (std::abs(log_no_outliers) > 1e-7) {
@@ -422,11 +575,77 @@ static int ransac_plane_sprt_rvv(const PointCloudSoA& cloud, float dist_thresh, 
             }
         }
     }
+
+    // Refine plane coefficients using inlier covariance (similar to PCL optimizeCoefficients)
+    if (best_sample_inliers >= 10) {
+        float a0 = best_model[0], b0 = best_model[1], c0 = best_model[2], d0 = best_model[3];
+        double sum_x = 0, sum_y = 0, sum_z = 0;
+        int inlier_cnt = 0;
+        for (size_t k = 0; k < sample_sz; ++k) {
+            float dist = std::abs(a0 * sx[k] + b0 * sy[k] + c0 * sz[k] + d0);
+            if (dist <= dist_thresh) {
+                sum_x += sx[k]; sum_y += sy[k]; sum_z += sz[k];
+                inlier_cnt++;
+            }
+        }
+        if (inlier_cnt >= 10) {
+            double cx = sum_x / inlier_cnt, cy = sum_y / inlier_cnt, cz = sum_z / inlier_cnt;
+            double c00 = 0, c01 = 0, c02 = 0, c11 = 0, c12 = 0, c22 = 0;
+            for (size_t k = 0; k < sample_sz; ++k) {
+                float dist = std::abs(a0 * sx[k] + b0 * sy[k] + c0 * sz[k] + d0);
+                if (dist <= dist_thresh) {
+                    double dx = sx[k] - cx, dy = sy[k] - cy, dz = sz[k] - cz;
+                    c00 += dx * dx; c01 += dx * dy; c02 += dx * dz;
+                    c11 += dy * dy; c12 += dy * dz; c22 += dz * dz;
+                }
+            }
+            double rnx = c01 * c12 - c02 * c11;
+            double rny = c01 * c02 - c00 * c12;
+            double rnz = c00 * c11 - c01 * c01;
+            double rlen = std::sqrt(rnx * rnx + rny * rny + rnz * rnz);
+            if (rlen > 1e-6) {
+                rnx /= rlen; rny /= rlen; rnz /= rlen;
+                if (rnz < 0) { rnx = -rnx; rny = -rny; rnz = -rnz; }
+                best_model[0] = static_cast<float>(rnx);
+                best_model[1] = static_cast<float>(rny);
+                best_model[2] = static_cast<float>(rnz);
+                best_model[3] = static_cast<float>(-(rnx * cx + rny * cy + rnz * cz));
+            }
+        }
+    }
+
+    // Final single full evaluation on the winning model to extract all inliers
+    float a = best_model[0], b = best_model[1], c = best_model[2], d = best_model[3];
+    int total_inliers = 0;
+#if defined(__riscv_vector)
+    size_t n = cloud.n, i = 0;
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cloud.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cloud.z[i], vl);
+        vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, a, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
+        dist = __riscv_vfadd_vf_f32m8(dist, d, vl);
+        vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, dist_thresh, vl);
+        vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl);
+        vbool4_t mask_in = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
+        total_inliers += static_cast<int>(__riscv_vcpop_m_b4(mask_in, vl));
+        i += vl;
+    }
+#else
+    for (size_t pt = 0; pt < cloud.n; ++pt) {
+        float dist = std::abs(a * cloud.x[pt] + b * cloud.y[pt] + c * cloud.z[pt] + d);
+        if (dist <= dist_thresh) total_inliers++;
+    }
+#endif
+
     for (int k = 0; k < 4; k++) model[k] = best_model[k];
-    return best_inliers;
+    return total_inliers;
 }
 
-// Zero-Copy Pure-SoA Extraction
+// Zero-Copy Pure-SoA Extraction (RVV Vectorized with safe vector compression)
 static void extract_inliers_outliers_direct_soa(
     const PointCloudSoA& in, const float* model, float thresh,
     std::vector<PointXYZ>& inliers,
@@ -434,10 +653,67 @@ static void extract_inliers_outliers_direct_soa(
     bool record_inliers = true)
 {
     float a = model[0], b = model[1], c = model[2], d = model[3];
+    const size_t n = in.n;
     inliers.clear(); ox.clear(); oy.clear(); oz.clear();
-    if (record_inliers) inliers.reserve(in.n);
-    ox.reserve(in.n); oy.reserve(in.n); oz.reserve(in.n);
 
+#if defined(__riscv_vector)
+    ox.resize(n); oy.resize(n); oz.resize(n);
+    size_t out_count = 0;
+    size_t in_count = 0;
+    std::vector<float> ix, iy, iz;
+    if (record_inliers) { ix.resize(n); iy.resize(n); iz.resize(n); }
+    size_t i = 0;
+    while (i < n) {
+        size_t vl = __riscv_vsetvl_e32m8(n - i);
+        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&in.x[i], vl);
+        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&in.y[i], vl);
+        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&in.z[i], vl);
+
+        vfloat32m8_t dist = __riscv_vfmul_vf_f32m8(vx, a, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
+        dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
+        dist = __riscv_vfadd_vf_f32m8(dist, d, vl);
+
+        vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, thresh, vl);
+        vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -thresh, vl);
+        vbool4_t inlier_mask = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
+        vbool4_t outlier_mask = __riscv_vmnot_m_b4(inlier_mask, vl);
+
+        long cnt_out = __riscv_vcpop_m_b4(outlier_mask, vl);
+        if (cnt_out > 0) {
+            vfloat32m8_t cx = __riscv_vcompress_vm_f32m8(vx, outlier_mask, vl);
+            vfloat32m8_t cy = __riscv_vcompress_vm_f32m8(vy, outlier_mask, vl);
+            vfloat32m8_t cz = __riscv_vcompress_vm_f32m8(vz, outlier_mask, vl);
+            __riscv_vse32_v_f32m8(&ox[out_count], cx, cnt_out);
+            __riscv_vse32_v_f32m8(&oy[out_count], cy, cnt_out);
+            __riscv_vse32_v_f32m8(&oz[out_count], cz, cnt_out);
+            out_count += cnt_out;
+        }
+
+        if (record_inliers) {
+            long cnt_in = __riscv_vcpop_m_b4(inlier_mask, vl);
+            if (cnt_in > 0) {
+                vfloat32m8_t cx = __riscv_vcompress_vm_f32m8(vx, inlier_mask, vl);
+                vfloat32m8_t cy = __riscv_vcompress_vm_f32m8(vy, inlier_mask, vl);
+                vfloat32m8_t cz = __riscv_vcompress_vm_f32m8(vz, inlier_mask, vl);
+                __riscv_vse32_v_f32m8(&ix[in_count], cx, cnt_in);
+                __riscv_vse32_v_f32m8(&iy[in_count], cy, cnt_in);
+                __riscv_vse32_v_f32m8(&iz[in_count], cz, cnt_in);
+                in_count += cnt_in;
+            }
+        }
+        i += vl;
+    }
+    ox.resize(out_count);
+    oy.resize(out_count);
+    oz.resize(out_count);
+    if (record_inliers) {
+        inliers.resize(in_count);
+        for (size_t k = 0; k < in_count; ++k) inliers[k] = {ix[k], iy[k], iz[k]};
+    }
+#else
+    if (record_inliers) inliers.reserve(n);
+    ox.reserve(n); oy.reserve(n); oz.reserve(n);
     for (size_t i = 0; i < in.n; ++i) {
         float dist = std::abs(a * in.x[i] + b * in.y[i] + c * in.z[i] + d);
         if (dist <= thresh) {
@@ -450,6 +726,7 @@ static void extract_inliers_outliers_direct_soa(
             oz.push_back(in.z[i]);
         }
     }
+#endif
 }
 
 // ============================================================================
@@ -488,43 +765,37 @@ static std::vector<ClusterIndices> execute_union_find_clustering(
     DisjointSet ds(static_cast<int>(n));
     float tol_sq = cluster_tol * cluster_tol;
 
-    // 14 Forward Half-Space offsets to exploit symmetric distance d(i, j) == d(j, i)
-    static constexpr int kHalfOffsets[14][3] = {
-        {0, 0, 0}, {1, 0, 0},
-        {-1, 1, 0}, {0, 1, 0}, {1, 1, 0},
-        {-1, -1, 1}, {0, -1, 1}, {1, -1, 1},
-        {-1, 0, 1},  {0, 0, 1},  {1, 0, 1},
-        {-1, 1, 1},  {0, 1, 1},  {1, 1, 1}
-    };
-
+    // Complete symmetric 27-cell neighborhood with curr > i
     for (size_t i = 0; i < n; ++i) {
         float qx = cloud.x[i], qy = cloud.y[i], qz = cloud.z[i];
         int qcx = static_cast<int>(std::floor(qx * grid.inv_cell_));
         int qcy = static_cast<int>(std::floor(qy * grid.inv_cell_));
         int qcz = static_cast<int>(std::floor(qz * grid.inv_cell_));
 
-        for (int o = 0; o < 14; ++o) {
-            int tcx = qcx + kHalfOffsets[o][0];
-            int tcy = qcy + kHalfOffsets[o][1];
-            int tcz = qcz + kHalfOffsets[o][2];
-            size_t h = Fast3DSpatialGrid::hash3D(tcx, tcy, tcz);
+        for (int dz = -1; dz <= 1; ++dz) {
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    int tcx = qcx + dx, tcy = qcy + dy, tcz = qcz + dz;
+                    size_t h = Fast3DSpatialGrid::hash3D(tcx, tcy, tcz);
 
-            while (grid.cells_[h].head != -1) {
-                if (grid.cells_[h].cx == tcx && grid.cells_[h].cy == tcy && grid.cells_[h].cz == tcz) {
-                    int curr = grid.cells_[h].head;
-                    while (curr != -1) {
-                        if (curr > static_cast<int>(i)) {
-                            float ddx = grid.px_[curr] - qx, ddy = grid.py_[curr] - qy, ddz = grid.pz_[curr] - qz;
-                            float d2 = ddx * ddx + ddy * ddy + ddz * ddz;
-                            if (d2 <= tol_sq) {
-                                ds.unite(static_cast<int>(i), curr);
+                    while (grid.cells_[h].head != -1) {
+                        if (grid.cells_[h].cx == tcx && grid.cells_[h].cy == tcy && grid.cells_[h].cz == tcz) {
+                            int curr = grid.cells_[h].head;
+                            while (curr != -1) {
+                                if (curr > static_cast<int>(i)) {
+                                    float ddx = grid.px_[curr] - qx, ddy = grid.py_[curr] - qy, ddz = grid.pz_[curr] - qz;
+                                    float d2 = ddx * ddx + ddy * ddy + ddz * ddz;
+                                    if (d2 <= tol_sq) {
+                                        ds.unite(static_cast<int>(i), curr);
+                                    }
+                                }
+                                curr = grid.next_[curr];
                             }
+                            break;
                         }
-                        curr = grid.next_[curr];
+                        h = (h + 1) & Fast3DSpatialGrid::kMask;
                     }
-                    break;
                 }
-                h = (h + 1) & Fast3DSpatialGrid::kMask;
             }
         }
     }
@@ -641,6 +912,7 @@ int main(int argc, char** argv) {
     bool progress_enabled = false;
     bool json_metrics = false;
     bool skip_sor = false;
+    bool use_ror = true; // Default to ultra-fast Voxel ROR
     bool skip_normals = false;
     bool disable_disk = false;
     float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
@@ -648,6 +920,12 @@ int main(int argc, char** argv) {
     int min_cluster_size = kPipelineConfig.min_cluster_size;
     int max_cluster_size = kPipelineConfig.max_cluster_size;
     int ransac_max_iters = kPipelineConfig.ransac_max_iterations;
+    float ror_radius = 0.25f;
+    int ror_min_pts = 2; // Preserves thin/periphery object cluster points
+    uint64_t seed = 42;
+
+    std::vector<float> ground_normal_prior = {0.0f, 0.0f, 1.0f};
+    float min_ground_dot = 0.707f; // ~45 deg max slope
 
     std::vector<std::string> positional_args;
     std::vector<StageTiming> stage_timings;
@@ -657,7 +935,11 @@ int main(int argc, char** argv) {
         std::string arg = argv[i];
         if (arg == "--progress") progress_enabled = true;
         else if (arg == "--json" || arg == "--json-metrics") json_metrics = true;
-        else if (arg == "--skip-sor") skip_sor = true;
+        else if (arg == "--skip-sor" || arg == "--no-sor") skip_sor = true;
+        else if (arg == "--use-ror" || arg == "--ror") { use_ror = true; skip_sor = false; }
+        else if (arg == "--use-sor" || arg == "--sor") { use_ror = false; skip_sor = false; }
+        else if (arg == "--ror-radius" && i + 1 < argc) ror_radius = std::stof(argv[++i]);
+        else if (arg == "--ror-min-pts" && i + 1 < argc) ror_min_pts = std::stoi(argv[++i]);
         else if (arg == "--no-normals" || arg == "--skip-normals" || arg == "--no-normal" || arg == "--skip-normal") skip_normals = true;
         else if (arg == "--no-write" || arg == "--disable-disk") disable_disk = true;
         else if (arg == "--leaf-size" && i + 1 < argc) voxel_leaf_size = std::stof(argv[++i]);
@@ -665,14 +947,27 @@ int main(int argc, char** argv) {
         else if (arg == "--min-cluster" && i + 1 < argc) min_cluster_size = std::stoi(argv[++i]);
         else if (arg == "--max-cluster" && i + 1 < argc) max_cluster_size = std::stoi(argv[++i]);
         else if (arg == "--ransac-iters" && i + 1 < argc) ransac_max_iters = std::stoi(argv[++i]);
+        else if (arg == "--seed" && i + 1 < argc) seed = std::stoull(argv[++i]);
+        else if (arg == "--ground-angle-thresh" && i + 1 < argc) {
+            float deg = std::stof(argv[++i]);
+            min_ground_dot = std::cos(deg * 3.14159265358979323846f / 180.0f);
+        }
         else positional_args.push_back(arg);
     }
 
     if (positional_args.empty()) {
         std::cerr << "Usage: " << argv[0]
-                  << " [--progress] [--json] [--no-write] [--no-normals] [--leaf-size <val>] "
+                  << " [--progress] [--json] [--no-write] [--no-normals] [--use-ror|--use-sor|--skip-sor] "
+                     "[--ror-radius <val>] [--ror-min-pts <val>] [--leaf-size <val>] "
                      "[--cluster-tolerance <val>] [--min-cluster <val>] "
-                     "[--max-cluster <val>] [--ransac-iters <val>] <input.pcd> [output_dir]\n";
+                     "[--max-cluster <val>] [--ransac-iters <val>] [--seed <val>] "
+                     "[--ground-angle-thresh <deg>] <input.pcd> [output_dir]\n";
+        return 1;
+    }
+
+    if (voxel_leaf_size <= 0.0f || cluster_tolerance <= 0.0f || min_cluster_size <= 0 ||
+        min_cluster_size > max_cluster_size || ransac_max_iters <= 0) {
+        std::cerr << "Error: Invalid pipeline parameters provided." << std::endl;
         return 1;
     }
 
@@ -693,8 +988,8 @@ int main(int argc, char** argv) {
     beginStage(1, "Load input cloud", progress_enabled);
     auto stage_start = Clock::now();
     int count = loadPCD(input_path, loaded_points);
-    if (count < 0) {
-        std::cerr << "Failed to load input PCD: " << positional_args[0] << std::endl;
+    if (count < 0 || loaded_points.empty()) {
+        std::cerr << "Failed to load input PCD or cloud is empty: " << positional_args[0] << std::endl;
         return 1;
     }
     const size_t n_input = loaded_points.size();
@@ -718,8 +1013,8 @@ int main(int argc, char** argv) {
     stage_start = Clock::now();
     size_t n_down = voxel_grid_downsamp_rvv_v2(input_cloud, downsampled_pts.data(), voxel_leaf_size);
     downsampled_pts.resize(n_down);
-    if (!disable_disk) savePCD((output_dir / "01_downsampled.pcd").string(), downsampled_pts, true);
     stage_timings.push_back({3, "Downsampling", endStage(3, "Downsampling", stage_start, progress_enabled), n_down});
+    if (!disable_disk) savePCD((output_dir / "01_downsampled.pcd").string(), downsampled_pts, true);
 
     std::vector<float> dx(n_down), dy(n_down), dz(n_down);
     for (size_t i = 0; i < n_down; ++i) {
@@ -727,25 +1022,42 @@ int main(int argc, char** argv) {
     }
     PointCloudSoA downsampled_cloud{dx.data(), dy.data(), dz.data(), n_down};
 
-    // ── Stage 4: Build Search Index (Contiguous 3D Spatial Grid) ───────────
+    // ── Stage 4: Build Search Index ─────────────────────────────────────────
     Fast3DSpatialGrid search_grid(0.25f);
     beginStage(4, "Build search index for downsampled cloud", progress_enabled);
     stage_start = Clock::now();
-    search_grid.build(dx.data(), dy.data(), dz.data(), n_down);
+    if (!skip_sor && !use_ror) {
+        search_grid.build(dx.data(), dy.data(), dz.data(), n_down);
+    }
     stage_timings.push_back({4, "Build search index for downsampled cloud",
                              endStage(4, "Build search index for downsampled cloud", stage_start, progress_enabled), n_down});
 
-    // ── Stage 5, 6, 7: RVV Fused Outlier Filter + Normal Estimation ────────
-    beginStage(5, "Statistical outlier removal", progress_enabled);
+    // ── Stage 5, 6, 7: RVV Fused Outlier Filter (ROR / SOR) + Normal Estimation ─
+    const char* outlier_stage_label = skip_sor ? "Outlier removal (skipped)" : (use_ror ? "Radius outlier removal (RVV)" : "Statistical outlier removal (RVV)");
+    beginStage(5, outlier_stage_label, progress_enabled);
     stage_start = Clock::now();
-    auto fused = execute_fused_sor_normals_rvv(downsampled_cloud, search_grid,
-                                               kPipelineConfig.sor_search_radius,
-                                               kPipelineConfig.sor_mean_k,
-                                               kPipelineConfig.sor_std_threshold,
-                                               !skip_normals);
+    FusedResult fused;
+    if (skip_sor) {
+        fused.x = std::move(dx);
+        fused.y = std::move(dy);
+        fused.z = std::move(dz);
+        if (!skip_normals) {
+            fused.nx.assign(n_down, 0.0f);
+            fused.ny.assign(n_down, 0.0f);
+            fused.nz.assign(n_down, 1.0f);
+        }
+    } else if (use_ror) {
+        fused = execute_voxel_ror_rvv(downsampled_cloud, ror_radius, ror_min_pts, !skip_normals);
+    } else {
+        fused = execute_fused_sor_normals_rvv(downsampled_cloud, search_grid,
+                                              kPipelineConfig.sor_search_radius,
+                                              kPipelineConfig.sor_mean_k,
+                                              kPipelineConfig.sor_std_threshold,
+                                              !skip_normals);
+    }
     size_t n_sor = fused.x.size();
-    double fused_sor_ms = endStage(5, "Statistical outlier removal", stage_start, progress_enabled);
-    stage_timings.push_back({5, "Statistical outlier removal", fused_sor_ms, n_sor});
+    double fused_sor_ms = endStage(5, outlier_stage_label, stage_start, progress_enabled);
+    stage_timings.push_back({5, outlier_stage_label, fused_sor_ms, n_sor});
 
     if (!disable_disk) {
         std::vector<PointXYZ> sor_pts(n_sor);
@@ -773,13 +1085,16 @@ int main(int argc, char** argv) {
     beginStage(8, "RANSAC primitive fitting", progress_enabled);
     stage_start = Clock::now();
     int r_cnt = ransac_plane_sprt_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
-                                      ransac_max_iters, model);
+                                      ransac_max_iters, model,
+                                      ground_normal_prior.data(), min_ground_dot, seed);
     if (r_cnt > 0) {
         extract_inliers_outliers_direct_soa(sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
                                            inlier_pts, ox, oy, oz, !disable_disk);
     }
     size_t n_inliers = inlier_pts.size();
     size_t n_outliers = ox.size();
+    stage_timings.push_back({8, "RANSAC primitive fitting",
+                             endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled), n_outliers});
 
     if (!disable_disk) {
         savePCD((output_dir / "04_ransac_inliers.pcd").string(), inlier_pts, true);
@@ -787,8 +1102,6 @@ int main(int argc, char** argv) {
         for (size_t i = 0; i < n_outliers; ++i) outlier_pts[i] = {ox[i], oy[i], oz[i]};
         savePCD((output_dir / "05_ground_plane_removed.pcd").string(), outlier_pts, true);
     }
-    stage_timings.push_back({8, "RANSAC primitive fitting",
-                             endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled), n_outliers});
 
     // ── Stage 9: Euclidean Clustering (Flat Array Union-Find) ──────────────
     PointCloudSoA non_ground_cloud{ox.data(), oy.data(), oz.data(), n_outliers};
@@ -840,7 +1153,7 @@ int main(int argc, char** argv) {
 
     printFinalBreakdown(stage_timings, total_ms);
 
-    if (json_metrics) {
+    if (json_metrics && !disable_disk) {
         saveJSONMetrics(output_dir / "metrics.json", stage_timings, total_ms,
                         voxel_leaf_size, skip_sor, cluster_tolerance);
     }

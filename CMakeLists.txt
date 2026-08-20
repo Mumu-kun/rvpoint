@@ -171,3 +171,8 @@ target_link_libraries(pipeline_3d_ultra PRIVATE rvvpcl)
 add_executable(pipeline_3d_ultimate src/tools/pipeline_3d_ultimate.cpp)
 target_include_directories(pipeline_3d_ultimate PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(pipeline_3d_ultimate PRIVATE rvvpcl)
+
+# RVV Optimization Ceiling Hypothesis Benchmark
+add_executable(rvv_ceiling_bench src/tools/rvv_ceiling_bench.cpp)
+target_include_directories(rvv_ceiling_bench PRIVATE "${CMAKE_SOURCE_DIR}/src/include" "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(rvv_ceiling_bench PRIVATE rvvpcl)
