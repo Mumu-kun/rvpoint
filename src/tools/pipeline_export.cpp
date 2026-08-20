@@ -170,12 +170,19 @@ std::size_t sor_pointer_octree_fast(const PointCloudSoA &in,
       std::nth_element(nbr_dists.begin(), nbr_dists.begin() + valid_k, nbr_dists.end());
 
 #if defined(__riscv) || defined(__riscv_vector)
-      size_t vl = __riscv_vsetvl_e32m4(valid_k);
-      vfloat32m4_t vd2 = __riscv_vle32_v_f32m4(nbr_dists.data() + 1, vl);
-      vfloat32m4_t vd = __riscv_vfsqrt_v_f32m4(vd2, vl);
-      vfloat32m1_t zero = __riscv_vfmv_v_f_f32m1(0.0f, 1);
-      vfloat32m1_t v_sum = __riscv_vfredusum_vs_f32m4_f32m1(vd, zero, vl);
-      float sum = __riscv_vfmv_f_s_f32m1_f32(v_sum);
+      float sum = 0.0f;
+      int rem = valid_k;
+      int offset = 1;
+      while (rem > 0) {
+        size_t vl = __riscv_vsetvl_e32m8(rem);
+        vfloat32m8_t vd2 = __riscv_vle32_v_f32m8(nbr_dists.data() + offset, vl);
+        vfloat32m8_t vd = __riscv_vfsqrt_v_f32m8(vd2, vl);
+        vfloat32m1_t zero = __riscv_vfmv_v_f_f32m1(0.0f, 1);
+        vfloat32m1_t v_sum = __riscv_vfredusum_vs_f32m8_f32m1(vd, zero, vl);
+        sum += __riscv_vfmv_f_s_f32m1_f32(v_sum);
+        offset += vl;
+        rem -= vl;
+      }
 #else
       float sum = 0.0f;
       for (int j = 1; j <= valid_k; ++j) sum += std::sqrt(nbr_dists[j]);

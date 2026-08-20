@@ -83,7 +83,7 @@ TARGET_NAME="${TARGET_NAME%.cc}"
 
 if [[ "$TARGET_NAME" == "pointer_octree" || "$TARGET_NAME" == "pointer_octree_bench" || "$TARGET_NAME" == "pointer_octree_real" ]]; then
     TARGET_NAME="benchmark_pointer_octree_real"
-elif [[ "$TARGET_NAME" != test_* && "$TARGET_NAME" != rvv_test && "$TARGET_NAME" != benchmark && "$TARGET_NAME" != benchmark_* && "$TARGET_NAME" != pipeline_export && "$TARGET_NAME" != pipeline_fast_export && "$TARGET_NAME" != pipeline_rvv_ultra_fast && "$TARGET_NAME" != pipeline_rvv_turbo && "$TARGET_NAME" != pipeline_3d_turbo && "$TARGET_NAME" != pipeline_3d_ultra && "$TARGET_NAME" != scalar_25d_baseline && "$TARGET_NAME" != ablation_bench && "$TARGET_NAME" != neighbor_search_sor_bench && "$TARGET_NAME" != pipeline_compare_bench && "$TARGET_NAME" != pcl_standalone_pipeline ]]; then
+elif [[ "$TARGET_NAME" != test_* && "$TARGET_NAME" != rvv_test && "$TARGET_NAME" != benchmark && "$TARGET_NAME" != benchmark_* && "$TARGET_NAME" != pipeline_export && "$TARGET_NAME" != pipeline_fast_export && "$TARGET_NAME" != pipeline_rvv_ultra_fast && "$TARGET_NAME" != pipeline_rvv_turbo && "$TARGET_NAME" != pipeline_3d_turbo && "$TARGET_NAME" != pipeline_3d_ultra && "$TARGET_NAME" != pipeline_3d_ultimate && "$TARGET_NAME" != scalar_25d_baseline && "$TARGET_NAME" != ablation_bench && "$TARGET_NAME" != neighbor_search_sor_bench && "$TARGET_NAME" != pipeline_compare_bench && "$TARGET_NAME" != pcl_standalone_pipeline ]]; then
     TARGET_NAME="test_$TARGET_NAME"
 fi
 

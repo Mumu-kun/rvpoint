@@ -73,6 +73,7 @@ int ransac_plane_sc(const PointXYZ* cloud, std::size_t n,
                                        cloud[i2].x, cloud[i2].y, cloud[i2].z,
                                        cloud[i3].x, cloud[i3].y, cloud[i3].z,
                                        cand_model, collinear_thresh)) continue;
+        if(std::abs(cand_model[2]) < 0.70f) continue;
                                        
         // 2. Count Inliers
         int current_inliers = 0;
@@ -137,6 +138,7 @@ int ransac_plane_rvv(const PointCloudSoA& cloud,
                                        cloud.x[i2], cloud.y[i2], cloud.z[i2],
                                        cloud.x[i3], cloud.y[i3], cloud.z[i3],
                                        cand_model, collinear_thresh)) continue;
+        if(std::abs(cand_model[2]) < 0.70f) continue;
         
         float a = cand_model[0];
         float b = cand_model[1];
