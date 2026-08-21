@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Static linking for QEMU compatibility
-set(CMAKE_EXE_LINKER_FLAGS "-static")
+# Static linking applied per-target (dynamic allowed for official PCL)
+# ==============================================================================
 
 option(RVPOINT_USE_RVV "Enable RVV helper backend" ON)
 option(RVV_PCL_USE_RVV "Backward compatibility alias for RVPOINT_USE_RVV" ON)
@@ -85,6 +85,27 @@ foreach(pipe_src ${PIPELINE_SOURCES})
     get_filename_component(pipe_name "${pipe_src}" NAME_WE)
     add_executable(${pipe_name} "${pipe_src}")
     target_link_libraries(${pipe_name} PRIVATE rvpoint)
+    if(pipe_name STREQUAL "official_pcl_pipeline")
+        target_compile_options(${pipe_name} PRIVATE 
+            "-I/usr/include/pcl-1.14" 
+            "-I/usr/include/eigen3" 
+            "-I/usr/include"
+        )
+        target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,/usr/lib/riscv64-linux-gnu")
+        target_link_libraries(${pipe_name} PRIVATE 
+            /usr/lib/riscv64-linux-gnu/libpcl_common.so
+            /usr/lib/riscv64-linux-gnu/libpcl_io.so
+            /usr/lib/riscv64-linux-gnu/libpcl_filters.so
+            /usr/lib/riscv64-linux-gnu/libpcl_features.so
+            /usr/lib/riscv64-linux-gnu/libpcl_segmentation.so
+            /usr/lib/riscv64-linux-gnu/libpcl_search.so
+            /usr/lib/riscv64-linux-gnu/libpcl_octree.so
+            /usr/lib/riscv64-linux-gnu/libpcl_kdtree.so
+            /usr/lib/riscv64-linux-gnu/libpcl_sample_consensus.so
+        )
+    else()
+        target_link_options(${pipe_name} PRIVATE "-static")
+    endif()
 endforeach()
 
 # ==============================================================================
@@ -97,6 +118,7 @@ foreach(bench_src ${BENCHMARK_SOURCES})
     get_filename_component(bench_name "${bench_src}" NAME_WE)
     add_executable(${bench_name} "${bench_src}")
     target_link_libraries(${bench_name} PRIVATE rvpoint)
+    target_link_options(${bench_name} PRIVATE "-static")
 endforeach()
 
 # ==============================================================================
@@ -107,7 +129,7 @@ function(add_rvpoint_test src)
     add_executable(${name} "${src}")
     target_link_libraries(${name} PRIVATE rvpoint)
     target_compile_options(${name} PRIVATE "-fopenmp")
-    target_link_options(${name} PRIVATE "-fopenmp")
+    target_link_options(${name} PRIVATE "-fopenmp" "-static")
 endfunction()
 
 file(GLOB FAST_TEST_SOURCES 

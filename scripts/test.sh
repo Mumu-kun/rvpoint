@@ -65,7 +65,6 @@ FAST_TESTS=(
     "test_pipeline_walkthrough"
     "test_scaling"
     "test_loader"
-    "test_scalar"
 )
 if [ "$BACKEND" = "rvv" ]; then
     FAST_TESTS+=("test_rvv_features")

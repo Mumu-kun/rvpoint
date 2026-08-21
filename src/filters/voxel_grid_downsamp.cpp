@@ -213,72 +213,6 @@ std::size_t voxel_grid_downsamp_sc(const PointXYZ* in, std::size_t n,
 }
 
 // ============================================================================
-// RVV Implementation
-// ============================================================================
-std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
-                                    PointXYZ* out, float leaf_size) {
-    if (in.n == 0) return 0;
-
-#if defined(__riscv_vector)
-    std::map<std::tuple<int, int, int>, std::pair<PointXYZ, int>> grid;
-    float inv_leaf = 1.0f / leaf_size;
-
-    size_t n = in.n;
-    size_t i = 0;
-
-    while (i < n) {
-        size_t vl = __riscv_vsetvl_e32m8(n - i);
-
-        // Load X, Y, Z
-        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&in.x[i], vl);
-        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&in.y[i], vl);
-        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&in.z[i], vl);
-
-        // Scale: val * inv_leaf
-        vfloat32m8_t vsx = __riscv_vfmul_vf_f32m8(vx, inv_leaf, vl);
-        vfloat32m8_t vsy = __riscv_vfmul_vf_f32m8(vy, inv_leaf, vl);
-        vfloat32m8_t vsz = __riscv_vfmul_vf_f32m8(vz, inv_leaf, vl);
-
-        std::vector<float> raw_sx(vl), raw_sy(vl), raw_sz(vl);
-        __riscv_vse32_v_f32m8(raw_sx.data(), vsx, vl);
-        __riscv_vse32_v_f32m8(raw_sy.data(), vsy, vl);
-        __riscv_vse32_v_f32m8(raw_sz.data(), vsz, vl);
-
-        for(size_t j=0; j<vl; ++j) {
-            int idx_x = std::floor(raw_sx[j]);
-            int idx_y = std::floor(raw_sy[j]);
-            int idx_z = std::floor(raw_sz[j]);
-
-            auto key = std::make_tuple(idx_x, idx_y, idx_z);
-            grid[key].first.x += in.x[i+j];
-            grid[key].first.y += in.y[i+j];
-            grid[key].first.z += in.z[i+j];
-            grid[key].second++;
-        }
-
-        i += vl;
-    }
-
-    // Compute centroids
-    std::size_t count = 0;
-    for (auto& kv : grid) {
-        float f = 1.0f / kv.second.second;
-        out[count].x = kv.second.first.x * f;
-        out[count].y = kv.second.first.y * f;
-        out[count].z = kv.second.first.z * f;
-        count++;
-    }
-    return count;
-#else
-    std::vector<PointXYZ> aos(in.n);
-    for (size_t i = 0; i < in.n; ++i) {
-        aos[i] = {in.x[i], in.y[i], in.z[i]};
-    }
-    return voxel_grid_downsamp_sc(aos.data(), in.n, out, leaf_size);
-#endif
-}
-
-// ============================================================================
 // Fully Vectorized RVV Implementation (v2) -- Sort-Based, No std::map
 // ============================================================================
 std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA& in,
@@ -330,7 +264,11 @@ std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA& in,
 
     return out_count;
 #else
-    return voxel_grid_downsamp_rvv(in, out, leaf_size);
+    std::vector<PointXYZ> aos(in.n);
+    for (size_t i = 0; i < in.n; ++i) {
+        aos[i] = {in.x[i], in.y[i], in.z[i]};
+    }
+    return voxel_grid_downsamp_sc(aos.data(), in.n, out, leaf_size);
 #endif
 }
 

@@ -835,7 +835,7 @@ int main(int argc, char** argv) {
     bool json_metrics = false;
     bool skip_sor = false;
     bool use_ror = true; // Default to ultra-fast ROR
-    bool skip_normals = false;
+    bool skip_normals = true; // Streamlined True 3D default: no normal estimation overhead
     bool disable_disk = false;
     float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
     float cluster_tolerance = kPipelineConfig.cluster_tolerance;
@@ -882,6 +882,8 @@ int main(int argc, char** argv) {
                 }
             } else if (arg == "--no-normals" || arg == "--skip-normals" || arg == "--no-normal" || arg == "--skip-normal") {
                 skip_normals = true;
+            } else if (arg == "--compute-normals" || arg == "--with-normals") {
+                skip_normals = false;
             } else if (arg == "--no-write" || arg == "--disable-disk") {
                 disable_disk = true;
             } else if (arg == "--leaf-size") {
