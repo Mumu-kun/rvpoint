@@ -155,3 +155,32 @@ When adding new vector kernels to `rvpoint`, follow these 5 core rules:
    - Design data structures so vector loads are sequential (`__riscv_vle32_v_f32m8`).
 5. **Fast Analytical Equations Over Loops**:
    - Prefer polynomial or algebraic approximations with hardware vector square-root (`__riscv_vfsqrt_v_f32m8`) and vector reciprocal over iterative algorithms.
+
+---
+
+## 7. Isolated Multi-Backend Build Architecture
+
+To prevent mutual cache invalidation and CMake rebuild churn when switching between native execution and gem5 microarchitectural simulation, RVPoint isolates build targets into four separate directories:
+
+```text
+/root/.cache/rvpoint/build/
+├── rvv/            # Native vector build (GEM5_BUILD=OFF, -march=rv64gcv)
+├── scalar/         # Native scalar baseline (GEM5_BUILD=OFF, -march=rv64gc)
+├── rvv_gem5/       # gem5 vector build (GEM5_BUILD=ON, simulator-safe kernels)
+└── scalar_gem5/    # gem5 scalar baseline (GEM5_BUILD=ON, simulator-safe kernels)
+```
+
+- **Invariants**: Building a native target will never dirty the gem5 CMake cache or object files, and vice-versa.
+- **Automation**: `scripts/build.sh`, `scripts/run.sh`, and `scripts/gem5/run_sim.sh` route binaries to and from these directories automatically.
+
+---
+
+## 8. Host-Side Adaptive Decimation & Pre-Simulation Budgeting
+
+To make cycle-accurate simulation tractable while preserving true 3D spatial properties, RVPoint implements a zero-dependency host-side PCD decimation engine in [`scripts/lib/downsample_pcd.py`](../scripts/lib/downsample_pcd.py):
+
+### Key Capabilities:
+1. **Universal PCD Parsing**: Supports `ascii`, packed `binary`, and LZF-compressed `binary_compressed` column-major SoA data streams with zero Python dependencies (`struct` + `math` only).
+2. **Binary LZF Decompressor**: Pure Python stream decompressor compliant with PCD v0.7 specifications.
+3. **Adaptive Bounding-Box Voxel Grid**: Computes point cloud bounding boxes, automatically calculates the optimal voxel leaf size $s$ to achieve target point budgets ($N_{target}$), and computes voxel centroids to preserve planarity, ground surface normal fidelity, and obstacle cluster geometry.
+4. **Transparent CLI Integration**: `scripts/gem5/run_sim.sh` and `scripts/run.sh` intercept `.pcd` arguments when budget flags (`--sanity`, `--dev`, `--eval`, `--stress`, `--pts <N>`) are provided, caching downsampled point clouds into `output/.downsampled_<tier>_<basename>.pcd`.

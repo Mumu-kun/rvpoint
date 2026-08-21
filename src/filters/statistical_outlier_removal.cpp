@@ -1,4 +1,5 @@
 #include "filters/statistical_outlier_removal.h"
+#include "core/rvv_common.h"
 #include "search/octree.h"
 #include "search/pointer_octree.h"
 #include "search/spatial_hashing.h"
@@ -142,16 +143,6 @@ std::size_t sor_rvv(const PointCloudSoA &in, PointXYZ *out, int k,
   // 3. Filter
   float thresh = global_mean + alpha * global_std;
   std::size_t count = 0;
-#ifdef GEM5_BUILD
-  for (size_t i = 0; i < in.n; ++i) {
-    if (mean_dists[i] <= thresh) {
-      out[count].x = in.x[i];
-      out[count].y = in.y[i];
-      out[count].z = in.z[i];
-      count++;
-    }
-  }
-#else
   {
     float *base = reinterpret_cast<float *>(out);
     const ptrdiff_t stride = (ptrdiff_t)sizeof(PointXYZ); // 12 bytes
@@ -165,6 +156,7 @@ std::size_t sor_rvv(const PointCloudSoA &in, PointXYZ *out, int k,
         vfloat32m8_t vx = __riscv_vle32_v_f32m8(&in.x[i], vl);
         vfloat32m8_t vy = __riscv_vle32_v_f32m8(&in.y[i], vl);
         vfloat32m8_t vz = __riscv_vle32_v_f32m8(&in.z[i], vl);
+#ifndef GEM5_BUILD
         __riscv_vsse32_v_f32m8(base + count * 3 + 0, stride,
                                __riscv_vcompress_vm_f32m8(vx, mask, vl),
                                (size_t)cnt);
@@ -174,12 +166,28 @@ std::size_t sor_rvv(const PointCloudSoA &in, PointXYZ *out, int k,
         __riscv_vsse32_v_f32m8(base + count * 3 + 2, stride,
                                __riscv_vcompress_vm_f32m8(vz, mask, vl),
                                (size_t)cnt);
+#else
+        alignas(64) float tx[kMaxVectorFloatsM8], ty[kMaxVectorFloatsM8], tz[kMaxVectorFloatsM8];
+        alignas(8) uint8_t m_bytes[kMaxVectorMaskBytesM8] = {0};
+        __riscv_vse32_v_f32m8(tx, vx, vl);
+        __riscv_vse32_v_f32m8(ty, vy, vl);
+        __riscv_vse32_v_f32m8(tz, vz, vl);
+        __riscv_vsm_v_b4(m_bytes, mask, vl);
+        size_t written = 0;
+        for (size_t k = 0; k < vl; ++k) {
+          if ((m_bytes[k >> 3] >> (k & 7)) & 1) {
+            out[count + written].x = tx[k];
+            out[count + written].y = ty[k];
+            out[count + written].z = tz[k];
+            written++;
+          }
+        }
+#endif
         count += (size_t)cnt;
       }
       i += vl;
     }
   }
-#endif
   return count;
 #else
   std::vector<PointXYZ> aos(in.n);

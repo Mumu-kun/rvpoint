@@ -1,4 +1,5 @@
 #include "segmentation/ransac_plane.h"
+#include "core/rvv_common.h"
 #include <vector>
 #include <cmath>
 #include <cstdlib>
@@ -218,19 +219,36 @@ static inline vfloat32m8_t plane_dist_rvv(float a, float b, float c, float d,
     return dist;
 }
 
-#ifndef GEM5_BUILD
 static inline void compress_to_aos(vfloat32m8_t vx, vfloat32m8_t vy, vfloat32m8_t vz,
                                     vbool4_t mask, size_t vl,
                                     PointXYZ *out, std::size_t off) {
     long cnt = __riscv_vcpop_m_b4(mask, vl);
     if (cnt <= 0) return;
+#ifndef GEM5_BUILD
     float *base = reinterpret_cast<float*>(out + off);
     const ptrdiff_t stride = (ptrdiff_t)sizeof(PointXYZ);  // 12 bytes
     __riscv_vsse32_v_f32m8(base + 0, stride, __riscv_vcompress_vm_f32m8(vx, mask, vl), cnt);
     __riscv_vsse32_v_f32m8(base + 1, stride, __riscv_vcompress_vm_f32m8(vy, mask, vl), cnt);
     __riscv_vsse32_v_f32m8(base + 2, stride, __riscv_vcompress_vm_f32m8(vz, mask, vl), cnt);
-}
+#else
+    // gem5 single-pass register extract: eliminates heap allocations and preserves vector pipeline streaming
+    alignas(64) float tx[kMaxVectorFloatsM8], ty[kMaxVectorFloatsM8], tz[kMaxVectorFloatsM8];
+    alignas(8) uint8_t m_bytes[kMaxVectorMaskBytesM8] = {0};
+    __riscv_vse32_v_f32m8(tx, vx, vl);
+    __riscv_vse32_v_f32m8(ty, vy, vl);
+    __riscv_vse32_v_f32m8(tz, vz, vl);
+    __riscv_vsm_v_b4(m_bytes, mask, vl);
+    size_t written = 0;
+    for (size_t k = 0; k < vl; ++k) {
+        if ((m_bytes[k >> 3] >> (k & 7)) & 1) {
+            out[off + written].x = tx[k];
+            out[off + written].y = ty[k];
+            out[off + written].z = tz[k];
+            written++;
+        }
+    }
 #endif
+}
 #endif
 
 std::size_t extract_plane_inliers_rvv(const PointCloudSoA &cloud,
@@ -239,21 +257,6 @@ std::size_t extract_plane_inliers_rvv(const PointCloudSoA &cloud,
     float a = model[0], b = model[1], c = model[2], d = model[3];
     std::size_t n = cloud.n, count = 0, i = 0;
 #if defined(__riscv_vector)
-#ifdef GEM5_BUILD
-    std::vector<float> dists(n);
-    {   size_t j = 0;
-        while (j < n) {
-            size_t vl = __riscv_vsetvl_e32m8(n - j);
-            vfloat32m8_t dist = plane_dist_rvv(a, b, c, d,
-                                                &cloud.x[j], &cloud.y[j], &cloud.z[j], vl);
-            __riscv_vse32_v_f32m8(&dists[j], dist, vl);
-            j += vl;
-        }
-    }
-    for (size_t j = 0; j < n; ++j)
-        if (dists[j] >= -dist_thresh && dists[j] <= dist_thresh)
-            inliers[count++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
-#else
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m8(n - i);
         vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
@@ -268,7 +271,6 @@ std::size_t extract_plane_inliers_rvv(const PointCloudSoA &cloud,
         count += (size_t)cnt;
         i += vl;
     }
-#endif
 #else
     for (size_t j = 0; j < n; ++j) {
         float dist = a * cloud.x[j] + b * cloud.y[j] + c * cloud.z[j] + d;
@@ -285,21 +287,6 @@ std::size_t extract_plane_outliers_rvv(const PointCloudSoA &cloud,
     float a = model[0], b = model[1], c = model[2], d = model[3];
     std::size_t n = cloud.n, count = 0, i = 0;
 #if defined(__riscv_vector)
-#ifdef GEM5_BUILD
-    std::vector<float> dists(n);
-    {   size_t j = 0;
-        while (j < n) {
-            size_t vl = __riscv_vsetvl_e32m8(n - j);
-            vfloat32m8_t dist = plane_dist_rvv(a, b, c, d,
-                                                &cloud.x[j], &cloud.y[j], &cloud.z[j], vl);
-            __riscv_vse32_v_f32m8(&dists[j], dist, vl);
-            j += vl;
-        }
-    }
-    for (size_t j = 0; j < n; ++j)
-        if (dists[j] < -dist_thresh || dists[j] > dist_thresh)
-            outliers[count++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
-#else
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m8(n - i);
         vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
@@ -315,7 +302,6 @@ std::size_t extract_plane_outliers_rvv(const PointCloudSoA &cloud,
         count += (size_t)cnt;
         i += vl;
     }
-#endif
 #else
     for (size_t j = 0; j < n; ++j) {
         float dist = a * cloud.x[j] + b * cloud.y[j] + c * cloud.z[j] + d;
@@ -336,24 +322,6 @@ void extract_plane_inliers_outliers_rvv(const PointCloudSoA &cloud,
     n_inliers = 0; n_outliers = 0;
     size_t i = 0;
 #if defined(__riscv_vector)
-#ifdef GEM5_BUILD
-    std::vector<float> dists(n);
-    {   size_t j = 0;
-        while (j < n) {
-            size_t vl = __riscv_vsetvl_e32m8(n - j);
-            vfloat32m8_t dist = plane_dist_rvv(a, b, c, d,
-                                                &cloud.x[j], &cloud.y[j], &cloud.z[j], vl);
-            __riscv_vse32_v_f32m8(&dists[j], dist, vl);
-            j += vl;
-        }
-    }
-    for (size_t j = 0; j < n; ++j) {
-        if (dists[j] >= -dist_thresh && dists[j] <= dist_thresh)
-            inliers[n_inliers++]  = {cloud.x[j], cloud.y[j], cloud.z[j]};
-        else
-            outliers[n_outliers++] = {cloud.x[j], cloud.y[j], cloud.z[j]};
-    }
-#else
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m8(n - i);
         vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cloud.x[i], vl);
@@ -372,7 +340,6 @@ void extract_plane_inliers_outliers_rvv(const PointCloudSoA &cloud,
         n_outliers += (size_t)oc;
         i += vl;
     }
-#endif
 #else
     for (size_t j = 0; j < n; ++j) {
         float dist = a * cloud.x[j] + b * cloud.y[j] + c * cloud.z[j] + d;

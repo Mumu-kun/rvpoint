@@ -154,6 +154,12 @@ wsl -d rvpoint bash -c "source env/activate.sh && ./scripts/run.sh <target_name>
 ./scripts/build.sh --backend scalar
 ```
 
+### Dataset Acquisition
+```bash
+# Download official benchmark datasets into data/ (table scenes, stereo mug, KITTI LiDAR):
+./scripts/get_data.sh
+```
+
 ### Test Commands
 ```bash
 # Run 12 Essential Fast Tests (runs in seconds):
@@ -166,20 +172,44 @@ wsl -d rvpoint bash -c "source env/activate.sh && ./scripts/run.sh <target_name>
 ./scripts/run.sh test_voxel_grid
 ```
 
-### Pipeline Execution Commands
+### Pipeline Execution (QEMU Emulation)
 ```bash
-# Run Recommended Ultimate 3D Pipeline (Full PCD Export):
-./scripts/run.sh pipeline_3d_ultimate data/pcd_compressed/0000000090.pcd \
-    --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000
+# Run Recommended Ultimate 3D Pipeline with Dev tier (~1,000 pts):
+./scripts/run.sh --dev pipeline_3d_ultimate data/01_table_scene_lms400.pcd --no-write
 
-# Run Ultimate 3D Pipeline (Pure Compute Benchmark, No Disk I/O):
-./scripts/run.sh pipeline_3d_ultimate data/pcd_compressed/0000000090.pcd \
-    --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000 --no-write
+# Run with custom point budget:
+./scripts/run.sh --pts 2500 pipeline_3d_ultimate data/01_table_scene_lms400.pcd --no-write
 
-# Run 10-Stage Scientific Evaluation Pipeline:
-./scripts/run.sh pipeline_3d_ultra data/pcd_compressed/0000000090.pcd \
-    --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000
+# Run PCL baseline comparison:
+./scripts/run.sh --backend scalar --dev pcl_standalone_pipeline data/01_table_scene_lms400.pcd --no-write
+```
 
-# Run Standalone Neighbor Search Benchmark:
-./scripts/run.sh neighbor_search_sor_bench data/pcd_compressed/0000000090.pcd output/neighbor_results
+---
+
+## 7. gem5 Architectural Simulation & Profiling Workflow
+
+RVPoint includes complete cycle-accurate microarchitectural simulation support targeting the **SpacemiT K1 / MinorCPU** in-order vector core model.
+
+### 5-Tier Simulation Budgeting
+Simulation time scales quadratically with point density in nearest-neighbor stages. Use discrete simulation tiers for rapid validation:
+
+| Tier | CLI Flag | Target Points | Typical Host Simulation Time | Microarchitectural Focus |
+| :--- | :--- | :--- | :--- | :--- |
+| **Sanity** | `--sanity` | **150 pts** | ~5–15 seconds | Functional smoke test |
+| **Dev** | `--dev` | **1,000 pts** | ~1–2 minutes | L1D cache resident dev loop |
+| **Eval** | `--eval` | **5,000 pts** | ~10–15 minutes | Official benchmark evaluation |
+| **Stress** | `--stress` | **10,000 pts** | ~20–30 minutes | L2 cache pressure benchmark |
+| **Full** | `--full` | **100%** | Pass-through | Full uncompressed cloud |
+| **Custom** | `--pts <N>` | **N pts** | Custom | Arbitrary exact point budget |
+
+### Execution Commands
+```bash
+# 1. Run simulation on RVPoint RVV pipeline:
+./scripts/gem5/run_sim.sh --dev pipeline_3d_ultimate data/01_table_scene_lms400.pcd --no-write
+
+# 2. Run simulation on PCL scalar baseline with identical point decimation:
+./scripts/gem5/run_sim.sh --dev pcl_standalone_pipeline data/01_table_scene_lms400.pcd --no-write
+
+# 3. Compare committed instructions, cycles, and IPC:
+python3 scripts/gem5/compare_stats.py /tmp/gem5_sim.rvv/stats.txt /tmp/gem5_sim.scalar/stats.txt
 ```

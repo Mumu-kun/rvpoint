@@ -183,7 +183,7 @@ std::size_t sor_pointer_octree_fast(const PointCloudSoA &in,
       std::nth_element(nbr_dists.begin(), nbr_dists.begin() + valid_k,
                        nbr_dists.end());
 
-#if defined(__riscv) || defined(__riscv_vector)
+#if (defined(__riscv) || defined(__riscv_vector)) && !defined(GEM5_BUILD)
       float sum = 0.0f;
       int rem = valid_k;
       int offset = 1;

@@ -584,6 +584,32 @@ static size_t extract_inliers_outliers_direct_soa(
         vbool4_t inlier_mask = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
         vbool4_t outlier_mask = __riscv_vmnot_m_b4(inlier_mask, vl);
 
+#ifdef GEM5_BUILD
+        alignas(64) float tx[kMaxVectorFloatsM8], ty[kMaxVectorFloatsM8], tz[kMaxVectorFloatsM8];
+        alignas(8) uint8_t m_in[kMaxVectorMaskBytesM8] = {0};
+        alignas(8) uint8_t m_out[kMaxVectorMaskBytesM8] = {0};
+        __riscv_vse32_v_f32m8(tx, vx, vl);
+        __riscv_vse32_v_f32m8(ty, vy, vl);
+        __riscv_vse32_v_f32m8(tz, vz, vl);
+        __riscv_vsm_v_b4(m_in, inlier_mask, vl);
+        __riscv_vsm_v_b4(m_out, outlier_mask, vl);
+        for (size_t k = 0; k < vl; ++k) {
+            if ((m_out[k >> 3] >> (k & 7)) & 1) {
+                ox[out_count] = tx[k];
+                oy[out_count] = ty[k];
+                oz[out_count] = tz[k];
+                out_count++;
+            }
+            if ((m_in[k >> 3] >> (k & 7)) & 1) {
+                if (populate_inlier_pts) {
+                    ix[in_count] = tx[k];
+                    iy[in_count] = ty[k];
+                    iz[in_count] = tz[k];
+                }
+                in_count++;
+            }
+        }
+#else
         long cnt_out = __riscv_vcpop_m_b4(outlier_mask, vl);
         if (cnt_out > 0) {
             vfloat32m8_t cx = __riscv_vcompress_vm_f32m8(vx, outlier_mask, vl);
@@ -607,6 +633,7 @@ static size_t extract_inliers_outliers_direct_soa(
             }
             in_count += cnt_in;
         }
+#endif
         i += vl;
     }
     ox.resize(out_count);
