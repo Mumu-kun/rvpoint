@@ -86,23 +86,27 @@ foreach(pipe_src ${PIPELINE_SOURCES})
     add_executable(${pipe_name} "${pipe_src}")
     target_link_libraries(${pipe_name} PRIVATE rvpoint)
     if(pipe_name STREQUAL "official_pcl_pipeline")
-        target_compile_options(${pipe_name} PRIVATE 
-            "-I/usr/include/pcl-1.14" 
-            "-I/usr/include/eigen3" 
-            "-I/usr/include"
-        )
-        target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,/usr/lib/riscv64-linux-gnu")
-        target_link_libraries(${pipe_name} PRIVATE 
-            /usr/lib/riscv64-linux-gnu/libpcl_common.so
-            /usr/lib/riscv64-linux-gnu/libpcl_io.so
-            /usr/lib/riscv64-linux-gnu/libpcl_filters.so
-            /usr/lib/riscv64-linux-gnu/libpcl_features.so
-            /usr/lib/riscv64-linux-gnu/libpcl_segmentation.so
-            /usr/lib/riscv64-linux-gnu/libpcl_search.so
-            /usr/lib/riscv64-linux-gnu/libpcl_octree.so
-            /usr/lib/riscv64-linux-gnu/libpcl_kdtree.so
-            /usr/lib/riscv64-linux-gnu/libpcl_sample_consensus.so
-        )
+        if(EXISTS "/usr/lib/riscv64-linux-gnu/libpcl_common.so" AND EXISTS "/usr/include/pcl-1.14")
+            target_compile_options(${pipe_name} PRIVATE 
+                "-I/usr/include/pcl-1.14" 
+                "-I/usr/include/eigen3" 
+                "-I/usr/include"
+            )
+            target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,/usr/lib/riscv64-linux-gnu")
+            target_link_libraries(${pipe_name} PRIVATE 
+                /usr/lib/riscv64-linux-gnu/libpcl_common.so
+                /usr/lib/riscv64-linux-gnu/libpcl_io.so
+                /usr/lib/riscv64-linux-gnu/libpcl_filters.so
+                /usr/lib/riscv64-linux-gnu/libpcl_features.so
+                /usr/lib/riscv64-linux-gnu/libpcl_segmentation.so
+                /usr/lib/riscv64-linux-gnu/libpcl_search.so
+                /usr/lib/riscv64-linux-gnu/libpcl_octree.so
+                /usr/lib/riscv64-linux-gnu/libpcl_kdtree.so
+                /usr/lib/riscv64-linux-gnu/libpcl_sample_consensus.so
+            )
+        else()
+            set_target_properties(${pipe_name} PROPERTIES EXCLUDE_FROM_ALL TRUE)
+        endif()
     else()
         target_link_options(${pipe_name} PRIVATE "-static")
     endif()

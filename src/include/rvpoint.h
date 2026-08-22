@@ -26,6 +26,10 @@
 #include "segmentation/ransac_plane.h"
 #include "segmentation/euclidean_clustering.h"
 
+#include "registration/tracking_types.h"
+#include "registration/icp_registration.h"
+#include "registration/tracking_pipeline.h"
+
 #include "io/simple_pcd_loader.h"
 // IWYU pragma: end_exports
 

@@ -26,6 +26,27 @@ public:
     p2_ = p2;
   }
 
+  /**
+   * @brief Incrementally insert new points into the existing hash grid.
+   *
+   * Used by tracking mode (Stage 9) to avoid full rebuild each frame.
+   *
+   * @param cloud  Point cloud containing the new points (SoA).
+   * @param start_idx  Starting index in the cloud to insert from.
+   * @param count  Number of points to insert.
+   */
+  void insertPoints(const PointCloudSoA &cloud, std::size_t start_idx,
+                    std::size_t count);
+
+  /**
+   * @brief Remove points at specified indices from the hash grid.
+   *
+   * Used by tracking mode (Stage 9) for incremental index updates.
+   *
+   * @param indices  Vector of point indices to remove.
+   */
+  void removePoints(const std::vector<int> &indices);
+
 private:
   PointCloudSoA cloud_;
   float cell_size_;

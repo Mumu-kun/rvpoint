@@ -80,7 +80,37 @@ Here is the complete, categorized list of all command lines in the repository:
 
 ---
 
-### 3. Architecture & Algorithmic Benchmarks
+### 3. Key Tracking Mode & ICP Registration Pipelines
+
+#### A. Multi-Frame Keyframe vs. Tracking Mode Comparison (`tracking_pcd_compare`)
+*Processes sequential PCD files, comparing Full Pipeline vs. 9-stage Tracking Mode with zero disk I/O in compute timer:*
+```bash
+# Compare 20 sequential frames with keyframe interval of 5:
+./scripts/run.sh tracking_pcd_compare data/pcd_compressed output/pcd_compare 20 5
+```
+
+#### B. Pure In-Memory Tracking Mode Benchmark (`tracking_mode_bench`)
+*Evaluates ICP registration speedup and per-stage latency breakdown across synthetic or recorded streams:*
+```bash
+# Synthetic scene benchmark (10 frames, 5000 points):
+./scripts/run.sh tracking_mode_bench --synthetic output 10 5000
+
+# Benchmark on recorded dataset frame:
+./scripts/run.sh tracking_mode_bench data/pcd_compressed/0000000080.pcd output 10 5
+```
+
+#### C. Tracking Unit Tests
+```bash
+# Run Point-to-Plane ICP Registration test (translation, rotation, SE3 transforms):
+./scripts/run.sh test_tracking_registration
+
+# Run 9-Stage Tracking Pipeline test (propagation, verification, point splitting):
+./scripts/run.sh test_tracking_pipeline
+```
+
+---
+
+### 4. Architecture & Algorithmic Benchmarks
 
 #### A. Pure In-Memory Compute Benchmark (Zero Disk I/O)
 *Direct compute timing across all architectures on identical in-memory frames:*
@@ -120,7 +150,7 @@ Here is the complete, categorized list of all command lines in the repository:
 
 ---
 
-### 4. Build and Testing Commands
+### 5. Build and Testing Commands
 
 #### A. Build All Targets (Toolchain: RISC-V RVV 1.0)
 ```bash
@@ -131,6 +161,8 @@ Here is the complete, categorized list of all command lines in the repository:
 ```bash
 ./scripts/build.sh --target pipeline_3d_ultimate
 ./scripts/build.sh --target pipeline_3d_ultra
+./scripts/build.sh --target tracking_pcd_compare
+./scripts/build.sh --target tracking_mode_bench
 ```
 
 #### C. Run All Unit Tests
