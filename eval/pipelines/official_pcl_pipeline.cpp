@@ -1,7 +1,8 @@
 // eval/pipelines/official_pcl_pipeline.cpp
 // Official Debian PCL 1.14 (Point Cloud Library) 10-Stage Evaluation Pipeline
-// Directly uses official PCL algorithms (pcl::VoxelGrid, pcl::StatisticalOutlierRemoval,
+// Directly uses official PCL algorithms (pcl::VoxelGrid, pcl::StatisticalOutlierRemoval / pcl::RadiusOutlierRemoval,
 // pcl::NormalEstimation, pcl::SACSegmentation, pcl::EuclideanClusterExtraction).
+// Matches stage-for-stage and disk I/O with pipeline_3d_ultra for direct benchmarking.
 
 #include <algorithm>
 #include <chrono>
@@ -21,6 +22,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/search/octree.h>
@@ -53,6 +55,8 @@ struct PipelineConfig {
     float cluster_tolerance = 0.15f;
     int min_cluster_size = 50;
     int max_cluster_size = 100000;
+    float ror_radius = 0.25f;
+    int ror_min_pts = 2;
 };
 
 void beginStage(int stage_idx, const std::string &label, bool enabled) {
@@ -109,54 +113,124 @@ std::string resolveInputPath(const std::string &raw_path) {
     return raw_path;
 }
 
+bool saveJSONMetrics(const std::filesystem::path &out_path,
+                     const std::vector<StageTiming> &stages,
+                     double total_ms, float leaf_size, bool skip_sor,
+                     float cluster_tolerance, size_t inlier_count,
+                     size_t outlier_count, size_t cluster_count) {
+    std::ofstream ofs(out_path);
+    if (!ofs.is_open()) return false;
+
+    ofs << "{\n";
+    ofs << "  \"status\": \"SUCCESS\",\n";
+    ofs << "  \"leaf_size\": " << leaf_size << ",\n";
+    ofs << "  \"skip_sor\": " << (skip_sor ? "true" : "false") << ",\n";
+    ofs << "  \"cluster_tolerance\": " << cluster_tolerance << ",\n";
+    ofs << "  \"total_ms\": " << total_ms << ",\n";
+    ofs << "  \"ground_inliers\": " << inlier_count << ",\n";
+    ofs << "  \"non_ground_outliers\": " << outlier_count << ",\n";
+    ofs << "  \"clusters_found\": " << cluster_count << ",\n";
+    ofs << "  \"stages\": [\n";
+    for (std::size_t i = 0; i < stages.size(); ++i) {
+        const auto &st = stages[i];
+        ofs << "    {\n";
+        ofs << "      \"stage\": " << st.index << ",\n";
+        ofs << "      \"name\": \"" << st.label << "\",\n";
+        ofs << "      \"time_ms\": " << st.ms << ",\n";
+        ofs << "      \"points\": " << st.point_count << "\n";
+        ofs << "    }" << (i + 1 < stages.size() ? "," : "") << "\n";
+    }
+    ofs << "  ]\n";
+    ofs << "}\n";
+    ofs.flush();
+    return ofs.good();
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     bool progress_enabled = false;
     bool json_metrics = false;
     bool skip_sor = false;
+    bool use_ror = false;
     bool skip_normals = false;
     bool disable_disk = false;
     PipelineConfig cfg;
+
+    std::vector<float> ground_normal_prior = {0.0f, 0.0f, 1.0f};
+    float min_ground_dot = 0.707f; // ~45 deg max slope
 
     std::vector<std::string> positional_args;
     std::vector<StageTiming> stage_timings;
     stage_timings.reserve(kStageCount);
 
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--progress") {
-            progress_enabled = true;
-        } else if (arg == "--json" || arg == "--json-metrics") {
-            json_metrics = true;
-        } else if (arg == "--skip-sor" || arg == "--no-sor") {
-            skip_sor = true;
-        } else if (arg == "--no-normals" || arg == "--skip-normals") {
-            skip_normals = true;
-        } else if (arg == "--no-write" || arg == "--disable-disk") {
-            disable_disk = true;
-        } else if (arg == "--leaf-size") {
-            if (i + 1 < argc) cfg.voxel_leaf_size = std::stof(argv[++i]);
-        } else if (arg == "--cluster-tolerance") {
-            if (i + 1 < argc) cfg.cluster_tolerance = std::stof(argv[++i]);
-        } else if (arg == "--min-cluster") {
-            if (i + 1 < argc) cfg.min_cluster_size = std::stoi(argv[++i]);
-        } else if (arg == "--max-cluster") {
-            if (i + 1 < argc) cfg.max_cluster_size = std::stoi(argv[++i]);
-        } else if (arg == "--ransac-iters") {
-            if (i + 1 < argc) cfg.ransac_max_iterations = std::stoi(argv[++i]);
-        } else if (!arg.empty() && arg[0] == '-') {
-            std::cerr << "Warning: Unrecognized option '" << arg << "'\n";
-        } else {
-            positional_args.push_back(arg);
+    try {
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--progress") {
+                progress_enabled = true;
+            } else if (arg == "--json" || arg == "--json-metrics") {
+                json_metrics = true;
+            } else if (arg == "--skip-sor" || arg == "--no-sor") {
+                skip_sor = true;
+            } else if (arg == "--use-ror" || arg == "--ror") {
+                use_ror = true; skip_sor = false;
+            } else if (arg == "--use-sor" || arg == "--sor") {
+                use_ror = false; skip_sor = false;
+            } else if (arg == "--ror-radius") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ror-radius\n"; return 1; }
+                cfg.ror_radius = std::stof(argv[++i]);
+            } else if (arg == "--ror-min-pts") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ror-min-pts\n"; return 1; }
+                cfg.ror_min_pts = std::stoi(argv[++i]);
+            } else if (arg == "--no-normals" || arg == "--skip-normals" || arg == "--no-normal" || arg == "--skip-normal") {
+                skip_normals = true;
+            } else if (arg == "--no-write" || arg == "--disable-disk") {
+                disable_disk = true;
+            } else if (arg == "--leaf-size") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --leaf-size\n"; return 1; }
+                cfg.voxel_leaf_size = std::stof(argv[++i]);
+            } else if (arg == "--cluster-tolerance") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --cluster-tolerance\n"; return 1; }
+                cfg.cluster_tolerance = std::stof(argv[++i]);
+            } else if (arg == "--min-cluster") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --min-cluster\n"; return 1; }
+                cfg.min_cluster_size = std::stoi(argv[++i]);
+            } else if (arg == "--max-cluster") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --max-cluster\n"; return 1; }
+                cfg.max_cluster_size = std::stoi(argv[++i]);
+            } else if (arg == "--ransac-iters") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ransac-iters\n"; return 1; }
+                cfg.ransac_max_iterations = std::stoi(argv[++i]);
+            } else if (arg == "--seed") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --seed\n"; return 1; }
+                ++i; // PCL manages its own PRNG
+            } else if (arg == "--ground-angle-thresh") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ground-angle-thresh\n"; return 1; }
+                float deg = std::stof(argv[++i]);
+                min_ground_dot = std::cos(deg * 3.14159265358979323846f / 180.0f);
+            } else if (arg == "--no-ground-prior" || arg == "--unconstrained-plane") {
+                min_ground_dot = 0.0f;
+            } else if (arg == "--optical-frame") {
+                ground_normal_prior = {0.0f, 1.0f, 0.0f};
+            } else if (!arg.empty() && arg[0] == '-') {
+                std::cerr << "Warning: Unrecognized option '" << arg << "'\n";
+            } else {
+                positional_args.push_back(arg);
+            }
         }
+    } catch (const std::exception& e) {
+        std::cerr << "Error parsing CLI arguments: " << e.what() << std::endl;
+        return 1;
     }
 
     if (positional_args.empty()) {
         std::cerr << "Usage: " << argv[0]
-                  << " [--progress] [--json] [--no-write] [--no-normals] [--skip-sor] "
-                     "[--leaf-size <val>] [--cluster-tolerance <val>] [--min-cluster <val>] "
-                     "[--max-cluster <val>] [--ransac-iters <val>] <input.pcd> [output_dir]\n";
+                  << " [--progress] [--json] [--no-write] [--no-normals] [--use-ror|--use-sor|--skip-sor] "
+                     "[--ror-radius <val>] [--ror-min-pts <val>] [--leaf-size <val>] "
+                     "[--cluster-tolerance <val>] [--min-cluster <val>] "
+                     "[--max-cluster <val>] [--ransac-iters <val>] "
+                     "[--ground-angle-thresh <deg>] [--no-ground-prior] [--optical-frame] <input.pcd> [output_dir]\n";
         return 1;
     }
 
@@ -215,12 +289,19 @@ int main(int argc, char** argv) {
     stage_timings.push_back({4, "Build search index for downsampled cloud",
                              endStage(4, "Build search index for downsampled cloud", stage_start, progress_enabled), n_down});
 
-    // ── Stage 5: Statistical Outlier Removal (pcl::StatisticalOutlierRemoval) ─
+    // ── Stage 5: Outlier Removal (pcl::StatisticalOutlierRemoval / pcl::RadiusOutlierRemoval) ─
     pcl::PointCloud<pcl::PointXYZ>::Ptr sor_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    beginStage(5, "Statistical outlier removal (pcl::SOR)", progress_enabled);
+    const char* outlier_stage_label = skip_sor ? "Outlier removal (skipped)" : (use_ror ? "Radius outlier removal (pcl::ROR)" : "Statistical outlier removal (pcl::SOR)");
+    beginStage(5, outlier_stage_label, progress_enabled);
     stage_start = Clock::now();
     if (skip_sor) {
         *sor_cloud = *downsampled_cloud;
+    } else if (use_ror) {
+        pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+        ror.setInputCloud(downsampled_cloud);
+        ror.setRadiusSearch(cfg.ror_radius);
+        ror.setMinNeighborsInRadius(cfg.ror_min_pts);
+        ror.filter(*sor_cloud);
     } else {
         pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
         sor.setInputCloud(downsampled_cloud);
@@ -230,7 +311,7 @@ int main(int argc, char** argv) {
         sor.filter(*sor_cloud);
     }
     const size_t n_sor = sor_cloud->size();
-    stage_timings.push_back({5, "Statistical outlier removal", endStage(5, "Statistical outlier removal", stage_start, progress_enabled), n_sor});
+    stage_timings.push_back({5, outlier_stage_label, endStage(5, outlier_stage_label, stage_start, progress_enabled), n_sor});
     if (!disable_disk) {
         pcl::io::savePCDFileBinary((output_dir / "02_sor_filtered.pcd").string(), *sor_cloud);
     }
@@ -267,24 +348,36 @@ int main(int argc, char** argv) {
     if (n_sor >= 3) {
         pcl::SACSegmentation<pcl::PointXYZ> seg;
         seg.setOptimizeCoefficients(true);
-        seg.setModelType(pcl::SACMODEL_PLANE);
+        if (min_ground_dot > 0.0f) {
+            seg.setModelType(pcl::SACMODEL_PERPENDICULAR_PLANE);
+            seg.setAxis(Eigen::Vector3f(ground_normal_prior[0], ground_normal_prior[1], ground_normal_prior[2]));
+            float max_angle_rad = std::acos(std::clamp(min_ground_dot, -1.0f, 1.0f));
+            seg.setEpsAngle(max_angle_rad);
+        } else {
+            seg.setModelType(pcl::SACMODEL_PLANE);
+        }
         seg.setMethodType(pcl::SAC_RANSAC);
         seg.setMaxIterations(cfg.ransac_max_iterations);
         seg.setDistanceThreshold(cfg.ransac_distance_threshold);
         seg.setInputCloud(sor_cloud);
         seg.segment(*inliers, *coefficients);
 
-        pcl::ExtractIndices<pcl::PointXYZ> extract;
-        extract.setInputCloud(sor_cloud);
-        extract.setIndices(inliers);
-        extract.setNegative(false);
-        extract.filter(*plane_inliers);
+        if (!inliers->indices.empty()) {
+            pcl::ExtractIndices<pcl::PointXYZ> extract;
+            extract.setInputCloud(sor_cloud);
+            extract.setIndices(inliers);
+            extract.setNegative(false);
+            extract.filter(*plane_inliers);
 
-        extract.setNegative(true);
-        extract.filter(*non_ground_cloud);
+            extract.setNegative(true);
+            extract.filter(*non_ground_cloud);
+        } else {
+            *non_ground_cloud = *sor_cloud;
+        }
     } else {
         *non_ground_cloud = *sor_cloud;
     }
+    const size_t n_inliers = plane_inliers->size();
     const size_t n_non_ground = non_ground_cloud->size();
     stage_timings.push_back({8, "RANSAC primitive fitting", endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled), n_non_ground});
 
@@ -311,31 +404,59 @@ int main(int argc, char** argv) {
     }
     stage_timings.push_back({9, "Euclidean clustering", endStage(9, "Euclidean clustering", stage_start, progress_enabled), cluster_indices.size()});
 
-    // ── Stage 10: Write Cluster Stage ───────────────────────────────────────
+    // ── Stage 10: Write Cluster Stage (Single Colored PCD, matching pipeline_3d_ultra) ─
     beginStage(10, "Write cluster stage", progress_enabled);
     stage_start = Clock::now();
-    size_t total_clustered_points = 0;
     if (!disable_disk) {
-        int cluster_id = 0;
-        for (const auto& indices : cluster_indices) {
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZ>);
-            for (const auto& idx : indices.indices) {
-                cluster->push_back((*non_ground_cloud)[idx]);
+        struct RGBColor { std::uint8_t r, g, b; };
+        auto generateColors = [](size_t count) {
+            std::vector<RGBColor> colors(count);
+            for (size_t i = 0; i < count; ++i) {
+                float hue = std::fmod(i * 0.618033988749895f, 1.0f);
+                float c = 0.95f * 0.85f;
+                float x = c * (1.0f - std::abs(std::fmod(hue * 6.0f, 2.0f) - 1.0f));
+                float m = 0.95f - c;
+                float r = 0, g = 0, b = 0;
+                int h = static_cast<int>(hue * 6.0f) % 6;
+                if (h == 0) { r = c; g = x; } else if (h == 1) { r = x; g = c; }
+                else if (h == 2) { g = c; b = x; } else if (h == 3) { g = x; b = c; }
+                else if (h == 4) { r = x; b = c; } else { r = c; b = x; }
+                colors[i] = {static_cast<uint8_t>((r + m) * 255.0f), static_cast<uint8_t>((g + m) * 255.0f), static_cast<uint8_t>((b + m) * 255.0f)};
             }
-            total_clustered_points += cluster->size();
-            std::string cname = "cluster_" + std::to_string(cluster_id++) + ".pcd";
-            pcl::io::savePCDFileBinary((output_dir / cname).string(), *cluster);
+            return colors;
+        };
+
+        auto colors = generateColors(cluster_indices.size());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+        for (size_t c_idx = 0; c_idx < cluster_indices.size(); ++c_idx) {
+            const auto& col = colors[c_idx];
+            for (int pt_idx : cluster_indices[c_idx].indices) {
+                if (pt_idx >= 0 && static_cast<size_t>(pt_idx) < n_non_ground) {
+                    pcl::PointXYZRGB pt;
+                    pt.x = (*non_ground_cloud)[pt_idx].x;
+                    pt.y = (*non_ground_cloud)[pt_idx].y;
+                    pt.z = (*non_ground_cloud)[pt_idx].z;
+                    pt.r = col.r;
+                    pt.g = col.g;
+                    pt.b = col.b;
+                    colored_cloud->push_back(pt);
+                }
+            }
         }
-    } else {
-        for (const auto& indices : cluster_indices) {
-            total_clustered_points += indices.indices.size();
-        }
+        pcl::io::savePCDFileBinary((output_dir / "06_clusters.pcd").string(), *colored_cloud);
     }
-    stage_timings.push_back({10, "Write cluster stage", endStage(10, "Write cluster stage", stage_start, progress_enabled), total_clustered_points});
+    stage_timings.push_back({10, "Write cluster stage", endStage(10, "Write cluster stage", stage_start, progress_enabled), cluster_indices.size()});
 
     const auto overall_end = Clock::now();
     const double total_ms = std::chrono::duration<double, std::milli>(overall_end - overall_start).count();
 
     printFinalBreakdown(stage_timings, total_ms);
+
+    if (json_metrics && !disable_disk) {
+        saveJSONMetrics(output_dir / "metrics.json", stage_timings, total_ms,
+                        cfg.voxel_leaf_size, skip_sor, cfg.cluster_tolerance,
+                        n_inliers, n_non_ground, cluster_indices.size());
+    }
+
     return 0;
 }
