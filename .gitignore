@@ -40,3 +40,5 @@ wsl/
 env/.wsl/
 .venv/
 AGENTS.md
+# Generated protobuf bindings (regenerate with grpc_tools.protoc)
+scripts/capture/sensor_pb2.py
