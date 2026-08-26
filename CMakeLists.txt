@@ -8,8 +8,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Static linking for QEMU compatibility
-set(CMAKE_EXE_LINKER_FLAGS "-static")
+# Target-specific linking options (static for internal targets, dynamic for upstream PCL)
+# CMAKE_EXE_LINKER_FLAGS is left unforced so targets can choose static vs dynamic
 
 option(RVPOINT_USE_RVV "Enable RVV helper backend" ON)
 option(RVV_PCL_USE_RVV "Backward compatibility alias for RVPOINT_USE_RVV" ON)
@@ -44,7 +44,7 @@ message(STATUS "Binary output dir: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 # ==============================================================================
 # 2. RVPoint Core Library Target (src/)
 # ==============================================================================
-file(GLOB_RECURSE LIB_SOURCES 
+file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/*.c"
 )
@@ -55,7 +55,7 @@ add_library(rvvpcl ALIAS rvpoint)
 add_library(rvv_pcl ALIAS rvpoint)
 
 # Automatically discover all subdirectories containing headers/sources under src/
-file(GLOB_RECURSE ALL_SRC_HEADERS 
+file(GLOB_RECURSE ALL_SRC_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/*.h" 
     "${CMAKE_SOURCE_DIR}/src/*.hpp"
 )
@@ -78,25 +78,74 @@ if(GEM5_BUILD)
 endif()
 
 # ==============================================================================
-# 3. Perception Pipelines (eval/pipelines/)
+# 3. Upstream PCL Dependency Discovery (env/deps/pcl)
 # ==============================================================================
-file(GLOB PIPELINE_SOURCES "${CMAKE_SOURCE_DIR}/eval/pipelines/*.cpp")
+set(PCL_DEPS_DIR "${CMAKE_SOURCE_DIR}/env/deps")
+if(EXISTS "${PCL_DEPS_DIR}/eigen/include/eigen3")
+    include_directories(SYSTEM "${PCL_DEPS_DIR}/eigen/include/eigen3")
+elseif(EXISTS "${PCL_DEPS_DIR}/eigen")
+    include_directories(SYSTEM "${PCL_DEPS_DIR}/eigen")
+endif()
+if(EXISTS "${PCL_DEPS_DIR}/flann/include")
+    include_directories(SYSTEM "${PCL_DEPS_DIR}/flann/include")
+    link_directories("${PCL_DEPS_DIR}/flann/lib")
+endif()
+if(EXISTS "${PCL_DEPS_DIR}/pcl/usr/include/pcl-1.14" OR EXISTS "${PCL_DEPS_DIR}/pcl/include/pcl-1.14")
+    include_directories(SYSTEM 
+        "${PCL_DEPS_DIR}/pcl/usr/include/pcl-1.14"
+        "${PCL_DEPS_DIR}/pcl/include/pcl-1.14"
+        "${PCL_DEPS_DIR}/pcl/usr/include"
+        "${PCL_DEPS_DIR}/pcl/include"
+    )
+    link_directories(
+        "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu" 
+        "${PCL_DEPS_DIR}/pcl/lib"
+        "${PCL_DEPS_DIR}/flann/lib"
+    )
+    set(PCL_NATIVE_AVAILABLE ON)
+    message(STATUS "Found upstream PCL 1.14 RISC-V static dependencies at: ${PCL_DEPS_DIR}/pcl")
+else()
+    set(PCL_NATIVE_AVAILABLE OFF)
+endif()
+
+# ==============================================================================
+# 4. Perception Pipelines (eval/pipelines/)
+# ==============================================================================
+file(GLOB PIPELINE_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/eval/pipelines/*.cpp")
 foreach(pipe_src ${PIPELINE_SOURCES})
     get_filename_component(pipe_name "${pipe_src}" NAME_WE)
+    if(pipe_name STREQUAL "official_pcl_pipeline")
+        continue() # Superseeded by pcl_native_pipeline / pcl_qemu_pipeline
+    endif()
+    if(pipe_name MATCHES "^pcl_" AND NOT PCL_NATIVE_AVAILABLE)
+        message(STATUS "Skipping '${pipe_name}' (Run './scripts/setup_pcl_riscv.sh' to install PCL)")
+        continue()
+    endif()
     add_executable(${pipe_name} "${pipe_src}")
     target_link_libraries(${pipe_name} PRIVATE rvpoint)
+    target_compile_options(${pipe_name} PRIVATE "-fopenmp")
+    target_link_options(${pipe_name} PRIVATE "-static" "-fopenmp")
+    if(pipe_name MATCHES "^pcl_" AND PCL_NATIVE_AVAILABLE)
+        set(PCL_LIB_DIR "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu")
+        target_link_libraries(${pipe_name} PRIVATE 
+            "${PCL_LIB_DIR}/libflann_cpp_s.a"
+            "${PCL_LIB_DIR}/libboost_system.a"
+            pthread
+        )
+    endif()
 endforeach()
 
 # ==============================================================================
 # 4. Standalone Benchmarks (eval/benchmarks/)
 # ==============================================================================
-file(GLOB BENCHMARK_SOURCES "${CMAKE_SOURCE_DIR}/eval/benchmarks/*.cpp")
+file(GLOB BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/eval/benchmarks/*.cpp")
 list(FILTER BENCHMARK_SOURCES EXCLUDE REGEX "benchmark_kernels.cpp|kdtree_vs_pointer_octree_bench.cpp")
 
 foreach(bench_src ${BENCHMARK_SOURCES})
     get_filename_component(bench_name "${bench_src}" NAME_WE)
     add_executable(${bench_name} "${bench_src}")
     target_link_libraries(${bench_name} PRIVATE rvpoint)
+    target_link_options(${bench_name} PRIVATE "-static")
 endforeach()
 
 # ==============================================================================
@@ -107,10 +156,10 @@ function(add_rvpoint_test src)
     add_executable(${name} "${src}")
     target_link_libraries(${name} PRIVATE rvpoint)
     target_compile_options(${name} PRIVATE "-fopenmp")
-    target_link_options(${name} PRIVATE "-fopenmp")
+    target_link_options(${name} PRIVATE "-static" "-fopenmp")
 endfunction()
 
-file(GLOB FAST_TEST_SOURCES 
+file(GLOB FAST_TEST_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/eval/tests/fast/*.cpp"
     "${CMAKE_SOURCE_DIR}/eval/tests/fast/*.c"
 )
@@ -121,7 +170,7 @@ endforeach()
 # ==============================================================================
 # 6. Experimental & Research Tests (eval/tests/experimental/)
 # ==============================================================================
-file(GLOB EXPERIMENTAL_TEST_SOURCES 
+file(GLOB EXPERIMENTAL_TEST_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/eval/tests/experimental/*.cpp"
 )
 foreach(src ${EXPERIMENTAL_TEST_SOURCES})

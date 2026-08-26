@@ -234,6 +234,10 @@ else
     QEMU_FLAGS+=("-cpu" "rv64")
 fi
 
+if [ -d "${PROJECT_ROOT}/env/deps/pcl" ]; then
+    QEMU_FLAGS+=("-E" "LD_LIBRARY_PATH=${PROJECT_ROOT}/env/deps/pcl/usr/lib/riscv64-linux-gnu:${PROJECT_ROOT}/env/deps/pcl/lib:${PROJECT_ROOT}/env/deps/pcl/usr/lib")
+fi
+
 BIN_DIR="${BUILD_DIR}/${BACKEND}/bin/${BACKEND}"
 TARGET_BIN="$BIN_DIR/$TARGET_NAME"
 if [ ! -f "$TARGET_BIN" ]; then

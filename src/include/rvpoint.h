@@ -9,6 +9,7 @@
 #include "core/point_types.h"
 #include "core/rvv_common.h"
 #include "core/profiler.h"
+#include "core/pipeline_params.h"
 
 #include "filters/voxel_grid.h"
 #include "filters/statistical_outlier_removal.h"

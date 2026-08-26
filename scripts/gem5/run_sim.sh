@@ -44,6 +44,7 @@ TIER=""
 TARGET_POINTS=""
 SAVE_RESULTS=false
 STREAM_OUTPUT=false
+NUM_CPUS=1
 TARGET_RAW=""
 CPP_ARGS=()
 
@@ -63,6 +64,7 @@ Simulation Budget Tiers:
   --pts <N>, --target-points <N>  Arbitrary exact point count target
 
 Runner Options:
+  --cpus <N>, --num-cpus <N> Number of simulated CPU cores (default: 1)
   --backend <rvv|scalar>    Compilation backend (default: rvv)
   --save-results            Save stats.txt and JSON summary to results/gem5/
   --stream, -v              Stream raw gem5 simulator log output
@@ -126,6 +128,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --backend)
             BACKEND="$2"
+            shift 2
+            ;;
+        --cpus|--num-cpus)
+            NUM_CPUS="$2"
             shift 2
             ;;
         --save-results)
@@ -276,6 +282,7 @@ if command -v gem5.opt &>/dev/null; then
     GEM5_EXEC="gem5.opt"
     "$GEM5_EXEC" -d "$OUTDIR" \
         /gem5/configs/deprecated/example/se.py \
+        --num-cpus "$NUM_CPUS" \
         --cmd "$TARGET_BIN" --options "${CPP_ARGS[*]}" 2>&1 \
         | tee "$SIM_LOG" \
         | grep --line-buffered -vE '^(warn:|info:|gem5 (Simulator|is |version|compiled|started|executing)|command line:|Global frequency|\*\*\*\* REAL SIMULATION)' || true
@@ -286,10 +293,12 @@ elif command -v docker &>/dev/null && docker ps &>/dev/null; then
         -v "$BUILD_DIR:$BUILD_DIR" \
         -v "/tmp:/tmp" \
         -w "$PROJECT_ROOT" \
+        -e OMP_WAIT_POLICY=passive \
         manuel313/gem5_v25 \
         /gem5/build/RISCV/gem5.opt \
           -d "$OUTDIR" \
           /gem5/configs/deprecated/example/se.py \
+          --num-cpus "$NUM_CPUS" \
           --cmd "$TARGET_BIN" --options "${CPP_ARGS[*]}" 2>&1 \
         | tee "$SIM_LOG" \
         | grep --line-buffered -vE '^(warn:|info:|gem5 (Simulator|is |version|compiled|started|executing)|command line:|Global frequency|\*\*\*\* REAL SIMULATION)' || true

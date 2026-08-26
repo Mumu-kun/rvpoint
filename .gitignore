@@ -38,6 +38,7 @@ docs/doxygen/
 env/.tools/
 wsl/
 env/.wsl/
+env/deps/
 .venv/
 data/
 docs/plans
