@@ -1,16 +1,6 @@
-// eval/pipelines/pipeline_3d_stream.cpp
+// eval/pipelines/pipeline_3d_stream_rvv_clust.cpp
 // Multi-Threaded Continuous Stream True-3D Perception Pipeline
-// Target Architecture: SpacemiT K1 / Orange Pi RV2 (RV64GCV Octa-Core) & QEMU / gem5
-//
-// Architectural Highlights:
-// 1. Pre-Allocated Zero-Copy ThreadFrameContext per Core (No heap allocations in hot loop)
-// 2. Lock-Free Asynchronous Frame Stream Worker Pool for Linear 8-Core Throughput Scaling
-// 3. Fast 2-Pass Linear Radix Voxel Downsampler (O(N) vs O(N log N) std::sort)
-// 4. Sparse-Reset O(K) 3D Spatial Grid (Eliminates 262k memset stalls)
-// 5. Hardware RVV 1.0 SPRT RANSAC with SVD Refinement & Early-Rejection Cutoff
-// 6. Multi-threaded Edge-Buffered Euclidean Clustering (Union-Find)
-// 7. Strict separation of pure compute pipeline execution time from disk I/O
-// 8. Verification cluster PCD export to output/stream_clusters/ in PointXYZRGB format
+// Hardware RVV 1.0 Vectorized Euclidean Clustering Standalone Test Target
 
 #include "include/rvpoint.h"
 #include "search/fast_3d_spatial_grid.h"
@@ -45,16 +35,13 @@ using namespace rvpoint;
 
 namespace {
 
-// ============================================================================
-// CONFIGURATION & TELEMETRY
-// ============================================================================
 struct StreamConfig {
     std::string input_path = "data/pcd_compressed";
     int max_frames = 20;
     int num_threads = 8;
     bool write_clusters = false;
     bool progress = true;
-    std::string mode = "inter"; // "inter" (Worker Pool) or "intra" (Single-Frame Low Latency)
+    std::string mode = "inter";
     float voxel_leaf_size = 0.10f;
     float ror_radius = 0.25f;
     int ror_min_neighbors = 2;
@@ -72,7 +59,6 @@ struct FrameMetrics {
     double compute_ms = 0.0;
     double io_write_ms = 0.0;
 
-    // Compute stage breakdowns
     double voxel_ms = 0.0;
     double grid_build_ms = 0.0;
     double ror_ms = 0.0;
@@ -87,9 +73,6 @@ struct FrameMetrics {
     size_t cluster_count = 0;
 };
 
-// ============================================================================
-// 1. FAST PSEUDO-RANDOM NUMBER GENERATOR FOR RANSAC
-// ============================================================================
 struct FastPRNG {
     uint64_t state;
     explicit FastPRNG(uint64_t seed = 0x853c49e6748fea9bULL) : state(seed != 0 ? seed : 0x853c49e6748fea9bULL) {}
@@ -106,9 +89,6 @@ struct FastPRNG {
     }
 };
 
-// ============================================================================
-// 2. SPARSE-RESET O(K) SPATIAL GRID FOR ZERO-ALLOCATION STREAMING
-// ============================================================================
 class FastStreamGrid {
 public:
     struct Cell {
@@ -142,7 +122,6 @@ public:
     }
 
     bool build(const float* x, const float* y, const float* z, size_t n) {
-        // O(K) Sparse reset: only clear cells touched in previous frame
         for (uint32_t slot : touched_slots_) {
             cells_[slot].head = -1;
             cells_[slot].cx = -999999;
@@ -173,9 +152,6 @@ public:
     }
 };
 
-// ============================================================================
-// 3. ZERO-ALLOCATION UNION FIND
-// ============================================================================
 struct UnionFind {
     std::vector<int> parent;
     std::vector<int> rank;
@@ -221,100 +197,30 @@ struct ClusterResult {
     std::vector<int> indices;
 };
 
-// ============================================================================
-// 4. FAST DIRECT SINGLE-PASS VOXEL ACCUMULATION GRID
-// ============================================================================
-class VoxelAccumGrid {
-public:
-    struct VoxelCell {
-        int cx = -999999, cy = -999999, cz = -999999;
-        float sum_x = 0, sum_y = 0, sum_z = 0;
-        int count = 0;
-    };
-    static constexpr size_t kCapacity = 131072;
-    static constexpr size_t kMask = kCapacity - 1;
-    static constexpr int kMaxProbes = 32;
-    std::vector<VoxelCell> cells_;
-    std::vector<uint32_t> touched_;
-
-    VoxelAccumGrid() {
-        cells_.resize(kCapacity);
-        touched_.reserve(65536);
-    }
-
-    void reset() {
-        for (uint32_t slot : touched_) {
-            cells_[slot].count = 0;
-            cells_[slot].cx = -999999;
-        }
-        touched_.clear();
-    }
-
-    inline void insert(float x, float y, float z, float inv_leaf) {
-        int cx = static_cast<int>(std::floor(x * inv_leaf));
-        int cy = static_cast<int>(std::floor(y * inv_leaf));
-        int cz = static_cast<int>(std::floor(z * inv_leaf));
-        size_t h = ((static_cast<size_t>(cx) * 73856093) ^
-                    (static_cast<size_t>(cy) * 19349663) ^
-                    (static_cast<size_t>(cz) * 83492791)) & kMask;
-        int probe = 0;
-        while (cells_[h].count > 0 && (cells_[h].cx != cx || cells_[h].cy != cy || cells_[h].cz != cz) && probe < kMaxProbes) {
-            h = (h + 1) & kMask;
-            probe++;
-        }
-        if (cells_[h].count == 0) {
-            cells_[h].cx = cx; cells_[h].cy = cy; cells_[h].cz = cz;
-            cells_[h].sum_x = x; cells_[h].sum_y = y; cells_[h].sum_z = z;
-            cells_[h].count = 1;
-            touched_.push_back(static_cast<uint32_t>(h));
-        } else {
-            cells_[h].sum_x += x;
-            cells_[h].sum_y += y;
-            cells_[h].sum_z += z;
-            cells_[h].count++;
-        }
-    }
-
-    void extract_centroids(std::vector<float>& dx, std::vector<float>& dy, std::vector<float>& dz) {
-        dx.clear(); dy.clear(); dz.clear();
-        for (uint32_t slot : touched_) {
-            const auto& c = cells_[slot];
-            if (c.count > 0) {
-                float inv = 1.0f / static_cast<float>(c.count);
-                dx.push_back(c.sum_x * inv);
-                dy.push_back(c.sum_y * inv);
-                dz.push_back(c.sum_z * inv);
-            }
-        }
-    }
-};
-
-// ============================================================================
-// 5. PRE-ALLOCATED ZERO-COPY THREAD FRAME CONTEXT (PER PHYSICAL CORE)
-// ============================================================================
 struct alignas(64) ThreadFrameContext {
-    // 1. Raw ingest buffer
     std::vector<PointXYZ> raw_pts;
     std::vector<float> rx, ry, rz;
 
-    // 2. Voxel downsample buffers
     std::vector<PointXYZ> downsampled_pts;
     std::vector<float> dx, dy, dz;
 
-    // 3. ROR buffers & Grid
     FastStreamGrid ror_grid;
     std::vector<uint8_t> ror_keep;
     std::vector<float> fx, fy, fz;
 
-    // 4. RANSAC & Outlier extraction buffers
     std::vector<float> sample_sx, sample_sy, sample_sz;
     std::vector<float> ox, oy, oz;
 
-    // 5. Clustering Grid & UnionFind
     FastStreamGrid cluster_grid;
     UnionFind uf;
     std::vector<std::vector<int>> root_to_pts;
     std::vector<ClusterResult> clusters;
+
+    // RVV clustering candidate & CSR grouping buffers
+    std::vector<int> cand_idx;
+    std::vector<float> cand_x, cand_y, cand_z;
+    std::vector<int> root_counts;
+    std::vector<int> root_to_cid;
 
     ThreadFrameContext(float leaf_size = 0.10f, float ror_rad = 0.25f, float clust_tol = 0.15f)
         : ror_grid(ror_rad, 65536), cluster_grid(clust_tol, 65536)
@@ -329,6 +235,13 @@ struct alignas(64) ThreadFrameContext {
         ox.reserve(65536); oy.reserve(65536); oz.reserve(65536);
         root_to_pts.resize(65536);
         clusters.reserve(256);
+
+        cand_idx.reserve(256);
+        cand_x.reserve(256);
+        cand_y.reserve(256);
+        cand_z.reserve(256);
+        root_counts.reserve(65536);
+        root_to_cid.reserve(65536);
     }
 };
 
@@ -349,9 +262,6 @@ static size_t execute_fast_radix_voxel_downsample_ctx(
     return n_down;
 }
 
-// ============================================================================
-// 6. PARALLEL RVV RADIUS OUTLIER REMOVAL (ZERO HEAP MALLOC)
-// ============================================================================
 static size_t execute_ror_rvv_ctx(
     ThreadFrameContext& ctx, size_t n, float search_radius, int min_neighbors)
 {
@@ -376,7 +286,6 @@ static size_t execute_ror_rvv_ctx(
 
         int in_radius_count = 0;
 
-        // 1. Fastpath: check self-cell first
         size_t self_h = ctx.ror_grid.hash3D(qcx, qcy, qcz);
         int probe = 0;
         while (cells[self_h].head != -1 && probe < FastStreamGrid::kMaxProbes) {
@@ -396,7 +305,6 @@ static size_t execute_ror_rvv_ctx(
             probe++;
         }
 
-        // 2. Neighbor 26 cells fallback
         if (in_radius_count < min_neighbors) {
             for (int dz = -1; dz <= 1 && in_radius_count < min_neighbors; ++dz) {
                 for (int dy = -1; dy <= 1 && in_radius_count < min_neighbors; ++dy) {
@@ -439,9 +347,6 @@ static size_t execute_ror_rvv_ctx(
     return ctx.fx.size();
 }
 
-// ============================================================================
-// 7. HARDWARE RVV 1.0 SPRT RANSAC WITH SVD COVARIANCE REFINEMENT
-// ============================================================================
 static bool compute_plane_coeffs(float x1, float y1, float z1,
                                  float x2, float y2, float z2,
                                  float x3, float y3, float z3,
@@ -563,7 +468,6 @@ static int ransac_plane_sprt_rvv_ctx(
         }
     }
 
-    // SVD Covariance Plane Refinement on Inliers
     if (best_sample_inliers >= 10) {
         float a0 = best_model[0], b0 = best_model[1], c0 = best_model[2], d0 = best_model[3];
         double sum_x = 0, sum_y = 0, sum_z = 0;
@@ -587,7 +491,6 @@ static int ransac_plane_sprt_rvv_ctx(
                 }
             }
 
-            // Power iteration for smallest eigenvector
             double vx = a0, vy = b0, vz = c0;
             for (int iter = 0; iter < 10; ++iter) {
                 double rx = c00*vx + c01*vy + c02*vz;
@@ -615,13 +518,12 @@ static int ransac_plane_sprt_rvv_ctx(
 
     for (int k = 0; k < 4; ++k) model[k] = best_model[k];
 
-    // Extract non-ground obstacle points into ctx.ox, oy, oz
     ctx.ox.clear(); ctx.oy.clear(); ctx.oz.clear();
     ctx.ox.reserve(n); ctx.oy.reserve(n); ctx.oz.reserve(n);
     float a = model[0], b = model[1], c = model[2], d = model[3];
     int total_inliers = 0;
 
-#if defined(RVV_PCL_USE_RVV) && defined(__riscv_vector)
+#if defined(__riscv) || defined(__riscv_vector)
     size_t i = 0;
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m8(n - i);
@@ -633,9 +535,10 @@ static int ransac_plane_sprt_rvv_ctx(
         dist = __riscv_vfmacc_vf_f32m8(dist, b, vy, vl);
         dist = __riscv_vfmacc_vf_f32m8(dist, c, vz, vl);
         dist = __riscv_vfadd_vf_f32m8(dist, d, vl);
-        vfloat32m8_t abs_dist = __riscv_vfsgnjx_vv_f32m8(dist, dist, vl);
 
-        vbool4_t inlier_mask = __riscv_vmfle_vf_f32m8_b4(abs_dist, dist_thresh, vl);
+        vbool4_t mask_le = __riscv_vmfle_vf_f32m8_b4(dist, dist_thresh, vl);
+        vbool4_t mask_ge = __riscv_vmfge_vf_f32m8_b4(dist, -dist_thresh, vl);
+        vbool4_t inlier_mask = __riscv_vmand_mm_b4(mask_le, mask_ge, vl);
         uint8_t mask_bytes[64];
         __riscv_vsm_v_b4(mask_bytes, inlier_mask, vl);
 
@@ -666,9 +569,7 @@ static int ransac_plane_sprt_rvv_ctx(
     return total_inliers;
 }
 
-// ============================================================================
-// 8. FAST SPATIAL UNION-FIND EUCLIDEAN CLUSTERING (ZERO HEAP MALLOC)
-// ============================================================================
+// Hardware RVV 1.0 Vectorized Euclidean Clustering for Continuous Stream
 static size_t execute_clustering_ctx(
     ThreadFrameContext& ctx, size_t n, float tolerance, int min_cluster_size, int max_cluster_size)
 {
@@ -684,64 +585,163 @@ static size_t execute_clustering_ctx(
     const float* ox = ctx.ox.data();
     const float* oy = ctx.oy.data();
     const float* oz = ctx.oz.data();
-    const float inv_cell = ctx.cluster_grid.inv_cell_;
+    const auto& touched = ctx.cluster_grid.touched_slots_;
 
     ctx.uf.reset(n);
-    for (size_t i = 0; i < n; ++i) {
-        float qx = ox[i], qy = oy[i], qz = oz[i];
-        int qcx = static_cast<int>(std::floor(qx * inv_cell));
-        int qcy = static_cast<int>(std::floor(qy * inv_cell));
-        int qcz = static_cast<int>(std::floor(qz * inv_cell));
 
-        for (int dz = -1; dz <= 1; ++dz) {
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    int tcx = qcx + dx, tcy = qcy + dy, tcz = qcz + dz;
-                    size_t h = ctx.cluster_grid.hash3D(tcx, tcy, tcz);
-                    int probe = 0;
-                    while (cells[h].head != -1 && probe < FastStreamGrid::kMaxProbes) {
-                        if (cells[h].cx == tcx && cells[h].cy == tcy && cells[h].cz == tcz) {
-                            int curr = cells[h].head;
-                            while (curr != -1) {
-                                if (static_cast<size_t>(curr) > i) {
-                                    float ddx = ox[curr] - qx;
-                                    float ddy = oy[curr] - qy;
-                                    float ddz = oz[curr] - qz;
-                                    if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
-                                        ctx.uf.unite(static_cast<int>(i), curr);
-                                    }
-                                }
-                                curr = next[curr];
+    static const int kForwardOffsets[13][3] = {
+        {-1, -1, 1}, { 0, -1, 1}, { 1, -1, 1},
+        {-1,  0, 1}, { 0,  0, 1}, { 1,  0, 1},
+        {-1,  1, 1}, { 0,  1, 1}, { 1,  1, 1},
+        {-1,  1, 0}, { 0,  1, 0}, { 1,  1, 0},
+        { 1,  0, 0}
+    };
+
+    std::vector<int> self_pts;
+    self_pts.reserve(64);
+
+    for (uint32_t slot : touched) {
+        const auto& cell = cells[slot];
+        if (cell.head == -1) continue;
+
+        self_pts.clear();
+        int curr = cell.head;
+        while (curr != -1) {
+            self_pts.push_back(curr);
+            curr = next[curr];
+        }
+
+        size_t n_self = self_pts.size();
+
+        // 1. Intra-cell pairwise checks
+        for (size_t u = 0; u < n_self; ++u) {
+            int p_u = self_pts[u];
+            float ux = ox[p_u], uy = oy[p_u], uz = oz[p_u];
+            for (size_t v = u + 1; v < n_self; ++v) {
+                int p_v = self_pts[v];
+                float ddx = ox[p_v] - ux, ddy = oy[p_v] - uy, ddz = oz[p_v] - uz;
+                if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                    ctx.uf.unite(p_u, p_v);
+                }
+            }
+        }
+
+        // 2. Gather candidates from 13 forward neighbors ONCE for this cell
+        ctx.cand_idx.clear();
+        ctx.cand_x.clear();
+        ctx.cand_y.clear();
+        ctx.cand_z.clear();
+
+        for (int k = 0; k < 13; ++k) {
+            int tcx = cell.cx + kForwardOffsets[k][0];
+            int tcy = cell.cy + kForwardOffsets[k][1];
+            int tcz = cell.cz + kForwardOffsets[k][2];
+
+            size_t h = ctx.cluster_grid.hash3D(tcx, tcy, tcz);
+            int probe = 0;
+            while (cells[h].head != -1 && probe < FastStreamGrid::kMaxProbes) {
+                if (cells[h].cx == tcx && cells[h].cy == tcy && cells[h].cz == tcz) {
+                    int c_nbr = cells[h].head;
+                    while (c_nbr != -1) {
+                        ctx.cand_idx.push_back(c_nbr);
+                        ctx.cand_x.push_back(ox[c_nbr]);
+                        ctx.cand_y.push_back(oy[c_nbr]);
+                        ctx.cand_z.push_back(oz[c_nbr]);
+                        c_nbr = next[c_nbr];
+                    }
+                    break;
+                }
+                h = (h + 1) & mask;
+                probe++;
+            }
+        }
+
+        // 3. Vectorized distance check
+        size_t M = ctx.cand_idx.size();
+        if (M > 0) {
+            for (size_t u = 0; u < n_self; ++u) {
+                int p_u = self_pts[u];
+                float qx = ox[p_u], qy = oy[p_u], qz = oz[p_u];
+
+#if defined(__riscv) || defined(__riscv_vector)
+                size_t k = 0;
+                while (k < M) {
+                    size_t vl = __riscv_vsetvl_e32m8(M - k);
+                    vfloat32m8_t vx = __riscv_vle32_v_f32m8(&ctx.cand_x[k], vl);
+                    vfloat32m8_t vy = __riscv_vle32_v_f32m8(&ctx.cand_y[k], vl);
+                    vfloat32m8_t vz = __riscv_vle32_v_f32m8(&ctx.cand_z[k], vl);
+
+                    vfloat32m8_t ddx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
+                    vfloat32m8_t ddy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
+                    vfloat32m8_t ddz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
+
+                    vfloat32m8_t d2 = __riscv_vfmul_vv_f32m8(ddx, ddx, vl);
+                    d2 = __riscv_vfmacc_vv_f32m8(d2, ddy, ddy, vl);
+                    d2 = __riscv_vfmacc_vv_f32m8(d2, ddz, ddz, vl);
+
+                    vbool4_t in_tol = __riscv_vmfle_vf_f32m8_b4(d2, tol_sq, vl);
+                    if (__riscv_vcpop_m_b4(in_tol, vl) > 0) {
+                        uint8_t mbytes[64];
+                        __riscv_vsm_v_b4(mbytes, in_tol, vl);
+                        for (size_t lane = 0; lane < vl; ++lane) {
+                            if ((mbytes[lane >> 3] >> (lane & 7u)) & 1u) {
+                                ctx.uf.unite(p_u, ctx.cand_idx[k + lane]);
                             }
-                            break;
                         }
-                        h = (h + 1) & mask;
-                        probe++;
+                    }
+                    k += vl;
+                }
+#else
+                for (size_t k = 0; k < M; ++k) {
+                    float ddx = ctx.cand_x[k] - qx;
+                    float ddy = ctx.cand_y[k] - qy;
+                    float ddz = ctx.cand_z[k] - qz;
+                    if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                        ctx.uf.unite(p_u, ctx.cand_idx[k]);
                     }
                 }
+#endif
             }
         }
     }
 
-    if (ctx.root_to_pts.size() < n) ctx.root_to_pts.resize(n);
-    for (size_t i = 0; i < n; ++i) ctx.root_to_pts[i].clear();
+    if (ctx.root_counts.size() < n) ctx.root_counts.resize(n);
+    if (ctx.root_to_cid.size() < n) ctx.root_to_cid.resize(n);
+    std::fill(ctx.root_counts.begin(), ctx.root_counts.begin() + n, 0);
+    std::fill(ctx.root_to_cid.begin(), ctx.root_to_cid.begin() + n, -1);
+
     for (size_t i = 0; i < n; ++i) {
-        int r = ctx.uf.find(static_cast<int>(i));
-        ctx.root_to_pts[r].push_back(static_cast<int>(i));
+        ctx.root_counts[ctx.uf.find(static_cast<int>(i))]++;
     }
 
+    int num_valid = 0;
     for (size_t r = 0; r < n; ++r) {
-        int sz = static_cast<int>(ctx.root_to_pts[r].size());
+        int sz = ctx.root_counts[r];
         if (sz >= min_cluster_size && sz <= max_cluster_size) {
-            ctx.clusters.push_back({std::move(ctx.root_to_pts[r])});
+            ctx.root_to_cid[r] = num_valid++;
         }
     }
+
+    ctx.clusters.resize(num_valid);
+    for (size_t r = 0; r < n; ++r) {
+        int cid = ctx.root_to_cid[r];
+        if (cid != -1) {
+            ctx.clusters[cid].indices.clear();
+            ctx.clusters[cid].indices.reserve(ctx.root_counts[r]);
+        }
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        int r = ctx.uf.find(static_cast<int>(i));
+        int cid = ctx.root_to_cid[r];
+        if (cid != -1) {
+            ctx.clusters[cid].indices.push_back(static_cast<int>(i));
+        }
+    }
+
     return ctx.clusters.size();
 }
 
-// ============================================================================
-// 9. VIEWER-COMPATIBLE PCD RGB EXPORT
-// ============================================================================
 struct RGBColor { uint8_t r, g, b; };
 static std::vector<RGBColor> generateClusterColors(size_t count) {
     std::vector<RGBColor> colors(count);
@@ -790,9 +790,6 @@ static bool export_clusters_pcd(
 
 } // anonymous namespace
 
-// ============================================================================
-// MAIN APPLICATION ENTRY POINT
-// ============================================================================
 int main(int argc, char** argv) {
     StreamConfig cfg;
 
@@ -838,7 +835,6 @@ int main(int argc, char** argv) {
     omp_set_num_threads(cfg.num_threads);
 #endif
 
-    // Resolve list of PCD files
     std::vector<std::string> pcd_files;
     if (std::filesystem::is_directory(cfg.input_path)) {
         for (const auto& entry : std::filesystem::directory_iterator(cfg.input_path)) {
@@ -868,7 +864,7 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "========================================================================\n"
-              << "  RVPoint Multi-Core Continuous Stream True-3D Perception Pipeline\n"
+              << "  RVPoint Multi-Core Continuous Stream Pipeline (RVV 1.0 Clustering Test)\n"
               << "  Target Architecture: SpacemiT K1 / Orange Pi RV2 (RV64GCV Octa-Core)\n"
               << "========================================================================\n"
               << "  Input Directory : " << cfg.input_path << " (" << pcd_files.size() << " frames)\n"
@@ -879,7 +875,6 @@ int main(int argc, char** argv) {
               << "  Cluster Export  : " << (cfg.write_clusters ? "ENABLED (output/stream_clusters/)" : "DISABLED (Zero Disk I/O)") << "\n"
               << "========================================================================\n\n";
 
-    // Pre-allocate 1 ThreadFrameContext per physical worker thread
     const int pool_threads = std::max(1, cfg.num_threads);
     std::vector<ThreadFrameContext> thread_contexts;
     thread_contexts.reserve(pool_threads);
@@ -889,7 +884,7 @@ int main(int argc, char** argv) {
 
     std::vector<FrameMetrics> all_metrics(pcd_files.size());
     const std::vector<float> ground_normal_prior = {0.0f, 0.0f, 1.0f};
-    const float min_ground_dot = 0.707f; // ~45 deg max slope
+    const float min_ground_dot = 0.707f;
 
     auto stream_start_wall = Clock::now();
 
@@ -899,9 +894,6 @@ int main(int argc, char** argv) {
         m.frame_id = static_cast<int>(f_idx);
         m.filename = std::filesystem::path(pcd_files[f_idx]).filename().string();
 
-        // --------------------------------------------------------------------
-        // STAGE 0: DISK I/O INGEST (READ) - SEPARATE TIMER
-        // --------------------------------------------------------------------
         auto t_read_start = Clock::now();
         int64_t load_res = loadPCD(pcd_files[f_idx], ctx.raw_pts);
         auto t_read_end = Clock::now();
@@ -923,32 +915,25 @@ int main(int argc, char** argv) {
             ctx.rz[i] = ctx.raw_pts[i].z;
         }
 
-        // --------------------------------------------------------------------
-        // PURE COMPUTE PIPELINE (STRICT ISOLATED TIMER - ZERO HEAP ALLOCATIONS)
-        // --------------------------------------------------------------------
         auto t_comp_start = Clock::now();
 
-        // 1. Fast Linear Radix Voxel Downsample
         auto t1 = Clock::now();
         size_t n_down = execute_fast_radix_voxel_downsample_ctx(ctx, n_raw, cfg.voxel_leaf_size);
         auto t2 = Clock::now();
         m.voxel_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
         m.downsampled_points = n_down;
 
-        // 2. Build Fast 3D Spatial Grid
         auto t3 = Clock::now();
         ctx.ror_grid.build(ctx.dx.data(), ctx.dy.data(), ctx.dz.data(), n_down);
         auto t4 = Clock::now();
         m.grid_build_ms = std::chrono::duration<double, std::milli>(t4 - t3).count();
 
-        // 3. Parallel RVV Radius Outlier Removal
         auto t5 = Clock::now();
         size_t n_filtered = execute_ror_rvv_ctx(ctx, n_down, cfg.ror_radius, cfg.ror_min_neighbors);
         auto t6 = Clock::now();
         m.ror_ms = std::chrono::duration<double, std::milli>(t6 - t5).count();
         m.ror_points = n_filtered;
 
-        // 4. Exact SPRT RANSAC Ground Segmentation with SVD Refinement
         auto t7 = Clock::now();
         float plane_model[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         int inliers = ransac_plane_sprt_rvv_ctx(ctx, n_filtered, cfg.ransac_distance_threshold,
@@ -959,7 +944,6 @@ int main(int argc, char** argv) {
         m.ground_inliers = inliers;
         m.obstacle_points = ctx.ox.size();
 
-        // 5. Spatial Euclidean Clustering (Union-Find)
         auto t9 = Clock::now();
         size_t n_clusters = execute_clustering_ctx(ctx, ctx.ox.size(), cfg.cluster_tolerance, cfg.min_cluster_size, cfg.max_cluster_size);
         auto t10 = Clock::now();
@@ -969,9 +953,6 @@ int main(int argc, char** argv) {
         auto t_comp_end = Clock::now();
         m.compute_ms = std::chrono::duration<double, std::milli>(t_comp_end - t_comp_start).count();
 
-        // --------------------------------------------------------------------
-        // STAGE N: DISK I/O CLUSTERS EXPORT (WRITE) - SEPARATE TIMER
-        // --------------------------------------------------------------------
         if (cfg.write_clusters) {
             auto t_write_start = Clock::now();
             std::stringstream ss;
@@ -985,10 +966,10 @@ int main(int argc, char** argv) {
             double fps = (m.compute_ms > 0.0) ? (1000.0 / m.compute_ms) : 0.0;
             #pragma omp critical
             {
-                std::cout << "[stream] [Core " << thread_id << "] Frame " << std::setw(3) << f_idx << " (" << m.filename << ") | "
+                std::cout << "[stream-rvv] [Core " << thread_id << "] Frame " << std::setw(3) << f_idx << " (" << m.filename << ") | "
                           << "Compute: " << std::fixed << std::setprecision(2) << std::setw(6) << m.compute_ms << " ms ("
                           << std::setprecision(1) << std::setw(4) << fps << " FPS) | "
-                          << "I/O Read: " << std::setprecision(2) << std::setw(5) << m.io_read_ms << " ms | "
+                          << "Clust: " << std::setw(5) << m.cluster_ms << " ms | "
                           << "Pts: " << std::setw(6) << m.raw_points << " -> " << std::setw(5) << m.downsampled_points << " | "
                           << "Obstacles: " << std::setw(5) << m.obstacle_points << " | "
                           << "Clusters: " << std::setw(2) << m.cluster_count << std::endl;
@@ -1021,7 +1002,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Compute summary statistics
     double sum_comp = 0, min_comp = 1e9, max_comp = 0;
     double sum_read = 0, sum_write = 0;
     double sum_vox = 0, sum_grid = 0, sum_ror = 0, sum_ransac = 0, sum_clust = 0;
@@ -1047,7 +1027,7 @@ int main(int argc, char** argv) {
     double stream_wall_fps = (total_wall_ms > 0.0) ? (count * 1000.0 / total_wall_ms) : 0.0;
 
     std::cout << "\n========================================================================\n"
-              << "  CONTINUOUS STREAM PERCEPTION BENCHMARK SUMMARY (" << count << " frames)\n"
+              << "  CONTINUOUS STREAM PERCEPTION BENCHMARK SUMMARY (RVV CLUSTERING) (" << count << " frames)\n"
               << "========================================================================\n"
               << "  [Overall Stream Throughput & Wall-Clock Runtime]:\n"
               << "    • Total Wall-Clock Time   : " << std::fixed << std::setprecision(2) << total_wall_ms << " ms\n"
