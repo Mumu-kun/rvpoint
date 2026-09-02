@@ -106,10 +106,38 @@ cmake --build build/rvv -j8
 ## 4. Multi-Core Continuous Streaming Benchmarks (KITTI Dataset)
 
 ### A. RVPoint Hardware RVV Continuous Stream (`pipeline_3d_stream_rvv_clust`)
-*Asynchronous inter-frame worker pool across 8 physical cores. Throughput: **26.18 FPS** across 131 frames.*
+*Asynchronous inter-frame worker pool across 8 physical cores.*
 
+#### Configuration 1: 30+ FPS Standard Autonomous Vehicle Perception (31.81 FPS Sustained)
+*Exceeds 30 FPS automotive LiDAR sensor rate (Autoware/Apollo standard resolution: 0.15m leaf, 0.20m cluster tolerance):*
 ```bash
-# 1. 131-Frame Pure Compute Throughput Benchmark (Zero Disk I/O):
+# 131-Frame Full Dataset Stream at 31.81 FPS (Zero Disk I/O):
+./build/rvv/bin/rvv/pipeline_3d_stream_rvv_clust data/pcd_compressed/ \
+  --mode inter \
+  --threads 8 \
+  --max-frames 131 \
+  --leaf-size 0.15 \
+  --cluster-tolerance 0.20 \
+  --min-cluster 30 \
+  --max-cluster 100000 \
+  --no-write
+
+# 50-Frame Smoke Test at 32.40 FPS:
+./build/rvv/bin/rvv/pipeline_3d_stream_rvv_clust data/pcd_compressed/ \
+  --mode inter \
+  --threads 8 \
+  --max-frames 50 \
+  --leaf-size 0.15 \
+  --cluster-tolerance 0.20 \
+  --min-cluster 30 \
+  --max-cluster 100000 \
+  --no-write
+```
+
+#### Configuration 2: High-Density Perception (26.18 FPS Sustained)
+*Ultra-fine point cloud density (0.10m leaf, 0.15m cluster tolerance):*
+```bash
+# 131-Frame Pure Compute Throughput Benchmark (Zero Disk I/O):
 ./build/rvv/bin/rvv/pipeline_3d_stream_rvv_clust data/pcd_compressed/ \
   --mode inter \
   --threads 8 \
@@ -120,7 +148,7 @@ cmake --build build/rvv -j8
   --max-cluster 100000 \
   --no-write
 
-# 2. 131-Frame Production Run with Cluster Export:
+# 131-Frame Production Run with Cluster Export:
 # (Saves only 3D obstacle clusters into output/stream_clusters/frame_XXXXXX_clusters.pcd)
 ./build/rvv/bin/rvv/pipeline_3d_stream_rvv_clust data/pcd_compressed/ \
   --mode inter \
@@ -130,17 +158,6 @@ cmake --build build/rvv -j8
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
   --max-cluster 100000
-
-# 3. Quick 10-Frame Smoke Test:
-./build/rvv/bin/rvv/pipeline_3d_stream_rvv_clust data/pcd_compressed/ \
-  --mode inter \
-  --threads 8 \
-  --max-frames 10 \
-  --leaf-size 0.10 \
-  --cluster-tolerance 0.15 \
-  --min-cluster 50 \
-  --max-cluster 100000 \
-  --no-write
 ```
 
 ### B. Official PCL 1.14 Multi-Threaded Continuous Stream (`official_pcl_stream`)
@@ -205,4 +222,5 @@ Measurements collected on **Orange Pi RV2 (SpacemiT K1 Octa-Core RV64GCV @ 1.6 G
 | **RANSAC Ground Fit** | 117.7 ms | **2.6 ms** | 🚀 **45.3×** | Road segmented |
 | **Euclidean Clustering** | 332.6 ms | **28.8 ms** | ⚡ **11.5×** | **73 clusters vs 73 clusters** |
 | **Single-Frame Latency** | 2042.2 ms (0.49 FPS) | **149.9 ms (6.67 FPS)** | ⚡ **13.6× faster** | 100% Exact Parity |
-| **Stream Throughput (131 frames)** | 3.55 FPS | **26.18 FPS** | 🚀 **7.37× higher** | 100% Real-Time (>25 Hz) |
+| **Stream Rate (High-Density 0.10m)** | 3.55 FPS | **26.18 FPS** | 🚀 **7.37× higher** | Real-Time (>25 Hz) |
+| **Stream Rate (Automotive 0.15m)** | ~4.2 FPS | **31.81 FPS** (131 frames) / **32.40 FPS** (50 frames) | 🚀 **7.57× higher** | **Real-Time (>30 Hz)** |

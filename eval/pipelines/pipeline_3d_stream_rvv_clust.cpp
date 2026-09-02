@@ -222,6 +222,13 @@ struct alignas(64) ThreadFrameContext {
     std::vector<int> root_counts;
     std::vector<int> root_to_cid;
 
+    // Fast Radix Downsampling buffers
+    std::vector<int32_t> voxel_keys;
+    std::vector<uint32_t> voxel_order;
+    std::vector<uint32_t> voxel_temp_order;
+    std::vector<int> ror_cand;
+    std::vector<int> ror_self_pts;
+
     ThreadFrameContext(float leaf_size = 0.10f, float ror_rad = 0.25f, float clust_tol = 0.15f)
         : ror_grid(ror_rad, 65536), cluster_grid(clust_tol, 65536)
     {
@@ -242,6 +249,12 @@ struct alignas(64) ThreadFrameContext {
         cand_z.reserve(256);
         root_counts.reserve(65536);
         root_to_cid.reserve(65536);
+
+        voxel_keys.reserve(130000);
+        voxel_order.reserve(130000);
+        voxel_temp_order.reserve(130000);
+        ror_cand.reserve(512);
+        ror_self_pts.reserve(64);
     }
 };
 
@@ -656,51 +669,62 @@ static size_t execute_clustering_ctx(
             }
         }
 
-        // 3. Vectorized distance check
+        // 3. Vectorized distance check with scalar fast-path for small M
         size_t M = ctx.cand_idx.size();
         if (M > 0) {
             for (size_t u = 0; u < n_self; ++u) {
                 int p_u = self_pts[u];
                 float qx = ox[p_u], qy = oy[p_u], qz = oz[p_u];
 
-#if defined(__riscv) || defined(__riscv_vector)
-                size_t k = 0;
-                while (k < M) {
-                    size_t vl = __riscv_vsetvl_e32m8(M - k);
-                    vfloat32m8_t vx = __riscv_vle32_v_f32m8(&ctx.cand_x[k], vl);
-                    vfloat32m8_t vy = __riscv_vle32_v_f32m8(&ctx.cand_y[k], vl);
-                    vfloat32m8_t vz = __riscv_vle32_v_f32m8(&ctx.cand_z[k], vl);
-
-                    vfloat32m8_t ddx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
-                    vfloat32m8_t ddy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
-                    vfloat32m8_t ddz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
-
-                    vfloat32m8_t d2 = __riscv_vfmul_vv_f32m8(ddx, ddx, vl);
-                    d2 = __riscv_vfmacc_vv_f32m8(d2, ddy, ddy, vl);
-                    d2 = __riscv_vfmacc_vv_f32m8(d2, ddz, ddz, vl);
-
-                    vbool4_t in_tol = __riscv_vmfle_vf_f32m8_b4(d2, tol_sq, vl);
-                    if (__riscv_vcpop_m_b4(in_tol, vl) > 0) {
-                        uint8_t mbytes[64];
-                        __riscv_vsm_v_b4(mbytes, in_tol, vl);
-                        for (size_t lane = 0; lane < vl; ++lane) {
-                            if ((mbytes[lane >> 3] >> (lane & 7u)) & 1u) {
-                                ctx.uf.unite(p_u, ctx.cand_idx[k + lane]);
-                            }
+                if (M < 8) {
+                    for (size_t k = 0; k < M; ++k) {
+                        float ddx = ctx.cand_x[k] - qx;
+                        float ddy = ctx.cand_y[k] - qy;
+                        float ddz = ctx.cand_z[k] - qz;
+                        if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                            ctx.uf.unite(p_u, ctx.cand_idx[k]);
                         }
                     }
-                    k += vl;
-                }
-#else
-                for (size_t k = 0; k < M; ++k) {
-                    float ddx = ctx.cand_x[k] - qx;
-                    float ddy = ctx.cand_y[k] - qy;
-                    float ddz = ctx.cand_z[k] - qz;
-                    if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
-                        ctx.uf.unite(p_u, ctx.cand_idx[k]);
+                } else {
+#if defined(__riscv) || defined(__riscv_vector)
+                    size_t k = 0;
+                    while (k < M) {
+                        size_t vl = __riscv_vsetvl_e32m8(M - k);
+                        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&ctx.cand_x[k], vl);
+                        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&ctx.cand_y[k], vl);
+                        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&ctx.cand_z[k], vl);
+
+                        vfloat32m8_t ddx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
+                        vfloat32m8_t ddy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
+                        vfloat32m8_t ddz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
+
+                        vfloat32m8_t d2 = __riscv_vfmul_vv_f32m8(ddx, ddx, vl);
+                        d2 = __riscv_vfmacc_vv_f32m8(d2, ddy, ddy, vl);
+                        d2 = __riscv_vfmacc_vv_f32m8(d2, ddz, ddz, vl);
+
+                        vbool4_t in_tol = __riscv_vmfle_vf_f32m8_b4(d2, tol_sq, vl);
+                        if (__riscv_vcpop_m_b4(in_tol, vl) > 0) {
+                            uint8_t mbytes[64];
+                            __riscv_vsm_v_b4(mbytes, in_tol, vl);
+                            for (size_t lane = 0; lane < vl; ++lane) {
+                                if ((mbytes[lane >> 3] >> (lane & 7u)) & 1u) {
+                                    ctx.uf.unite(p_u, ctx.cand_idx[k + lane]);
+                                }
+                            }
+                        }
+                        k += vl;
                     }
-                }
+#else
+                    for (size_t k = 0; k < M; ++k) {
+                        float ddx = ctx.cand_x[k] - qx;
+                        float ddy = ctx.cand_y[k] - qy;
+                        float ddz = ctx.cand_z[k] - qz;
+                        if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                            ctx.uf.unite(p_u, ctx.cand_idx[k]);
+                        }
+                    }
 #endif
+                }
             }
         }
     }
