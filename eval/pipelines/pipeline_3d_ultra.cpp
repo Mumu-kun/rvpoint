@@ -1017,10 +1017,17 @@ int main(int argc, char** argv) {
     stage_timings.push_back({1, "Load input cloud", endStage(1, "Load input cloud", stage_start, progress_enabled), n_input});
 
     std::vector<float> ix(n_input), iy(n_input), iz(n_input);
+    size_t n_valid = 0;
     for (size_t i = 0; i < n_input; ++i) {
-        ix[i] = loaded_points[i].x; iy[i] = loaded_points[i].y; iz[i] = loaded_points[i].z;
+        if (std::isfinite(loaded_points[i].x) && std::isfinite(loaded_points[i].y) && std::isfinite(loaded_points[i].z)) {
+            ix[n_valid] = loaded_points[i].x;
+            iy[n_valid] = loaded_points[i].y;
+            iz[n_valid] = loaded_points[i].z;
+            n_valid++;
+        }
     }
-    PointCloudSoA input_cloud{ix.data(), iy.data(), iz.data(), n_input};
+    ix.resize(n_valid); iy.resize(n_valid); iz.resize(n_valid);
+    PointCloudSoA input_cloud{ix.data(), iy.data(), iz.data(), n_valid};
 
     // ── Stage 2: Write input stage ─────────────────────────────────────────
     beginStage(2, "Write input stage", progress_enabled);
@@ -1033,7 +1040,7 @@ int main(int argc, char** argv) {
     stage_timings.push_back({2, "Write input stage", endStage(2, "Write input stage", stage_start, progress_enabled), n_input});
 
     // ── Stage 3: Downsampling (RVV) ────────────────────────────────────────
-    std::vector<PointXYZ> downsampled_pts(n_input);
+    std::vector<PointXYZ> downsampled_pts(n_valid);
     beginStage(3, "Downsampling (RVV)", progress_enabled);
     stage_start = Clock::now();
     size_t n_down = voxel_grid_downsamp_rvv_v2(input_cloud, downsampled_pts.data(), voxel_leaf_size);

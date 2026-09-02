@@ -47,10 +47,15 @@ Here is the complete, categorized list of all command lines in the repository:
 ```
 
 #### E. Official Debian PCL 1.14 Pipeline (`official_pcl_pipeline`)
-*Runs genuine Debian Point Cloud Library 1.14 (`libpcl-dev` shared libraries: `pcl::VoxelGrid`, `pcl::StatisticalOutlierRemoval`, `pcl::NormalEstimation`, `pcl::SACSegmentation`, `pcl::EuclideanClusterExtraction`).*
+*Runs genuine Debian Point Cloud Library 1.14 (`libpcl-dev` shared libraries: `pcl::VoxelGrid`, `pcl::StatisticalOutlierRemoval` / `pcl::RadiusOutlierRemoval`, `pcl::NormalEstimation`, `pcl::SACSegmentation`, `pcl::EuclideanClusterExtraction`).*
 ```bash
+# Standard SOR baseline:
 ./scripts/run.sh official_pcl_pipeline data/pcd_compressed/0000000090.pcd \
     --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000 --no-write
+
+# Radius Outlier Removal (ROR) mode:
+./scripts/run.sh official_pcl_pipeline data/pcd_compressed/0000000090.pcd \
+    --progress --use-ror --ror-radius 0.25 --ror-min-pts 2 --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000 --no-write
 ```
 
 #### F. Standalone Scalar PCL Baseline Replicate (`pcl_standalone_pipeline`)

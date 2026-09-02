@@ -68,7 +68,8 @@ list(APPEND RVPOINT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/eval/benchmarks")
 list(REMOVE_DUPLICATES RVPOINT_INCLUDE_DIRS)
 
 target_include_directories(rvpoint PUBLIC ${RVPOINT_INCLUDE_DIRS})
-target_compile_options(rvpoint PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
+target_compile_options(rvpoint PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}" "-fopenmp" "-pthread")
+target_link_options(rvpoint PUBLIC "-fopenmp" "-pthread")
 
 if(RVPOINT_ENABLE_RVV)
     target_compile_definitions(rvpoint PUBLIC RVPOINT_USE_RVV=1 RVV_PCL_USE_RVV=1)
@@ -83,28 +84,34 @@ endif()
 file(GLOB PIPELINE_SOURCES "${CMAKE_SOURCE_DIR}/eval/pipelines/*.cpp")
 foreach(pipe_src ${PIPELINE_SOURCES})
     get_filename_component(pipe_name "${pipe_src}" NAME_WE)
-    add_executable(${pipe_name} "${pipe_src}")
-    target_link_libraries(${pipe_name} PRIVATE rvpoint)
     if(pipe_name STREQUAL "official_pcl_pipeline")
-        target_compile_options(${pipe_name} PRIVATE 
-            "-I/usr/include/pcl-1.14" 
-            "-I/usr/include/eigen3" 
-            "-I/usr/include"
-        )
-        target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,/usr/lib/riscv64-linux-gnu")
-        target_link_libraries(${pipe_name} PRIVATE 
-            /usr/lib/riscv64-linux-gnu/libpcl_common.so
-            /usr/lib/riscv64-linux-gnu/libpcl_io.so
-            /usr/lib/riscv64-linux-gnu/libpcl_filters.so
-            /usr/lib/riscv64-linux-gnu/libpcl_features.so
-            /usr/lib/riscv64-linux-gnu/libpcl_segmentation.so
-            /usr/lib/riscv64-linux-gnu/libpcl_search.so
-            /usr/lib/riscv64-linux-gnu/libpcl_octree.so
-            /usr/lib/riscv64-linux-gnu/libpcl_kdtree.so
-            /usr/lib/riscv64-linux-gnu/libpcl_sample_consensus.so
-        )
+        if(EXISTS "/usr/lib/riscv64-linux-gnu/libpcl_common.so" AND EXISTS "/usr/include/pcl-1.14")
+            add_executable(${pipe_name} "${pipe_src}")
+            target_link_libraries(${pipe_name} PRIVATE rvpoint)
+            target_compile_options(${pipe_name} PRIVATE "-fopenmp" "-pthread")
+            target_compile_options(${pipe_name} PRIVATE 
+                "-I/usr/include/pcl-1.14" 
+                "-I/usr/include/eigen3" 
+                "-I/usr/include"
+            )
+            target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,/usr/lib/riscv64-linux-gnu" "-fopenmp" "-pthread")
+            target_link_libraries(${pipe_name} PRIVATE 
+                /usr/lib/riscv64-linux-gnu/libpcl_common.so
+                /usr/lib/riscv64-linux-gnu/libpcl_io.so
+                /usr/lib/riscv64-linux-gnu/libpcl_filters.so
+                /usr/lib/riscv64-linux-gnu/libpcl_features.so
+                /usr/lib/riscv64-linux-gnu/libpcl_segmentation.so
+                /usr/lib/riscv64-linux-gnu/libpcl_search.so
+                /usr/lib/riscv64-linux-gnu/libpcl_octree.so
+                /usr/lib/riscv64-linux-gnu/libpcl_kdtree.so
+                /usr/lib/riscv64-linux-gnu/libpcl_sample_consensus.so
+            )
+        endif()
     else()
-        target_link_options(${pipe_name} PRIVATE "-static")
+        add_executable(${pipe_name} "${pipe_src}")
+        target_link_libraries(${pipe_name} PRIVATE rvpoint)
+        target_compile_options(${pipe_name} PRIVATE "-fopenmp" "-pthread")
+        target_link_options(${pipe_name} PRIVATE "-static" "-fopenmp" "-pthread")
     endif()
 endforeach()
 
@@ -118,7 +125,8 @@ foreach(bench_src ${BENCHMARK_SOURCES})
     get_filename_component(bench_name "${bench_src}" NAME_WE)
     add_executable(${bench_name} "${bench_src}")
     target_link_libraries(${bench_name} PRIVATE rvpoint)
-    target_link_options(${bench_name} PRIVATE "-static")
+    target_compile_options(${bench_name} PRIVATE "-fopenmp" "-pthread")
+    target_link_options(${bench_name} PRIVATE "-static" "-fopenmp" "-pthread")
 endforeach()
 
 # ==============================================================================
