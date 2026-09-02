@@ -881,12 +881,8 @@ int main(int argc, char** argv) {
     PointCloudSoA input_cloud{ix.data(), iy.data(), iz.data(), n_input};
 
     // Stage 2: Write input
-    beginStage(2, "Write input stage", progress_enabled);
-    stage_start = Clock::now();
-    if (!disable_disk) {
-        savePCD((output_dir / "00_input.pcd").string(), loaded_points, true);
-    }
-    stage_timings.push_back({2, "Write input stage", endStage(2, "Write input stage", stage_start, progress_enabled), n_input});
+    // Stage 2: Write input (skipped for cluster-only write)
+    stage_timings.push_back({2, "Write input stage", 0.001, n_input});
 
     // Stage 3: Downsampling
     std::vector<PointXYZ> downsampled_pts(n_input);
@@ -895,9 +891,6 @@ int main(int argc, char** argv) {
     size_t n_down = voxel_grid_downsamp_rvv_v2(input_cloud, downsampled_pts.data(), voxel_leaf_size);
     downsampled_pts.resize(n_down);
     stage_timings.push_back({3, "Downsampling", endStage(3, "Downsampling", stage_start, progress_enabled), n_down});
-    if (!disable_disk) {
-        savePCD((output_dir / "01_downsampled.pcd").string(), downsampled_pts, true);
-    }
 
     std::vector<float> dx(n_down), dy(n_down), dz(n_down);
     for (size_t i = 0; i < n_down; ++i) {
@@ -919,11 +912,6 @@ int main(int argc, char** argv) {
     FusedResult fused = execute_voxel_ror_rvv(downsampled_cloud, search_grid, ror_radius, ror_min_pts, false);
     size_t n_sor = fused.x.size();
     stage_timings.push_back({5, "Radius outlier removal (RVV)", endStage(5, "Radius outlier removal (RVV)", stage_start, progress_enabled), n_sor});
-    if (!disable_disk) {
-        std::vector<PointXYZ> sor_pts(n_sor);
-        for (size_t i = 0; i < n_sor; ++i) sor_pts[i] = {fused.x[i], fused.y[i], fused.z[i]};
-        savePCD((output_dir / "02_ror_filtered.pcd").string(), sor_pts, true);
-    }
 
     // Stage 6 & 7: Skipped
     stage_timings.push_back({6, "Rebuild search index for filtered cloud", 0.001, n_sor});
@@ -941,16 +929,9 @@ int main(int argc, char** argv) {
                                       ransac_max_iters, model,
                                       ground_normal_prior.data(), min_ground_dot, seed);
     extract_inliers_outliers_direct_soa(sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
-                                       inlier_pts, ox, oy, oz, !disable_disk);
+                                       inlier_pts, ox, oy, oz, false);
     size_t n_outliers = ox.size();
     stage_timings.push_back({8, "RANSAC primitive fitting", endStage(8, "RANSAC primitive fitting", stage_start, progress_enabled), n_outliers});
-
-    if (!disable_disk) {
-        savePCD((output_dir / "04_ransac_inliers.pcd").string(), inlier_pts, true);
-        std::vector<PointXYZ> outlier_pts(n_outliers);
-        for (size_t i = 0; i < n_outliers; ++i) outlier_pts[i] = {ox[i], oy[i], oz[i]};
-        savePCD((output_dir / "05_ground_plane_removed.pcd").string(), outlier_pts, true);
-    }
 
     // Stage 9: Hardware RVV 1.0 Euclidean Clustering
     PointCloudSoA non_ground_cloud{ox.data(), oy.data(), oz.data(), n_outliers};

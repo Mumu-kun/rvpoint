@@ -39,7 +39,7 @@ struct StreamConfig {
     std::string input_path = "data/pcd_compressed";
     int max_frames = 20;
     int num_threads = 8;
-    bool write_clusters = false;
+    bool write_clusters = true;
     bool progress = true;
     std::string mode = "inter";
     float voxel_leaf_size = 0.10f;
@@ -875,6 +875,14 @@ int main(int argc, char** argv) {
               << "  Cluster Export  : " << (cfg.write_clusters ? "ENABLED (output/stream_clusters/)" : "DISABLED (Zero Disk I/O)") << "\n"
               << "========================================================================\n\n";
 
+    if (cfg.write_clusters) {
+        std::error_code ec;
+        std::filesystem::create_directories("output/stream_clusters", ec);
+        if (ec) {
+            std::cerr << "Warning: Could not create output/stream_clusters/: " << ec.message() << std::endl;
+        }
+    }
+
     const int pool_threads = std::max(1, cfg.num_threads);
     std::vector<ThreadFrameContext> thread_contexts;
     thread_contexts.reserve(pool_threads);
@@ -1053,8 +1061,12 @@ int main(int argc, char** argv) {
               << "------------------------------------------------------------------------\n"
               << "  [Disk I/O Telemetry (Isolated from Compute)]:\n"
               << "    • Average PCD Load Time   : " << avg_read << " ms\n"
-              << "    • Average Cluster Save    : " << avg_write << " ms\n"
-              << "========================================================================\n";
+              << "    • Average Cluster Save    : " << avg_write << " ms\n";
+    if (cfg.write_clusters) {
+        std::cout << "  [Export Destination]:\n"
+                  << "    • Clustered Frames Saved  : output/stream_clusters/frame_XXXXXX_clusters.pcd\n";
+    }
+    std::cout << "========================================================================\n";
 
     return 0;
 }

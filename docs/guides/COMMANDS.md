@@ -1,4 +1,4 @@
-Here is the complete, categorized list of all command lines in the repository:
+> **Physical Hardware Reference**: For standalone board commands targeting the Orange Pi RV2 (SpacemiT K1 Octa-Core RV64GCV), see [BOARD_BENCHMARK_GUIDE.md](file:///d:/rvpoint/rvpoint/docs/guides/BOARD_BENCHMARK_GUIDE.md).
 
 ---
 
