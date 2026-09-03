@@ -58,17 +58,13 @@ struct PipelineConfig {
 constexpr PipelineConfig kPipelineConfig;
 
 std::string resolveInputPath(const std::string &input) {
-  const std::vector<std::string> candidates = {
-      input,
-      "/workspace/" + input,
-      "/workspace/data/" + input,
-  };
-
-  for (const std::string &candidate : candidates) {
-    if (std::filesystem::exists(candidate)) {
-      return candidate;
-    }
-  }
+  if (std::filesystem::is_regular_file(input)) return input;
+  const std::filesystem::path p(input);
+  const std::filesystem::path data_dir("data");
+  const std::filesystem::path alt1 = data_dir / p.filename();
+  if (std::filesystem::is_regular_file(alt1)) return alt1.string();
+  const std::filesystem::path alt2 = data_dir / "pcd_compressed" / p.filename();
+  if (std::filesystem::is_regular_file(alt2)) return alt2.string();
   return input;
 }
 
@@ -363,9 +359,12 @@ int main(int argc, char **argv) {
   beginStage(1, "Load input cloud", progress_enabled);
   auto stage_start = std::chrono::high_resolution_clock::now();
   const int count = loadPCD(input_path, loaded_points);
-  if (count < 0) {
-    std::cerr << "Failed to load input cloud: " << positional_args[0]
-              << std::endl;
+  if (count <= 0 || loaded_points.empty()) {
+    std::cerr << "Failed to load input cloud: " << positional_args[0] << std::endl;
+    if (std::filesystem::is_directory(positional_args[0])) {
+      std::cerr << "Note: '" << positional_args[0] << "' is a directory. pipeline_export only processes single .pcd files.\n"
+                << "For multi-frame directory streaming, use pipeline_3d_stream_rvv_clust or official_pcl_stream." << std::endl;
+    }
     return 1;
   }
   const std::size_t n_input = loaded_points.size();

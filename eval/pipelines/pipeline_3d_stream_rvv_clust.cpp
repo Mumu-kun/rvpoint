@@ -50,6 +50,11 @@ struct StreamConfig {
     float cluster_tolerance = 0.15f;
     int min_cluster_size = 50;
     int max_cluster_size = 100000;
+    float ground_angle_thresh = 45.0f;
+    bool no_ground_prior = false;
+    bool optical_frame = false;
+    uint64_t seed = 42;
+    bool skip_sor = false;
 };
 
 struct FrameMetrics {
@@ -831,6 +836,24 @@ int main(int argc, char** argv) {
             cfg.min_cluster_size = std::atoi(argv[++i]);
         } else if (arg == "--max-cluster" && i + 1 < argc) {
             cfg.max_cluster_size = std::atoi(argv[++i]);
+        } else if (arg == "--ror-radius" && i + 1 < argc) {
+            cfg.ror_radius = std::atof(argv[++i]);
+        } else if ((arg == "--ror-min-pts" || arg == "--ror-min-neighbors") && i + 1 < argc) {
+            cfg.ror_min_neighbors = std::atoi(argv[++i]);
+        } else if (arg == "--ransac-iters" && i + 1 < argc) {
+            cfg.ransac_max_iterations = std::atoi(argv[++i]);
+        } else if (arg == "--ground-angle-thresh" && i + 1 < argc) {
+            cfg.ground_angle_thresh = std::atof(argv[++i]);
+        } else if (arg == "--no-ground-prior" || arg == "--unconstrained-plane") {
+            cfg.no_ground_prior = true;
+        } else if (arg == "--optical-frame") {
+            cfg.optical_frame = true;
+        } else if (arg == "--seed" && i + 1 < argc) {
+            cfg.seed = std::stoull(argv[++i]);
+        } else if (arg == "--skip-sor" || arg == "--no-sor") {
+            cfg.skip_sor = true;
+        } else if (arg == "--use-ror" || arg == "--ror") {
+            cfg.skip_sor = false;
         } else if (arg == "--write-clusters") {
             cfg.write_clusters = true;
         } else if (arg == "--no-write") {
@@ -915,8 +938,11 @@ int main(int argc, char** argv) {
     }
 
     std::vector<FrameMetrics> all_metrics(pcd_files.size());
-    const std::vector<float> ground_normal_prior = {0.0f, 0.0f, 1.0f};
-    const float min_ground_dot = 0.707f;
+    std::vector<float> ground_normal_prior = {0.0f, 0.0f, 1.0f};
+    if (cfg.optical_frame) {
+        ground_normal_prior = {0.0f, 1.0f, 0.0f};
+    }
+    const float min_ground_dot = cfg.no_ground_prior ? 0.0f : std::cos(cfg.ground_angle_thresh * 3.14159265358979323846f / 180.0f);
 
     auto stream_start_wall = Clock::now();
 
@@ -955,22 +981,29 @@ int main(int argc, char** argv) {
         m.voxel_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
         m.downsampled_points = n_down;
 
-        auto t3 = Clock::now();
-        ctx.ror_grid.build(ctx.dx.data(), ctx.dy.data(), ctx.dz.data(), n_down);
-        auto t4 = Clock::now();
-        m.grid_build_ms = std::chrono::duration<double, std::milli>(t4 - t3).count();
+        size_t n_filtered = n_down;
+        if (!cfg.skip_sor) {
+            auto t3 = Clock::now();
+            ctx.ror_grid.build(ctx.dx.data(), ctx.dy.data(), ctx.dz.data(), n_down);
+            auto t4 = Clock::now();
+            m.grid_build_ms = std::chrono::duration<double, std::milli>(t4 - t3).count();
 
-        auto t5 = Clock::now();
-        size_t n_filtered = execute_ror_rvv_ctx(ctx, n_down, cfg.ror_radius, cfg.ror_min_neighbors);
-        auto t6 = Clock::now();
-        m.ror_ms = std::chrono::duration<double, std::milli>(t6 - t5).count();
+            auto t5 = Clock::now();
+            n_filtered = execute_ror_rvv_ctx(ctx, n_down, cfg.ror_radius, cfg.ror_min_neighbors);
+            auto t6 = Clock::now();
+            m.ror_ms = std::chrono::duration<double, std::milli>(t6 - t5).count();
+        } else {
+            ctx.fx = ctx.dx;
+            ctx.fy = ctx.dy;
+            ctx.fz = ctx.dz;
+        }
         m.ror_points = n_filtered;
 
         auto t7 = Clock::now();
         float plane_model[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         int inliers = ransac_plane_sprt_rvv_ctx(ctx, n_filtered, cfg.ransac_distance_threshold,
                                                cfg.ransac_max_iterations, plane_model,
-                                               ground_normal_prior.data(), min_ground_dot, 42);
+                                               ground_normal_prior.data(), min_ground_dot, cfg.seed);
         auto t8 = Clock::now();
         m.ransac_ms = std::chrono::duration<double, std::milli>(t8 - t7).count();
         m.ground_inliers = inliers;

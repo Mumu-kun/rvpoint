@@ -801,10 +801,47 @@ std::string resolveInputPath(const std::string &raw_path) {
     return raw_path;
 }
 
+bool saveJSONMetrics(const std::filesystem::path &out_path,
+                     const std::vector<StageTiming> &stages,
+                     double total_ms, float leaf_size, bool skip_sor,
+                     float cluster_tolerance, PerceptionStatus status,
+                     size_t inlier_count, size_t outlier_count, size_t cluster_count) {
+    std::ofstream ofs(out_path);
+    if (!ofs.is_open()) return false;
+
+    ofs << "{\n";
+    ofs << "  \"status\": \"" << perceptionStatusToString(status) << "\",\n";
+    ofs << "  \"leaf_size\": " << leaf_size << ",\n";
+    ofs << "  \"skip_sor\": " << (skip_sor ? "true" : "false") << ",\n";
+    ofs << "  \"cluster_tolerance\": " << cluster_tolerance << ",\n";
+    ofs << "  \"total_ms\": " << total_ms << ",\n";
+    ofs << "  \"ground_inliers\": " << inlier_count << ",\n";
+    ofs << "  \"non_ground_outliers\": " << outlier_count << ",\n";
+    ofs << "  \"clusters_found\": " << cluster_count << ",\n";
+    ofs << "  \"stages\": [\n";
+    for (std::size_t i = 0; i < stages.size(); ++i) {
+        const auto &st = stages[i];
+        ofs << "    {\n";
+        ofs << "      \"stage\": " << st.index << ",\n";
+        ofs << "      \"name\": \"" << st.label << "\",\n";
+        ofs << "      \"time_ms\": " << st.ms << ",\n";
+        ofs << "      \"points\": " << st.point_count << "\n";
+        ofs << "    }" << (i + 1 < stages.size() ? "," : "") << "\n";
+    }
+    ofs << "  ]\n";
+    ofs << "}\n";
+    ofs.flush();
+    return ofs.good();
+}
+
 } // anonymous namespace
 
 int main(int argc, char** argv) {
     bool progress_enabled = false;
+    bool json_metrics = false;
+    bool skip_sor = false;
+    bool use_ror = true;
+    bool skip_normals = true;
     bool disable_disk = false;
     float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
     float cluster_tolerance = kPipelineConfig.cluster_tolerance;
@@ -822,27 +859,108 @@ int main(int argc, char** argv) {
     std::vector<StageTiming> stage_timings;
     stage_timings.reserve(kStageCount);
 
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "--progress") {
-            progress_enabled = true;
-        } else if (arg == "--no-write" || arg == "--disable-disk") {
-            disable_disk = true;
-        } else if (arg == "--leaf-size" && i + 1 < argc) {
-            voxel_leaf_size = std::stof(argv[++i]);
-        } else if (arg == "--cluster-tolerance" && i + 1 < argc) {
-            cluster_tolerance = std::stof(argv[++i]);
-        } else if (arg == "--min-cluster" && i + 1 < argc) {
-            min_cluster_size = std::stoi(argv[++i]);
-        } else if (arg == "--max-cluster" && i + 1 < argc) {
-            max_cluster_size = std::stoi(argv[++i]);
-        } else if (!arg.empty() && arg[0] != '-') {
-            positional_args.push_back(arg);
+    try {
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--progress") {
+                progress_enabled = true;
+            } else if (arg == "--json" || arg == "--json-metrics") {
+                json_metrics = true;
+            } else if (arg == "--skip-sor" || arg == "--no-sor") {
+                skip_sor = true;
+            } else if (arg == "--use-ror" || arg == "--ror") {
+                use_ror = true; skip_sor = false;
+            } else if (arg == "--use-sor" || arg == "--sor") {
+                use_ror = false; skip_sor = false;
+            } else if (arg == "--ror-radius") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ror-radius\n"; return 1; }
+                ror_radius = std::stof(argv[++i]);
+                if (!std::isfinite(ror_radius) || ror_radius <= 0.0f) {
+                    std::cerr << "Error: --ror-radius must be a positive finite number.\n";
+                    return 1;
+                }
+            } else if (arg == "--ror-min-pts") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ror-min-pts\n"; return 1; }
+                ror_min_pts = std::stoi(argv[++i]);
+                if (ror_min_pts < 1) {
+                    std::cerr << "Error: --ror-min-pts must be >= 1.\n";
+                    return 1;
+                }
+            } else if (arg == "--no-normals" || arg == "--skip-normals" || arg == "--no-normal" || arg == "--skip-normal") {
+                skip_normals = true;
+            } else if (arg == "--compute-normals" || arg == "--with-normals") {
+                skip_normals = false;
+            } else if (arg == "--no-write" || arg == "--disable-disk") {
+                disable_disk = true;
+            } else if (arg == "--leaf-size") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --leaf-size\n"; return 1; }
+                voxel_leaf_size = std::stof(argv[++i]);
+                if (!std::isfinite(voxel_leaf_size) || voxel_leaf_size <= 0.0f) {
+                    std::cerr << "Error: --leaf-size must be a positive finite number.\n";
+                    return 1;
+                }
+            } else if (arg == "--cluster-tolerance") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --cluster-tolerance\n"; return 1; }
+                cluster_tolerance = std::stof(argv[++i]);
+                if (!std::isfinite(cluster_tolerance) || cluster_tolerance <= 0.0f) {
+                    std::cerr << "Error: --cluster-tolerance must be a positive finite number.\n";
+                    return 1;
+                }
+            } else if (arg == "--min-cluster") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --min-cluster\n"; return 1; }
+                min_cluster_size = std::stoi(argv[++i]);
+                if (min_cluster_size < 1) {
+                    std::cerr << "Error: --min-cluster must be >= 1.\n";
+                    return 1;
+                }
+            } else if (arg == "--max-cluster") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --max-cluster\n"; return 1; }
+                max_cluster_size = std::stoi(argv[++i]);
+                if (max_cluster_size < 1) {
+                    std::cerr << "Error: --max-cluster must be >= 1.\n";
+                    return 1;
+                }
+            } else if (arg == "--ransac-iters") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ransac-iters\n"; return 1; }
+                ransac_max_iters = std::stoi(argv[++i]);
+                if (ransac_max_iters < 1) {
+                    std::cerr << "Error: --ransac-iters must be >= 1.\n";
+                    return 1;
+                }
+            } else if (arg == "--seed") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --seed\n"; return 1; }
+                seed = std::stoull(argv[++i]);
+            } else if (arg == "--ground-angle-thresh") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ground-angle-thresh\n"; return 1; }
+                float deg = std::stof(argv[++i]);
+                if (!std::isfinite(deg) || deg < 0.0f || deg > 90.0f) {
+                    std::cerr << "Error: --ground-angle-thresh must be in [0, 90] degrees.\n";
+                    return 1;
+                }
+                min_ground_dot = std::cos(deg * 3.14159265358979323846f / 180.0f);
+            } else if (arg == "--no-ground-prior" || arg == "--unconstrained-plane") {
+                min_ground_dot = 0.0f;
+            } else if (arg == "--optical-frame") {
+                ground_normal_prior = {0.0f, 1.0f, 0.0f};
+            } else if (!arg.empty() && arg[0] == '-') {
+                std::cerr << "Error: Unrecognized command-line option '" << arg << "'\n";
+                return 1;
+            } else {
+                positional_args.push_back(arg);
+            }
         }
+    } catch (const std::exception& e) {
+        std::cerr << "Error parsing CLI arguments: " << e.what() << std::endl;
+        return 1;
     }
 
     if (positional_args.empty()) {
-        std::cerr << "Usage: " << argv[0] << " <input.pcd> [--progress] [--no-write] ...\n";
+        std::cerr << "Usage: " << argv[0]
+                  << " [--progress] [--json] [--no-write] [--no-normals] [--use-ror|--skip-sor] "
+                     "[--ror-radius <val>] [--ror-min-pts <val>] [--leaf-size <val>] "
+                     "[--cluster-tolerance <val>] [--min-cluster <val>] "
+                     "[--max-cluster <val>] [--ransac-iters <val>] [--seed <val>] "
+                     "[--ground-angle-thresh <deg>] [--no-ground-prior] [--optical-frame] <input.pcd> [output_dir]\n";
         return 1;
     }
 
@@ -880,7 +998,6 @@ int main(int argc, char** argv) {
     }
     PointCloudSoA input_cloud{ix.data(), iy.data(), iz.data(), n_input};
 
-    // Stage 2: Write input
     // Stage 2: Write input (skipped for cluster-only write)
     stage_timings.push_back({2, "Write input stage", 0.001, n_input});
 
@@ -902,18 +1019,28 @@ int main(int argc, char** argv) {
     Fast3DSpatialGrid search_grid(ror_radius, n_down);
     beginStage(4, "Build search index for downsampled cloud", progress_enabled);
     stage_start = Clock::now();
-    search_grid.build(dx.data(), dy.data(), dz.data(), n_down);
+    if (!skip_sor) {
+        search_grid.build(dx.data(), dy.data(), dz.data(), n_down);
+    }
     stage_timings.push_back({4, "Build search index for downsampled cloud",
                              endStage(4, "Build search index for downsampled cloud", stage_start, progress_enabled), n_down});
 
-    // Stage 5: ROR
-    beginStage(5, "Radius outlier removal (RVV)", progress_enabled);
+    // Stage 5: Outlier Removal (ROR / Skipped)
+    const char* outlier_stage_label = skip_sor ? "Outlier removal (skipped)" : "Radius outlier removal (RVV)";
+    beginStage(5, outlier_stage_label, progress_enabled);
     stage_start = Clock::now();
-    FusedResult fused = execute_voxel_ror_rvv(downsampled_cloud, search_grid, ror_radius, ror_min_pts, false);
+    FusedResult fused;
+    if (skip_sor) {
+        fused.x = std::move(dx);
+        fused.y = std::move(dy);
+        fused.z = std::move(dz);
+    } else {
+        fused = execute_voxel_ror_rvv(downsampled_cloud, search_grid, ror_radius, ror_min_pts, false);
+    }
     size_t n_sor = fused.x.size();
-    stage_timings.push_back({5, "Radius outlier removal (RVV)", endStage(5, "Radius outlier removal (RVV)", stage_start, progress_enabled), n_sor});
+    stage_timings.push_back({5, outlier_stage_label, endStage(5, outlier_stage_label, stage_start, progress_enabled), n_sor});
 
-    // Stage 6 & 7: Skipped
+    // Stage 6 & 7: Skipped (or normal estimation stub)
     stage_timings.push_back({6, "Rebuild search index for filtered cloud", 0.001, n_sor});
     stage_timings.push_back({7, "Normal estimation", 0.001, n_sor});
 
@@ -925,9 +1052,12 @@ int main(int argc, char** argv) {
 
     beginStage(8, "RANSAC primitive fitting", progress_enabled);
     stage_start = Clock::now();
-    int r_cnt = ransac_plane_sprt_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
+    int r_cnt = 0;
+    if (n_sor >= 3) {
+        r_cnt = ransac_plane_sprt_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
                                       ransac_max_iters, model,
                                       ground_normal_prior.data(), min_ground_dot, seed);
+    }
     extract_inliers_outliers_direct_soa(sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
                                        inlier_pts, ox, oy, oz, false);
     size_t n_outliers = ox.size();
@@ -987,6 +1117,11 @@ int main(int argc, char** argv) {
     std::cout << "[result] Total clusters found: " << clusters.size() << std::endl;
     if (!disable_disk) {
         std::cout << "[export] Colored clusters saved to: " << (output_dir / "06_clusters.pcd").string() << std::endl;
+    }
+    if (json_metrics && !disable_disk) {
+        saveJSONMetrics(output_dir / "metrics.json", stage_timings, total_ms,
+                        voxel_leaf_size, skip_sor, cluster_tolerance, PerceptionStatus::SUCCESS,
+                        inlier_pts.size(), n_outliers, clusters.size());
     }
     std::cout << "========================================================================\n";
 
