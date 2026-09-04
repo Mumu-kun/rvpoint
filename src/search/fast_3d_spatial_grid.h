@@ -9,6 +9,11 @@
 
 namespace rvpoint {
 
+inline int rv_fast_floor(float f) {
+    int i = static_cast<int>(f);
+    return i - (f < static_cast<float>(i));
+}
+
 inline size_t next_power_of_2(size_t v) {
     if (v == 0) return 1;
     v--;
@@ -38,12 +43,15 @@ public:
     const float *px_ = nullptr, *py_ = nullptr, *pz_ = nullptr;
     size_t n_pts_ = 0;
 
+    std::vector<uint32_t> touched_slots_;
+
     Fast3DSpatialGrid(float cell_size = 0.25f, size_t expected_points = 65536)
         : cell_size_(cell_size), inv_cell_(1.0f / cell_size)
     {
-        capacity_ = next_power_of_2(std::max<size_t>(65536, expected_points * 4));
+        capacity_ = next_power_of_2(std::max<size_t>(1024, expected_points * 2));
         mask_ = capacity_ - 1;
         cells_.resize(capacity_);
+        touched_slots_.reserve(std::min<size_t>(capacity_, 65536));
     }
 
     inline size_t hash3D(int x, int y, int z) const {
@@ -55,22 +63,24 @@ public:
 
     bool build(const float* x, const float* y, const float* z, size_t n) {
         px_ = x; py_ = y; pz_ = z; n_pts_ = n;
-        if (capacity_ < n * 4) {
-            capacity_ = next_power_of_2(std::max<size_t>(65536, n * 4));
+        if (capacity_ < n * 2) {
+            capacity_ = next_power_of_2(std::max<size_t>(1024, n * 2));
             mask_ = capacity_ - 1;
             cells_.resize(capacity_);
+            for (size_t i = 0; i < capacity_; ++i) cells_[i].head = -1;
+            touched_slots_.clear();
+        } else {
+            for (uint32_t slot : touched_slots_) {
+                cells_[slot].head = -1;
+            }
+            touched_slots_.clear();
         }
-        for (size_t i = 0; i < capacity_; ++i) cells_[i].head = -1;
-        next_.assign(n, -1);
+        if (next_.size() < n) next_.resize(n);
 
         for (size_t i = 0; i < n; ++i) {
-            if (!std::isfinite(x[i]) || !std::isfinite(y[i]) || !std::isfinite(z[i])) {
-                return false;
-            }
-
-            int cx = static_cast<int>(std::floor(x[i] * inv_cell_));
-            int cy = static_cast<int>(std::floor(y[i] * inv_cell_));
-            int cz = static_cast<int>(std::floor(z[i] * inv_cell_));
+            int cx = rv_fast_floor(x[i] * inv_cell_);
+            int cy = rv_fast_floor(y[i] * inv_cell_);
+            int cz = rv_fast_floor(z[i] * inv_cell_);
 
             size_t h = hash3D(cx, cy, cz);
             int probe = 0;
@@ -83,6 +93,7 @@ public:
             }
             if (cells_[h].head == -1) {
                 cells_[h].cx = cx; cells_[h].cy = cy; cells_[h].cz = cz;
+                touched_slots_.push_back(static_cast<uint32_t>(h));
             }
             next_[i] = cells_[h].head;
             cells_[h].head = static_cast<int>(i);
@@ -97,9 +108,9 @@ public:
     inline void radiusSearch(float qx, float qy, float qz, float r2,
                              std::vector<int>& neighbors, std::vector<float>& dists2) const {
         neighbors.clear(); dists2.clear();
-        int qcx = static_cast<int>(std::floor(qx * inv_cell_));
-        int qcy = static_cast<int>(std::floor(qy * inv_cell_));
-        int qcz = static_cast<int>(std::floor(qz * inv_cell_));
+        int qcx = rv_fast_floor(qx * inv_cell_);
+        int qcy = rv_fast_floor(qy * inv_cell_);
+        int qcz = rv_fast_floor(qz * inv_cell_);
 
         for (int dz = -1; dz <= 1; ++dz) {
             for (int dy = -1; dy <= 1; ++dy) {
@@ -132,9 +143,9 @@ public:
     inline void radiusSearchDists(float qx, float qy, float qz, float r2,
                                   std::vector<float>& dists2) const {
         dists2.clear();
-        int qcx = static_cast<int>(std::floor(qx * inv_cell_));
-        int qcy = static_cast<int>(std::floor(qy * inv_cell_));
-        int qcz = static_cast<int>(std::floor(qz * inv_cell_));
+        int qcx = rv_fast_floor(qx * inv_cell_);
+        int qcy = rv_fast_floor(qy * inv_cell_);
+        int qcz = rv_fast_floor(qz * inv_cell_);
 
         for (int dz = -1; dz <= 1; ++dz) {
             for (int dy = -1; dy <= 1; ++dy) {

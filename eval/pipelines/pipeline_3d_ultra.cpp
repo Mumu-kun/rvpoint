@@ -25,6 +25,10 @@
 #include <string>
 #include <vector>
 
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
+
 #if defined(__riscv) || defined(__riscv_vector)
 #include <riscv_vector.h>
 #endif
@@ -152,8 +156,88 @@ static FusedResult execute_voxel_ror_rvv(
     const size_t mask = grid.mask_;
     const float inv_cell = grid.inv_cell_;
 
+    if (!compute_normals) {
+        std::vector<uint8_t> keep(n, 0);
+#if defined(_OPENMP)
+        #pragma omp parallel for schedule(dynamic, 128)
+#endif
+        for (size_t i = 0; i < n; ++i) {
+            float qx = px[i], qy = py[i], qz = pz[i];
+            int qcx = static_cast<int>(std::floor(qx * inv_cell));
+            int qcy = static_cast<int>(std::floor(qy * inv_cell));
+            int qcz = static_cast<int>(std::floor(qz * inv_cell));
+
+            int in_radius_count = 0;
+
+            size_t self_h = grid.hash3D(qcx, qcy, qcz);
+            int probe = 0;
+            while (cells[self_h].head != -1 && probe < Fast3DSpatialGrid::kMaxProbes) {
+                if (cells[self_h].cx == qcx && cells[self_h].cy == qcy && cells[self_h].cz == qcz) {
+                    int curr = cells[self_h].head;
+                    while (curr != -1) {
+                        float ddx = px[curr] - qx, ddy = py[curr] - qy, ddz = pz[curr] - qz;
+                        if (ddx * ddx + ddy * ddy + ddz * ddz <= r2) {
+                            in_radius_count++;
+                            if (in_radius_count >= min_neighbors) break;
+                        }
+                        curr = next[curr];
+                    }
+                    break;
+                }
+                self_h = (self_h + 1) & mask;
+                probe++;
+            }
+
+            if (in_radius_count < min_neighbors) {
+                for (int dz = -1; dz <= 1 && in_radius_count < min_neighbors; ++dz) {
+                    for (int dy = -1; dy <= 1 && in_radius_count < min_neighbors; ++dy) {
+                        for (int dx = -1; dx <= 1 && in_radius_count < min_neighbors; ++dx) {
+                            if (dx == 0 && dy == 0 && dz == 0) continue;
+                            int tcx = qcx + dx, tcy = qcy + dy, tcz = qcz + dz;
+                            size_t h = grid.hash3D(tcx, tcy, tcz);
+                            int p = 0;
+                            while (cells[h].head != -1 && p < Fast3DSpatialGrid::kMaxProbes) {
+                                if (cells[h].cx == tcx && cells[h].cy == tcy && cells[h].cz == tcz) {
+                                    int curr = cells[h].head;
+                                    while (curr != -1) {
+                                        float ddx = px[curr] - qx, ddy = py[curr] - qy, ddz = pz[curr] - qz;
+                                        if (ddx * ddx + ddy * ddy + ddz * ddz <= r2) {
+                                            in_radius_count++;
+                                            if (in_radius_count >= min_neighbors) break;
+                                        }
+                                        curr = next[curr];
+                                    }
+                                    break;
+                                }
+                                h = (h + 1) & mask;
+                                p++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (in_radius_count >= min_neighbors) {
+                keep[i] = 1;
+            }
+        }
+
+        res.x.reserve(n);
+        res.y.reserve(n);
+        res.z.reserve(n);
+        for (size_t i = 0; i < n; ++i) {
+            if (keep[i]) {
+                res.x.push_back(px[i]);
+                res.y.push_back(py[i]);
+                res.z.push_back(pz[i]);
+            }
+        }
+        return res;
+    }
+
+    // Fallback when compute_normals == true
     std::vector<int> nbrs;
-    if (compute_normals) nbrs.reserve(64);
+    nbrs.reserve(64);
 
     for (size_t i = 0; i < n; ++i) {
         float qx = px[i], qy = py[i], qz = pz[i];
@@ -162,7 +246,7 @@ static FusedResult execute_voxel_ror_rvv(
         int qcz = static_cast<int>(std::floor(qz * inv_cell));
 
         int in_radius_count = 0;
-        if (compute_normals) nbrs.clear();
+        nbrs.clear();
 
         // 1. Fastpath: check self-cell first (skips 26 neighbor cells for dense voxels)
         size_t self_h = grid.hash3D(qcx, qcy, qcz);
@@ -174,8 +258,7 @@ static FusedResult execute_voxel_ror_rvv(
                     float ddx = px[curr] - qx, ddy = py[curr] - qy, ddz = pz[curr] - qz;
                     if (ddx * ddx + ddy * ddy + ddz * ddz <= r2) {
                         in_radius_count++;
-                        if (compute_normals) nbrs.push_back(curr);
-                        if (!compute_normals && in_radius_count >= min_neighbors) break;
+                        nbrs.push_back(curr);
                     }
                     curr = next[curr];
                 }
@@ -186,31 +269,28 @@ static FusedResult execute_voxel_ror_rvv(
         }
 
         // 2. Fallback to neighbor 26 cells
-        if (compute_normals || in_radius_count < min_neighbors) {
-            for (int dz = -1; dz <= 1 && (compute_normals || in_radius_count < min_neighbors); ++dz) {
-                for (int dy = -1; dy <= 1 && (compute_normals || in_radius_count < min_neighbors); ++dy) {
-                    for (int dx = -1; dx <= 1 && (compute_normals || in_radius_count < min_neighbors); ++dx) {
-                        if (dx == 0 && dy == 0 && dz == 0) continue;
-                        int tcx = qcx + dx, tcy = qcy + dy, tcz = qcz + dz;
-                        size_t h = grid.hash3D(tcx, tcy, tcz);
-                        int p = 0;
-                        while (cells[h].head != -1 && p < Fast3DSpatialGrid::kMaxProbes) {
-                            if (cells[h].cx == tcx && cells[h].cy == tcy && cells[h].cz == tcz) {
-                                int curr = cells[h].head;
-                                while (curr != -1) {
-                                    float ddx = px[curr] - qx, ddy = py[curr] - qy, ddz = pz[curr] - qz;
-                                    if (ddx * ddx + ddy * ddy + ddz * ddz <= r2) {
-                                        in_radius_count++;
-                                        if (compute_normals) nbrs.push_back(curr);
-                                        if (!compute_normals && in_radius_count >= min_neighbors) break;
-                                    }
-                                    curr = next[curr];
+        for (int dz = -1; dz <= 1; ++dz) {
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    if (dx == 0 && dy == 0 && dz == 0) continue;
+                    int tcx = qcx + dx, tcy = qcy + dy, tcz = qcz + dz;
+                    size_t h = grid.hash3D(tcx, tcy, tcz);
+                    int p = 0;
+                    while (cells[h].head != -1 && p < Fast3DSpatialGrid::kMaxProbes) {
+                        if (cells[h].cx == tcx && cells[h].cy == tcy && cells[h].cz == tcz) {
+                            int curr = cells[h].head;
+                            while (curr != -1) {
+                                float ddx = px[curr] - qx, ddy = py[curr] - qy, ddz = pz[curr] - qz;
+                                if (ddx * ddx + ddy * ddy + ddz * ddz <= r2) {
+                                    in_radius_count++;
+                                    nbrs.push_back(curr);
                                 }
-                                break;
+                                curr = next[curr];
                             }
-                            h = (h + 1) & mask;
-                            p++;
+                            break;
                         }
+                        h = (h + 1) & mask;
+                        p++;
                     }
                 }
             }
@@ -220,41 +300,39 @@ static FusedResult execute_voxel_ror_rvv(
             res.x.push_back(qx);
             res.y.push_back(qy);
             res.z.push_back(qz);
-            if (compute_normals) {
-                if (nbrs.size() >= 3) {
-                    float cx = 0, cy = 0, cz = 0;
-                    for (int idx : nbrs) {
-                        cx += px[idx]; cy += py[idx]; cz += pz[idx];
-                    }
-                    float inv_n = 1.0f / static_cast<float>(nbrs.size());
-                    cx *= inv_n; cy *= inv_n; cz *= inv_n;
+            if (nbrs.size() >= 3) {
+                float cx = 0, cy = 0, cz = 0;
+                for (int idx : nbrs) {
+                    cx += px[idx]; cy += py[idx]; cz += pz[idx];
+                }
+                float inv_n = 1.0f / static_cast<float>(nbrs.size());
+                cx *= inv_n; cy *= inv_n; cz *= inv_n;
 
-                    float c00 = 0, c01 = 0, c02 = 0, c11 = 0, c12 = 0, c22 = 0;
-                    for (int idx : nbrs) {
-                        float ddx = px[idx] - cx, ddy = py[idx] - cy, ddz = pz[idx] - cz;
-                        c00 += ddx * ddx; c01 += ddx * ddy; c02 += ddx * ddz;
-                        c11 += ddy * ddy; c12 += ddy * ddz; c22 += ddz * ddz;
-                    }
+                float c00 = 0, c01 = 0, c02 = 0, c11 = 0, c12 = 0, c22 = 0;
+                for (int idx : nbrs) {
+                    float ddx = px[idx] - cx, ddy = py[idx] - cy, ddz = pz[idx] - cz;
+                    c00 += ddx * ddx; c01 += ddx * ddy; c02 += ddx * ddz;
+                    c11 += ddy * ddy; c12 += ddy * ddz; c22 += ddz * ddz;
+                }
 
-                    float vx = c01 * c12 - c02 * c11;
-                    float vy = c01 * c02 - c00 * c12;
-                    float vz = c00 * c11 - c01 * c01;
-                    float norm = std::sqrt(vx * vx + vy * vy + vz * vz);
-                    if (norm > 1e-6f) {
-                        float inv_norm = 1.0f / norm;
-                        res.nx.push_back(vx * inv_norm);
-                        res.ny.push_back(vy * inv_norm);
-                        res.nz.push_back(vz * inv_norm);
-                    } else {
-                        res.nx.push_back(std::numeric_limits<float>::quiet_NaN());
-                        res.ny.push_back(std::numeric_limits<float>::quiet_NaN());
-                        res.nz.push_back(std::numeric_limits<float>::quiet_NaN());
-                    }
+                float vx = c01 * c12 - c02 * c11;
+                float vy = c01 * c02 - c00 * c12;
+                float vz = c00 * c11 - c01 * c01;
+                float norm = std::sqrt(vx * vx + vy * vy + vz * vz);
+                if (norm > 1e-6f) {
+                    float inv_norm = 1.0f / norm;
+                    res.nx.push_back(vx * inv_norm);
+                    res.ny.push_back(vy * inv_norm);
+                    res.nz.push_back(vz * inv_norm);
                 } else {
                     res.nx.push_back(std::numeric_limits<float>::quiet_NaN());
                     res.ny.push_back(std::numeric_limits<float>::quiet_NaN());
                     res.nz.push_back(std::numeric_limits<float>::quiet_NaN());
                 }
+            } else {
+                res.nx.push_back(std::numeric_limits<float>::quiet_NaN());
+                res.ny.push_back(std::numeric_limits<float>::quiet_NaN());
+                res.nz.push_back(std::numeric_limits<float>::quiet_NaN());
             }
         }
     }
@@ -703,64 +781,266 @@ struct UnionFind {
     }
 };
 
-static std::vector<ClusterResult> execute_union_find_clustering(
+class FastClustGrid {
+public:
+    struct Cell {
+        int cx = 0, cy = 0, cz = 0;
+        int head = -1;
+    };
+    static constexpr int kMaxProbes = 64;
+    size_t capacity_ = 65536;
+    size_t mask_ = 65535;
+    float inv_cell_;
+    std::vector<Cell> cells_;
+    std::vector<int> next_;
+    std::vector<uint32_t> touched_slots_;
+
+    FastClustGrid(float cell_size, size_t expected_pts)
+        : inv_cell_(1.0f / cell_size)
+    {
+        capacity_ = next_power_of_2(std::max<size_t>(65536, expected_pts * 4));
+        mask_ = capacity_ - 1;
+        cells_.resize(capacity_);
+        touched_slots_.reserve(65536);
+    }
+
+    inline size_t hash3D(int x, int y, int z) const {
+        return ((static_cast<size_t>(x) * 73856093) ^
+                (static_cast<size_t>(y) * 19349663) ^
+                (static_cast<size_t>(z) * 83492791)) & mask_;
+    }
+
+    bool build(const float* x, const float* y, const float* z, size_t n) {
+        if (capacity_ < n * 4) {
+            capacity_ = next_power_of_2(std::max<size_t>(65536, n * 4));
+            mask_ = capacity_ - 1;
+            cells_.resize(capacity_);
+        }
+        for (uint32_t slot : touched_slots_) {
+            cells_[slot].head = -1;
+        }
+        touched_slots_.clear();
+        if (next_.size() < n) next_.resize(n);
+
+        for (size_t i = 0; i < n; ++i) {
+            int cx = static_cast<int>(std::floor(x[i] * inv_cell_));
+            int cy = static_cast<int>(std::floor(y[i] * inv_cell_));
+            int cz = static_cast<int>(std::floor(z[i] * inv_cell_));
+
+            size_t h = hash3D(cx, cy, cz);
+            int probe = 0;
+            while (cells_[h].head != -1 && (cells_[h].cx != cx || cells_[h].cy != cy || cells_[h].cz != cz) && probe < kMaxProbes) {
+                h = (h + 1) & mask_;
+                probe++;
+            }
+            if (cells_[h].head == -1) {
+                cells_[h].cx = cx; cells_[h].cy = cy; cells_[h].cz = cz;
+                touched_slots_.push_back(static_cast<uint32_t>(h));
+            }
+            next_[i] = cells_[h].head;
+            cells_[h].head = static_cast<int>(i);
+        }
+        return true;
+    }
+};
+
+static std::vector<ClusterResult> execute_union_find_clustering_rvv(
     const PointCloudSoA& cloud, float tolerance, int min_cluster_size, int max_cluster_size)
 {
     std::vector<ClusterResult> clusters;
     const size_t n = cloud.n;
     if (n == 0) return clusters;
 
-    float tol_sq = tolerance * tolerance;
-    Fast3DSpatialGrid grid(tolerance, n);
+    const float tol_sq = tolerance * tolerance;
+    const float cell_size = tolerance;
+    FastClustGrid grid(cell_size, n);
     grid.build(cloud.x, cloud.y, cloud.z, n);
 
-    UnionFind uf(n);
+    const int max_threads =
+#if defined(_OPENMP)
+        omp_get_max_threads();
+#else
+        1;
+#endif
 
-    for (size_t i = 0; i < n; ++i) {
-        float qx = cloud.x[i], qy = cloud.y[i], qz = cloud.z[i];
-        int qcx = static_cast<int>(std::floor(qx * grid.inv_cell_));
-        int qcy = static_cast<int>(std::floor(qy * grid.inv_cell_));
-        int qcz = static_cast<int>(std::floor(qz * grid.inv_cell_));
+    std::vector<std::vector<std::pair<int, int>>> thread_edges(max_threads);
+    for (int t = 0; t < max_threads; ++t) {
+        thread_edges[t].reserve(n * 2 / max_threads);
+    }
 
-        for (int dz = -1; dz <= 1; ++dz) {
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dx = -1; dx <= 1; ++dx) {
-                    int tcx = qcx + dx, tcy = qcy + dy, tcz = qcz + dz;
-                    size_t h = grid.hash3D(tcx, tcy, tcz);
-                    int probe = 0;
-                    while (grid.cells_[h].head != -1 && probe < Fast3DSpatialGrid::kMaxProbes) {
-                        if (grid.cells_[h].cx == tcx && grid.cells_[h].cy == tcy && grid.cells_[h].cz == tcz) {
-                            int curr = grid.cells_[h].head;
-                            while (curr != -1) {
-                                if (static_cast<size_t>(curr) > i) {
-                                    float ddx = cloud.x[curr] - qx, ddy = cloud.y[curr] - qy, ddz = cloud.z[curr] - qz;
-                                    float d2 = ddx * ddx + ddy * ddy + ddz * ddz;
-                                    if (d2 <= tol_sq) {
-                                        uf.unite(static_cast<int>(i), curr);
-                                    }
-                                }
-                                curr = grid.next_[curr];
-                            }
-                            break;
-                        }
-                        h = (h + 1) & grid.mask_;
-                        probe++;
+    static const int kForwardOffsets[13][3] = {
+        {-1, -1, 1}, { 0, -1, 1}, { 1, -1, 1},
+        {-1,  0, 1}, { 0,  0, 1}, { 1,  0, 1},
+        {-1,  1, 1}, { 0,  1, 1}, { 1,  1, 1},
+        {-1,  1, 0}, { 0,  1, 0}, { 1,  1, 0},
+        { 1,  0, 0}
+    };
+
+    const auto& touched = grid.touched_slots_;
+    const size_t num_cells = touched.size();
+
+#if defined(_OPENMP)
+    #pragma omp parallel
+#endif
+    {
+        int tid = 0;
+#if defined(_OPENMP)
+        tid = omp_get_thread_num();
+#endif
+        auto& local_edges = thread_edges[tid];
+        std::vector<int> self_pts;
+        std::vector<int> cand_idx;
+        std::vector<float> cand_x, cand_y, cand_z;
+        self_pts.reserve(64);
+        cand_idx.reserve(128);
+        cand_x.reserve(128);
+        cand_y.reserve(128);
+        cand_z.reserve(128);
+
+#if defined(_OPENMP)
+        #pragma omp for schedule(dynamic, 32)
+#endif
+        for (size_t s_idx = 0; s_idx < num_cells; ++s_idx) {
+            uint32_t slot = touched[s_idx];
+            const auto& cell = grid.cells_[slot];
+            if (cell.head == -1) continue;
+
+            self_pts.clear();
+            int curr = cell.head;
+            while (curr != -1) {
+                self_pts.push_back(curr);
+                curr = grid.next_[curr];
+            }
+            size_t n_self = self_pts.size();
+
+            // 1. Intra-cell pairwise checks
+            for (size_t u = 0; u < n_self; ++u) {
+                int p_u = self_pts[u];
+                float ux = cloud.x[p_u], uy = cloud.y[p_u], uz = cloud.z[p_u];
+                for (size_t v = u + 1; v < n_self; ++v) {
+                    int p_v = self_pts[v];
+                    float ddx = cloud.x[p_v] - ux, ddy = cloud.y[p_v] - uy, ddz = cloud.z[p_v] - uz;
+                    if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                        local_edges.push_back({p_u, p_v});
                     }
+                }
+            }
+
+            // 2. Gather candidates from 13 forward neighbors ONCE for this cell
+            cand_idx.clear();
+            cand_x.clear();
+            cand_y.clear();
+            cand_z.clear();
+
+            for (int k = 0; k < 13; ++k) {
+                int tcx = cell.cx + kForwardOffsets[k][0];
+                int tcy = cell.cy + kForwardOffsets[k][1];
+                int tcz = cell.cz + kForwardOffsets[k][2];
+
+                size_t h = grid.hash3D(tcx, tcy, tcz);
+                int probe = 0;
+                while (grid.cells_[h].head != -1 && probe < Fast3DSpatialGrid::kMaxProbes) {
+                    if (grid.cells_[h].cx == tcx && grid.cells_[h].cy == tcy && grid.cells_[h].cz == tcz) {
+                        int c_nbr = grid.cells_[h].head;
+                        while (c_nbr != -1) {
+                            cand_idx.push_back(c_nbr);
+                            cand_x.push_back(cloud.x[c_nbr]);
+                            cand_y.push_back(cloud.y[c_nbr]);
+                            cand_z.push_back(cloud.z[c_nbr]);
+                            c_nbr = grid.next_[c_nbr];
+                        }
+                        break;
+                    }
+                    h = (h + 1) & grid.mask_;
+                    probe++;
+                }
+            }
+
+            // 3. Vector distance checks against all candidates for each point in cell
+            size_t M = cand_idx.size();
+            if (M > 0) {
+                for (size_t u = 0; u < n_self; ++u) {
+                    int p_u = self_pts[u];
+                    float qx = cloud.x[p_u], qy = cloud.y[p_u], qz = cloud.z[p_u];
+
+#if defined(__riscv) || defined(__riscv_vector)
+                    size_t k = 0;
+                    while (k < M) {
+                        size_t vl = __riscv_vsetvl_e32m8(M - k);
+                        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cand_x[k], vl);
+                        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cand_y[k], vl);
+                        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cand_z[k], vl);
+
+                        vfloat32m8_t ddx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
+                        vfloat32m8_t ddy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
+                        vfloat32m8_t ddz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
+
+                        vfloat32m8_t d2 = __riscv_vfmul_vv_f32m8(ddx, ddx, vl);
+                        d2 = __riscv_vfmacc_vv_f32m8(d2, ddy, ddy, vl);
+                        d2 = __riscv_vfmacc_vv_f32m8(d2, ddz, ddz, vl);
+
+                        vbool4_t in_tol = __riscv_vmfle_vf_f32m8_b4(d2, tol_sq, vl);
+                        if (__riscv_vcpop_m_b4(in_tol, vl) > 0) {
+                            uint8_t mbytes[64];
+                            __riscv_vsm_v_b4(mbytes, in_tol, vl);
+                            for (size_t lane = 0; lane < vl; ++lane) {
+                                if ((mbytes[lane >> 3] >> (lane & 7u)) & 1u) {
+                                    local_edges.push_back({p_u, cand_idx[k + lane]});
+                                }
+                            }
+                        }
+                        k += vl;
+                    }
+#else
+                    for (size_t k = 0; k < M; ++k) {
+                        float ddx = cand_x[k] - qx;
+                        float ddy = cand_y[k] - qy;
+                        float ddz = cand_z[k] - qz;
+                        if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                            local_edges.push_back({p_u, cand_idx[k]});
+                        }
+                    }
+#endif
                 }
             }
         }
     }
 
-    std::vector<std::vector<int>> root_to_pts(n);
-    for (size_t i = 0; i < n; ++i) {
-        int r = uf.find(static_cast<int>(i));
-        root_to_pts[r].push_back(static_cast<int>(i));
+    UnionFind uf(n);
+    for (int t = 0; t < max_threads; ++t) {
+        for (const auto& edge : thread_edges[t]) {
+            uf.unite(edge.first, edge.second);
+        }
     }
 
+    // Zero-Allocation Two-Pass CSR Grouping
+    std::vector<int> root_counts(n, 0);
+    for (size_t i = 0; i < n; ++i) {
+        root_counts[uf.find(static_cast<int>(i))]++;
+    }
+
+    std::vector<int> root_to_cid(n, -1);
+    int num_valid_clusters = 0;
     for (size_t r = 0; r < n; ++r) {
-        int sz = static_cast<int>(root_to_pts[r].size());
+        int sz = root_counts[r];
         if (sz >= min_cluster_size && sz <= max_cluster_size) {
-            clusters.push_back({std::move(root_to_pts[r])});
+            root_to_cid[r] = num_valid_clusters++;
+        }
+    }
+
+    clusters.resize(num_valid_clusters);
+    for (size_t r = 0; r < n; ++r) {
+        int cid = root_to_cid[r];
+        if (cid != -1) {
+            clusters[cid].indices.reserve(root_counts[r]);
+        }
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        int r = uf.find(static_cast<int>(i));
+        int cid = root_to_cid[r];
+        if (cid != -1) {
+            clusters[cid].indices.push_back(static_cast<int>(i));
         }
     }
     return clusters;
@@ -860,7 +1140,7 @@ int main(int argc, char** argv) {
     bool json_metrics = false;
     bool skip_sor = false;
     bool use_ror = true; // Default to ultra-fast ROR
-    bool skip_normals = false;
+    bool skip_normals = true; // Default to fast benchmark mode without normals
     bool disable_disk = false;
     float voxel_leaf_size = kPipelineConfig.voxel_leaf_size;
     float cluster_tolerance = kPipelineConfig.cluster_tolerance;
@@ -907,6 +1187,8 @@ int main(int argc, char** argv) {
                 }
             } else if (arg == "--no-normals" || arg == "--skip-normals" || arg == "--no-normal" || arg == "--skip-normal") {
                 skip_normals = true;
+            } else if (arg == "--compute-normals" || arg == "--with-normals" || arg == "--normals") {
+                skip_normals = false;
             } else if (arg == "--no-write" || arg == "--disable-disk") {
                 disable_disk = true;
             } else if (arg == "--leaf-size") {
@@ -1159,14 +1441,14 @@ int main(int argc, char** argv) {
         }
     }
 
-    // ── Stage 9: Euclidean Clustering (Flat Array Union-Find) ──────────────
+    // ── Stage 9: Euclidean Clustering (Hardware RVV 1.0 Vectorized) ─────────
     PointCloudSoA non_ground_cloud{ox.data(), oy.data(), oz.data(), n_outliers};
 
-    beginStage(9, "Euclidean clustering", progress_enabled);
+    beginStage(9, "Euclidean clustering (Hardware RVV 1.0)", progress_enabled);
     stage_start = Clock::now();
-    auto clusters = execute_union_find_clustering(non_ground_cloud, cluster_tolerance, min_cluster_size, max_cluster_size);
-    stage_timings.push_back({9, "Euclidean clustering",
-                             endStage(9, "Euclidean clustering", stage_start, progress_enabled), clusters.size()});
+    auto clusters = execute_union_find_clustering_rvv(non_ground_cloud, cluster_tolerance, min_cluster_size, max_cluster_size);
+    stage_timings.push_back({9, "Euclidean clustering (Hardware RVV 1.0)",
+                             endStage(9, "Euclidean clustering (Hardware RVV 1.0)", stage_start, progress_enabled), clusters.size()});
 
     // ── Stage 10: Export Colored Clusters ──────────────────────────────────
     beginStage(10, "Write cluster stage", progress_enabled);

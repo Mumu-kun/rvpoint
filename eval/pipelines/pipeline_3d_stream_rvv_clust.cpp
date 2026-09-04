@@ -902,8 +902,17 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if (cfg.max_frames > 0 && pcd_files.size() > static_cast<size_t>(cfg.max_frames)) {
-        pcd_files.resize(cfg.max_frames);
+    const size_t unique_pcd_count = pcd_files.size();
+    if (cfg.max_frames > 0) {
+        if (pcd_files.size() > static_cast<size_t>(cfg.max_frames)) {
+            pcd_files.resize(cfg.max_frames);
+        } else if (pcd_files.size() < static_cast<size_t>(cfg.max_frames)) {
+            size_t orig_sz = pcd_files.size();
+            pcd_files.reserve(cfg.max_frames);
+            for (size_t i = orig_sz; i < static_cast<size_t>(cfg.max_frames); ++i) {
+                pcd_files.push_back(pcd_files[i % orig_sz]);
+            }
+        }
     }
 
     if (cfg.write_clusters) {
@@ -914,7 +923,11 @@ int main(int argc, char** argv) {
               << "  RVPoint Multi-Core Continuous Stream Pipeline (RVV 1.0 Clustering Test)\n"
               << "  Target Architecture: SpacemiT K1 / Orange Pi RV2 (RV64GCV Octa-Core)\n"
               << "========================================================================\n"
-              << "  Input Directory : " << cfg.input_path << " (" << pcd_files.size() << " frames)\n"
+              << "  Input Directory : " << cfg.input_path << " (" << pcd_files.size() << " frames";
+    if (pcd_files.size() > unique_pcd_count) {
+        std::cout << " [looped " << unique_pcd_count << " unique files]";
+    }
+    std::cout << ")\n"
               << "  Streaming Mode  : " << (cfg.mode == "inter" ? "INTER-FRAME (Asynchronous Multi-Core Stream Pool)" : "INTRA-FRAME (Low Latency)") << "\n"
               << "  Worker Threads  : " << cfg.num_threads << "\n"
               << "  Voxel Leaf Size : " << cfg.voxel_leaf_size << " m\n"
@@ -1031,7 +1044,7 @@ int main(int argc, char** argv) {
             double fps = (m.compute_ms > 0.0) ? (1000.0 / m.compute_ms) : 0.0;
             #pragma omp critical
             {
-                std::cout << "[stream-rvv] [Core " << thread_id << "] Frame " << std::setw(3) << f_idx << " (" << m.filename << ") | "
+                std::cout << "[stream-rvv] [Core " << thread_id << "] Frame " << std::setw(4) << f_idx << " (" << m.filename << ") | "
                           << "Compute: " << std::fixed << std::setprecision(2) << std::setw(6) << m.compute_ms << " ms ("
                           << std::setprecision(1) << std::setw(4) << fps << " FPS) | "
                           << "Clust: " << std::setw(5) << m.cluster_ms << " ms | "

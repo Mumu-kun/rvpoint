@@ -160,6 +160,7 @@ Supports the same control parameters: `--threads <N>`, `--mode <inter|intra>`, `
   --min-cluster 30 \
   --max-cluster 100000 \
   --no-write
+  --ror-min-pts 3
 
 # 50-Frame Smoke Test at 32.40 FPS:
 ./build/rvv/bin/rvv/pipeline_3d_stream_rvv_clust data/pcd_compressed/ \
