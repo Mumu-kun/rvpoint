@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
 #include <riscv_vector.h>
 #endif
 
@@ -144,7 +144,7 @@ static int ransac_plane_intra(
 
         float a = cand_model[0], b = cand_model[1], c = cand_model[2], d = cand_model[3];
         int sample_inliers = 0;
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
         size_t si = 0;
         while (si < sample_sz) {
             size_t vl = __riscv_vsetvl_e32m8(sample_sz - si);
@@ -224,7 +224,7 @@ static int ransac_plane_intra(
     // Count total inliers on full cloud
     float a = model[0], b = model[1], c = model[2], d = model[3];
     int total_inliers = 0;
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
     size_t n = cloud.n, i = 0;
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m8(n - i);
@@ -262,7 +262,7 @@ static size_t extract_outliers_soa(
     ox.clear(); oy.clear(); oz.clear();
 
     size_t in_count = 0;
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
     ox.resize(n); oy.resize(n); oz.resize(n);
     size_t out_count = 0;
     size_t i = 0;
@@ -421,7 +421,7 @@ struct UnionFind {
     std::vector<int> parent;
     std::vector<int> rank;
     explicit UnionFind(size_t n) : parent(n), rank(n, 0) {
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
         size_t i = 0;
         int* p = parent.data();
         while (i < n) {
@@ -653,7 +653,7 @@ static std::vector<ClusterResult> execute_clustering_rvv(
                     int p_u = self_pts[u];
                     float qx = cloud.x[p_u], qy = cloud.y[p_u], qz = cloud.z[p_u];
 
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
                     size_t k = 0;
                     while (k < M) {
                         size_t vl = __riscv_vsetvl_e32m8(M - k);
@@ -780,7 +780,7 @@ static SpatialSlabPipelineResult execute_spatial_slab_stages(
 
     std::vector<uint32_t> keys(n_obstacles);
     std::vector<uint32_t> sorted_idx(n_obstacles);
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
     size_t vi_idx = 0;
     const int32_t* iox = reinterpret_cast<const int32_t*>(ox.data());
     int32_t* okeys = reinterpret_cast<int32_t*>(keys.data());
@@ -1077,7 +1077,7 @@ static SpatialSlabPipelineResult execute_spatial_slab_stages(
                 for (size_t u = 0; u < n_self; ++u) {
                     int p_u = self_pts[u];
                     float qx = sx[p_u], qy = sy[p_u], qz = sz[p_u];
-#if defined(__riscv) || defined(__riscv_vector)
+#if defined(__riscv_vector)
                     size_t k = 0;
                     while (k < M) {
                         size_t vl = __riscv_vsetvl_e32m8(M - k);

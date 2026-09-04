@@ -215,6 +215,7 @@ build_backend() {
             -DCMAKE_BUILD_TYPE=Release \
             -DRISCV_ARCH="$riscv_arch" \
             -DRISCV_ABI="lp64d" \
+            -DRVPOINT_USE_RVV="$rvv_cmake" \
             -DRVV_PCL_USE_RVV="$rvv_cmake" \
             -DGEM5_BUILD="$rvv_gem5_arg"
         echo "$TOOLCHAIN" > "$marker"
