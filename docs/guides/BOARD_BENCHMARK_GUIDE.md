@@ -1,5 +1,13 @@
 # Orange Pi RV2 (SpacemiT K1) Benchmark & Execution Runbook
 
+
+
+pinning it
+./build/rvv/bin/rvv/pipeline_3d_intra data/pcd_compressed/     --threads 8   --max-frames 131   --leaf-size 0.15   --cluster-tolerance 0.20   --min-cluster 30   --max-cluster 100000   --ror-min-pts 3
+
+
+
+
 > **Complete reference guide for build, execution, profiling, and synchronization commands used on the physical Orange Pi RV2 (RV64GCV Octa-Core) testbed.**
 
 ---
