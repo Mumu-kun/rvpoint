@@ -390,14 +390,16 @@ class FrameProcessor:
             "--ground-angle-thresh", str(self.args.ground_angle_thresh),
         ])
 
-        # iPhone LiDAR world frame orientation:
-        # ARKit world coordinate has +Y up (gravity = -Y).
-        # Passing --no-ground-prior by default prevents RANSAC from rejecting
-        # valid floor planes that do not align with vehicle +Z.
-        if not self.args.ground_prior:
+        # Ground plane orientation prior for iPhone LiDAR:
+        # In ARKit world coordinates, +Y is vertical (ground normal is [0, 1, 0]).
+        # Passing --optical-frame tells RANSAC the floor is perpendicular to +Y,
+        # perfectly isolating the horizontal floor and preventing diagonal cuts.
+        if self.args.unconstrained_plane:
             cmd.append("--no-ground-prior")
-
-        if self.args.optical_frame:
+        elif self.args.vehicle_frame:
+            pass  # Vehicle frame (+Z up) is default in C++
+        else:
+            # Default for iPhone LiDAR: camera optical frame (+Y vertical)
             cmd.append("--optical-frame")
 
         if self.args.skip_sor:
@@ -563,20 +565,24 @@ def main():
 
     # Algorithm & Pipeline Tuning (Optimized defaults for indoor handheld LiDAR)
     ap.add_argument("--leaf-size", type=float, default=0.03, help="Voxel downsample leaf size in meters (default: 0.03 = 3cm)")
-    ap.add_argument("--cluster-tolerance", type=float, default=0.15, help="Euclidean clustering radius in meters (default: 0.15 = 15cm)")
-    ap.add_argument("--min-cluster", type=int, default=15, help="Minimum points per cluster (default: 15)")
+    ap.add_argument("--cluster-tolerance", type=float, default=0.12, help="Euclidean clustering radius in meters (default: 0.12 = 12cm)")
+    ap.add_argument("--min-cluster", type=int, default=20, help="Minimum points per cluster (default: 20)")
     ap.add_argument("--max-cluster", type=int, default=100000, help="Maximum points per cluster")
-    ap.add_argument("--ransac-iters", type=int, default=150, help="RANSAC plane fit iterations")
+    ap.add_argument("--ransac-iters", type=int, default=250, help="RANSAC plane fit iterations (default: 250)")
     ap.add_argument("--ror-radius", type=float, default=0.25, help="Radius outlier removal radius (m)")
     ap.add_argument("--ror-min-pts", type=int, default=2, help="Minimum neighbor count for ROR")
     ap.add_argument("--skip-sor", action="store_true", help="Bypass outlier removal filtering stage")
-    ap.add_argument("--ground-angle-thresh", type=float, default=45.0, help="Max ground plane normal tilt (deg)")
+    ap.add_argument("--ground-angle-thresh", type=float, default=35.0, help="Max ground plane normal tilt in degrees (default: 35.0)")
     ap.add_argument(
-        "--ground-prior",
+        "--unconstrained-plane",
         action="store_true",
-        help="Force vehicle +Z ground normal prior (default is False: unconstrained plane for handheld iPhone)",
+        help="Accept any planar orientation without horizontal ground constraint",
     )
-    ap.add_argument("--optical-frame", action="store_true", help="Set camera optical frame (+Y down)")
+    ap.add_argument(
+        "--vehicle-frame",
+        action="store_true",
+        help="Force vehicle +Z ground normal prior (for automotive/KITTI datasets)",
+    )
 
     # Pinhole & Point Cloud Range
     ap.add_argument("--min-conf", type=int, default=1, choices=(0, 1, 2), help="0=low, 1=medium, 2=high")
