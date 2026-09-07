@@ -216,6 +216,56 @@ def write_binary_pcd(path: str, pts: np.ndarray) -> None:
         f.write(np.ascontiguousarray(pts, dtype="<f4").tobytes())
 
 
+def pack_rgb_float(r: int, g: int, b: int) -> float:
+    """Pack 8-bit RGB into IEEE-754 float32 for PCD viewer compatibility."""
+    val = (int(r) << 16) | (int(g) << 8) | int(b)
+    return np.frombuffer(np.uint32(val).tobytes(), dtype=np.float32)[0]
+
+
+def save_pcd_xyzrgb(path: str, x: np.ndarray, y: np.ndarray, z: np.ndarray, rgb: np.ndarray) -> None:
+    """Write binary XYZRGB PCD."""
+    n = len(x)
+    header = (
+        "# .PCD v0.7 - Point Cloud Data file format\n"
+        "VERSION 0.7\n"
+        "FIELDS x y z rgb\n"
+        "SIZE 4 4 4 4\n"
+        "TYPE F F F F\n"
+        "COUNT 1 1 1 1\n"
+        f"WIDTH {n}\n"
+        "HEIGHT 1\n"
+        "VIEWPOINT 0 0 0 1 0 0 0\n"
+        f"POINTS {n}\n"
+        "DATA binary\n"
+    ).encode("ascii")
+    dt = np.dtype([("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("rgb", "<f4")])
+    arr = np.empty(n, dtype=dt)
+    arr["x"] = x
+    arr["y"] = y
+    arr["z"] = z
+    arr["rgb"] = rgb
+    with open(path, "wb") as f:
+        f.write(header)
+        f.write(arr.tobytes())
+
+
+def load_pcd_binary_data(path: Path) -> Tuple[List[str], np.ndarray]:
+    """Read binary PCD into structured numpy array."""
+    with open(path, "rb") as f:
+        fields = []
+        while True:
+            line = f.readline().decode("ascii", errors="ignore").strip()
+            if line.startswith("FIELDS"):
+                fields = line.split()[1:]
+            elif line.startswith("DATA binary"):
+                break
+        if "rgb" in fields:
+            dt = np.dtype([("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("rgb", "<f4")])
+        else:
+            dt = np.dtype([("x", "<f4"), ("y", "<f4"), ("z", "<f4")])
+        return fields, np.frombuffer(f.read(), dtype=dt)
+
+
 def fake_frame(t: float) -> Dict:
     """Generate synthetic 3D room/obstacle depth frame for testing without an iPhone."""
     w, h = 256, 192
@@ -405,42 +455,67 @@ class FrameProcessor:
 
         # ── 5. SAVE PROCESSED CLUSTERED PCD TO processed_scans/ ──────────────────
         produced_clust_pcd = self.out_temp_dir / "06_clusters.pcd"
+        ground_src = self.out_temp_dir / "04_ransac_inliers.pcd"
+        obs_src = self.out_temp_dir / "05_ground_plane_removed.pcd"
         processed_dest_path = os.path.join(self.args.processed_dir, f"processed_{frame_tag}")
 
-        if produced_clust_pcd.is_file() and produced_clust_pcd.stat().st_size > 200:
-            shutil.copyfile(produced_clust_pcd, processed_dest_path)
+        merged_saved = False
+        # If pipeline_3d_ultra was used, 04_ransac_inliers.pcd exists: create a unified full-scene visualization
+        if ground_src.is_file() and ground_src.stat().st_size > 200:
+            try:
+                g_fields, g_data = load_pcd_binary_data(ground_src)
+                gx, gy, gz = g_data["x"], g_data["y"], g_data["z"]
+                # Color ground plane in muted slate-gray (RGB: 75, 85, 95)
+                g_rgb = np.full(len(gx), pack_rgb_float(75, 85, 95), dtype=np.float32)
 
-            # Optionally save intermediate segmentation stages (ground plane & obstacles)
-            if self.args.save_stages:
-                ground_src = self.out_temp_dir / "04_ransac_inliers.pcd"
-                obs_src = self.out_temp_dir / "05_ground_plane_removed.pcd"
-                if ground_src.is_file():
-                    shutil.copyfile(ground_src, os.path.join(self.args.processed_dir, f"ground_{frame_tag}"))
-                if obs_src.is_file():
-                    shutil.copyfile(obs_src, os.path.join(self.args.processed_dir, f"obstacles_{frame_tag}"))
+                all_x, all_y, all_z, all_rgb = [gx], [gy], [gz], [g_rgb]
 
-            print(
-                f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
-                f"Raw: {len(pts):,} pts saved to {self.args.raw_dir}/ | "
-                f"Compute: {effective_process_ms:5.2f} ms (no write overhead) | "
-                f"Ground: {ground_inliers:,} pts | "
-                f"Obstacles: {obstacle_points:,} pts | "
-                f"Clusters: {clusters_found:2d} | "
-                f"Saved: {processed_dest_path}"
-            )
-        else:
-            # Fallback if 0 clusters were formed: save downsampled / obstacle points so user can diagnose
-            down_src = self.out_temp_dir / "01_downsampled.pcd"
-            if down_src.is_file():
-                shutil.copyfile(down_src, processed_dest_path)
+                if produced_clust_pcd.is_file() and produced_clust_pcd.stat().st_size > 200:
+                    c_fields, c_data = load_pcd_binary_data(produced_clust_pcd)
+                    if "rgb" in c_fields and len(c_data) > 0:
+                        all_x.append(c_data["x"])
+                        all_y.append(c_data["y"])
+                        all_z.append(c_data["z"])
+                        all_rgb.append(c_data["rgb"])
 
-            print(
-                f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
-                f"Raw: {len(pts):,} pts saved to {self.args.raw_dir}/ | "
-                f"Compute: {effective_process_ms:5.2f} ms | "
-                f"Ground: {ground_inliers:,} | Obstacles: {obstacle_points:,} | "
-                f"Clusters: {clusters_found:2d} (Tip: tune --min-cluster or --cluster-tolerance)"
-            )
+                fx = np.concatenate(all_x)
+                fy = np.concatenate(all_y)
+                fz = np.concatenate(all_z)
+                frgb = np.concatenate(all_rgb)
+
+                save_pcd_xyzrgb(processed_dest_path, fx, fy, fz, frgb)
+                merged_saved = True
+
+                # Also save the isolated clusters as clusters_only_*.pcd
+                if produced_clust_pcd.is_file():
+                    shutil.copyfile(produced_clust_pcd, os.path.join(self.args.processed_dir, f"clusters_only_{frame_tag}"))
+            except Exception as e:
+                pass
+
+        if not merged_saved:
+            if produced_clust_pcd.is_file() and produced_clust_pcd.stat().st_size > 200:
+                shutil.copyfile(produced_clust_pcd, processed_dest_path)
+            else:
+                down_src = self.out_temp_dir / "01_downsampled.pcd"
+                if down_src.is_file():
+                    shutil.copyfile(down_src, processed_dest_path)
+
+        # Optionally save raw intermediate stages
+        if self.args.save_stages:
+            if ground_src.is_file():
+                shutil.copyfile(ground_src, os.path.join(self.args.processed_dir, f"ground_{frame_tag}"))
+            if obs_src.is_file():
+                shutil.copyfile(obs_src, os.path.join(self.args.processed_dir, f"obstacles_{frame_tag}"))
+
+        print(
+            f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
+            f"Raw: {len(pts):,} pts ({self.args.raw_dir}/) | "
+            f"Compute: {effective_process_ms:5.2f} ms | "
+            f"Ground: {ground_inliers:,} pts | "
+            f"Obstacles: {obstacle_points:,} pts | "
+            f"Clusters: {clusters_found:2d} | "
+            f"Saved: {processed_dest_path}"
+        )
 
 
 def main():
@@ -487,9 +562,9 @@ def main():
     )
 
     # Algorithm & Pipeline Tuning (Optimized defaults for indoor handheld LiDAR)
-    ap.add_argument("--leaf-size", type=float, default=0.08, help="Voxel downsample leaf size in meters")
-    ap.add_argument("--cluster-tolerance", type=float, default=0.18, help="Euclidean clustering radius in meters")
-    ap.add_argument("--min-cluster", type=int, default=25, help="Minimum points per cluster")
+    ap.add_argument("--leaf-size", type=float, default=0.03, help="Voxel downsample leaf size in meters (default: 0.03 = 3cm)")
+    ap.add_argument("--cluster-tolerance", type=float, default=0.15, help="Euclidean clustering radius in meters (default: 0.15 = 15cm)")
+    ap.add_argument("--min-cluster", type=int, default=15, help="Minimum points per cluster (default: 15)")
     ap.add_argument("--max-cluster", type=int, default=100000, help="Maximum points per cluster")
     ap.add_argument("--ransac-iters", type=int, default=150, help="RANSAC plane fit iterations")
     ap.add_argument("--ror-radius", type=float, default=0.25, help="Radius outlier removal radius (m)")
