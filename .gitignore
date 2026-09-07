@@ -52,6 +52,8 @@ demonstration/lidar-env
 demonstration/scans
 demonstration/main_scans
 main_scans/
+demonstration/processed_scans
+processed_scans/
 
 
 # macOS metadata

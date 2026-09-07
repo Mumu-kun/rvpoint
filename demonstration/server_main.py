@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
 """
-server_main.py — Real-time LiDAR Perception Stream Server for Orange Pi RV2 (RVV 1.0).
+server_main.py — Real-Time iPhone LiDAR Perception Stream Server for Orange Pi RV2 (RVV 1.0).
 
 Receives iPhone LiDAR depth frames over TCP, periodically captures frames at a
-configurable rate (default 500ms / 2 Hz), executes the native hardware-vectorized
-perception pipeline (pipeline_3d_rvv_clust), and exports the resulting clustered
-point clouds directly into the output directory (default: main_scans/).
+configurable rate (default: 500ms / 2 Hz), and saves two distinct streams:
+  1. main_scans/       --> Raw, unprojected 3D point cloud frames captured from iPhone.
+  2. processed_scans/  --> Processed point cloud frames with ground plane extracted
+                           and obstacles clustered with unique RGB colors via hardware RVV 1.0.
+
+Compatible with both:
+  - pipeline_3d_ultra      (Recommended for demonstrations: robust fallback, full 10 stages)
+  - pipeline_3d_rvv_clust  (Minimal standalone benchmark target)
 
 Usage Examples:
-  # Standard Orange Pi RV2 native execution (defaults to 500ms periodic capture):
+  # Standard Orange Pi RV2 execution (auto-detects pipeline_3d_ultra or pipeline_3d_rvv_clust):
   python3 demonstration/server_main.py
 
-  # Custom capture interval (e.g. 250ms) and custom output folder:
-  python3 demonstration/server_main.py --interval 0.25 --out main_scans
+  # Explicitly select pipeline_3d_ultra:
+  python3 demonstration/server_main.py --pipeline ultra
 
-  # Custom clustering & voxel parameters:
-  python3 demonstration/server_main.py --leaf-size 0.08 --cluster-tolerance 0.20
+  # Save intermediate stages (ground plane & obstacle clouds) in processed_scans/:
+  python3 demonstration/server_main.py --save-stages
 
-  # Synthetic test without an iPhone:
+  # Custom capture interval (e.g. 250ms) and tuning parameters:
+  python3 demonstration/server_main.py --interval 0.25 --leaf-size 0.08 --cluster-tolerance 0.18
+
+  # Synthetic offline test without an iPhone:
   python3 demonstration/server_main.py --fake
 """
 
@@ -61,33 +69,52 @@ def get_local_ips() -> List[str]:
     return ips or ["127.0.0.1"]
 
 
-def find_pipeline_binary(specified_path: Optional[str] = None) -> Path:
-    """Locate the pipeline_3d_rvv_clust binary."""
-    candidates = []
-    if specified_path:
-        candidates.append(Path(specified_path))
-
+def find_pipeline_binary(pipeline_choice: str = "auto", specified_path: Optional[str] = None) -> Tuple[Path, str]:
+    """
+    Locate the perception pipeline binary (pipeline_3d_ultra or pipeline_3d_rvv_clust).
+    Returns (Path, pipeline_type).
+    """
     repo_root = Path(__file__).resolve().parent.parent
-    candidates.extend([
-        repo_root / "build" / "rvv" / "bin" / "rvv" / "pipeline_3d_rvv_clust",
-        repo_root / "build" / "bin" / "rvv" / "pipeline_3d_rvv_clust",
-        repo_root / "build" / "rvv" / "bin" / "pipeline_3d_rvv_clust",
-        repo_root / "build" / "bin" / "pipeline_3d_rvv_clust",
-        repo_root / "build_cmake" / "eval" / "pipelines" / "pipeline_3d_rvv_clust",
-        repo_root / "eval" / "pipelines" / "pipeline_3d_rvv_clust",
-        Path("pipeline_3d_rvv_clust"),
-    ])
 
-    which_bin = shutil.which("pipeline_3d_rvv_clust")
-    if which_bin:
-        candidates.append(Path(which_bin))
+    if specified_path:
+        p = Path(specified_path)
+        if p.is_file() and os.access(p, os.X_OK):
+            p_type = "ultra" if "ultra" in p.name else "rvv_clust"
+            return p.resolve(), p_type
 
-    for cand in candidates:
-        if cand.is_file() and os.access(cand, os.X_OK):
-            return cand.resolve()
+    build_dirs = [
+        repo_root / "build" / "rvv" / "bin" / "rvv",
+        repo_root / "build" / "bin" / "rvv",
+        repo_root / "build" / "rvv" / "bin",
+        repo_root / "build" / "bin",
+        repo_root / "build_cmake" / "eval" / "pipelines",
+        repo_root / "eval" / "pipelines",
+    ]
 
-    # If not yet built, return the most canonical expected location
-    return repo_root / "build" / "rvv" / "bin" / "rvv" / "pipeline_3d_rvv_clust"
+    names_to_try = []
+    if pipeline_choice == "ultra":
+        names_to_try = ["pipeline_3d_ultra"]
+    elif pipeline_choice == "rvv_clust":
+        names_to_try = ["pipeline_3d_rvv_clust"]
+    else:  # auto: prefer pipeline_3d_ultra for demonstrations
+        names_to_try = ["pipeline_3d_ultra", "pipeline_3d_rvv_clust"]
+
+    for name in names_to_try:
+        for bdir in build_dirs:
+            cand = bdir / name
+            if cand.is_file() and os.access(cand, os.X_OK):
+                p_type = "ultra" if "ultra" in name else "rvv_clust"
+                return cand.resolve(), p_type
+
+        which_bin = shutil.which(name)
+        if which_bin:
+            p_type = "ultra" if "ultra" in name else "rvv_clust"
+            return Path(which_bin).resolve(), p_type
+
+    # Default fallback path
+    chosen_name = names_to_try[0]
+    p_type = "ultra" if "ultra" in chosen_name else "rvv_clust"
+    return repo_root / "build" / "rvv" / "bin" / "rvv" / chosen_name, p_type
 
 
 def recv_frame(conn: socket.socket, buf: bytearray) -> Optional[Dict]:
@@ -169,7 +196,7 @@ def unproject_points(frame: Dict, args: argparse.Namespace) -> np.ndarray:
 
 
 def write_binary_pcd(path: str, pts: np.ndarray) -> None:
-    """Fast write uncompressed binary PCD to RAM disk for zero-overhead pipeline ingestion."""
+    """Fast write uncompressed binary PCD for point cloud storage and pipeline ingestion."""
     n = pts.shape[0]
     header = (
         "# .PCD v0.7 - Point Cloud Data file format\n"
@@ -190,11 +217,16 @@ def write_binary_pcd(path: str, pts: np.ndarray) -> None:
 
 
 def fake_frame(t: float) -> Dict:
-    """Generate synthetic 3D depth frame for pipeline testing without an iPhone."""
+    """Generate synthetic 3D room/obstacle depth frame for testing without an iPhone."""
     w, h = 256, 192
     u = np.arange(w, dtype=np.float32)[None, :].repeat(h, 0)
     v = np.arange(h, dtype=np.float32)[:, None].repeat(w, 1)
-    z = 1.5 + 0.3 * np.sin((u + v) / 25.0 + t)
+
+    # Simulated ground plane at bottom half, obstacle block in center
+    z = np.full((h, w), 2.0, dtype=np.float32)
+    z[80:120, 100:150] = 1.2 + 0.1 * np.sin(t)  # obstacle closer to camera
+    z[140:, :] = 1.5 + (v[140:, :] - 140) * 0.01  # slanted floor plane
+
     return {
         "idx": int(t * 10),
         "w": w,
@@ -204,24 +236,25 @@ def fake_frame(t: float) -> Dict:
         "cx": w / 2,
         "cy": h / 2,
         "pose": np.eye(4),
-        "depth": z.astype(np.float32),
+        "depth": z,
         "conf": np.full((h, w), 2, np.uint8),
     }
 
 
 class FrameProcessor:
-    """Processes captured frames through the native RVV pipeline every interval."""
+    """Processes captured frames and writes both raw frames and clustered outputs."""
 
-    def __init__(self, args: argparse.Namespace, pipeline_bin: Path):
+    def __init__(self, args: argparse.Namespace, pipeline_bin: Path, pipeline_type: str):
         self.args = args
         self.pipeline_bin = pipeline_bin
+        self.pipeline_type = pipeline_type
         self.latest_frame: Optional[Dict] = None
         self.frame_lock = threading.Lock()
         self.last_capture_time = 0.0
         self.processed_count = 0
         self.running = True
 
-        # Use /dev/shm (shared memory RAM-disk) on Linux to eliminate flash storage wear
+        # Use /dev/shm (RAM-disk) for pipeline scratch buffers to eliminate SSD/SD wear
         shm_candidate = Path("/dev/shm")
         if shm_candidate.is_dir() and os.access(shm_candidate, os.W_OK):
             self.temp_base = shm_candidate / f"rvpoint_{os.getpid()}"
@@ -268,7 +301,7 @@ class FrameProcessor:
         frame_idx = frame["idx"]
         pts = unproject_points(frame, self.args)
         if len(pts) == 0:
-            print(f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx}: No valid points in range.")
+            print(f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx}: 0 valid 3D points in range.")
             return
 
         # Cap max points if specified
@@ -276,10 +309,18 @@ class FrameProcessor:
             sel = np.linspace(0, len(pts) - 1, self.args.max_pts).astype(np.int64)
             pts = pts[sel]
 
-        # 1. Write temporary input PCD in RAM disk (not counted in algorithm process time)
+        self.processed_count += 1
+        time_tag = time.strftime("%H%M%S")
+        frame_tag = f"frame_{self.processed_count:06d}_{time_tag}.pcd"
+
+        # ── 1. SAVE RAW ORIGINAL FRAME TO main_scans/ ─────────────────────────────
+        raw_dest_path = os.path.join(self.args.raw_dir, frame_tag)
+        write_binary_pcd(raw_dest_path, pts)
+
+        # Also write to temporary scratch file for pipeline execution
         write_binary_pcd(self.in_pcd_temp, pts)
 
-        # 2. Assemble native command for pipeline_3d_rvv_clust
+        # ── 2. ASSEMBLE COMMAND FOR THE PERCEPTION PIPELINE ────────────────────────
         cmd = []
         if self.args.qemu:
             cmd.extend(["qemu-riscv64", "-cpu", "rv64,v=true,vlen=128"])
@@ -299,42 +340,56 @@ class FrameProcessor:
             "--ground-angle-thresh", str(self.args.ground_angle_thresh),
         ])
 
+        # iPhone LiDAR world frame orientation:
+        # ARKit world coordinate has +Y up (gravity = -Y).
+        # Passing --no-ground-prior by default prevents RANSAC from rejecting
+        # valid floor planes that do not align with vehicle +Z.
+        if not self.args.ground_prior:
+            cmd.append("--no-ground-prior")
+
+        if self.args.optical_frame:
+            cmd.append("--optical-frame")
+
         if self.args.skip_sor:
             cmd.append("--skip-sor")
         else:
             cmd.append("--use-ror")
 
-        if self.args.no_ground_prior:
-            cmd.append("--no-ground-prior")
-        if self.args.optical_frame:
-            cmd.append("--optical-frame")
+        # Clean out scratch directory before running
+        for f in self.out_temp_dir.glob("*.pcd"):
+            f.unlink(missing_ok=True)
+        (self.out_temp_dir / "metrics.json").unlink(missing_ok=True)
 
-        # 3. Measure native pipeline execution
+        # ── 3. EXECUTE NATIVE HARDWARE-ACCELERATED PIPELINE ─────────────────────────
         t_start = time.perf_counter()
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         t_end = time.perf_counter()
         wall_process_ms = (t_end - t_start) * 1000.0
 
         if res.returncode != 0:
-            print(f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx} pipeline failed (code {res.returncode}):")
+            print(f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx} pipeline failed (exit code {res.returncode}):")
             print(res.stderr or res.stdout)
             return
 
-        # 4. Extract stage breakdown from metrics.json to isolate pure compute from I/O write time
+        # ── 4. PARSE METRICS (COMPUTE ONLY, EXCLUDING I/O WRITE TIME) ─────────────
         metrics_file = self.out_temp_dir / "metrics.json"
         compute_ms = None
         io_write_ms = 0.0
         clusters_found = 0
+        ground_inliers = 0
+        obstacle_points = 0
 
         if metrics_file.is_file():
             try:
                 with open(metrics_file, "r") as f:
                     data = json.load(f)
                     clusters_found = data.get("clusters_found", 0)
+                    ground_inliers = data.get("ground_inliers", 0)
+                    obstacle_points = data.get("non_ground_outliers", 0)
                     stages = data.get("stages", [])
 
                     # Compute stages: 3 (Downsample), 4 (Search Index), 5 (ROR), 8 (RANSAC), 9 (Euclidean Clust)
-                    # Stage 1 is Load PCD and Stage 10 is Write cluster PCD
+                    # Excludes Stage 1 (Load PCD) and Stage 10 / Stage 2 (Disk Write)
                     compute_stage_indices = {3, 4, 5, 6, 7, 8, 9}
                     stage_compute_times = [s["time_ms"] for s in stages if s.get("stage") in compute_stage_indices]
                     if stage_compute_times:
@@ -343,33 +398,48 @@ class FrameProcessor:
                     write_stage_times = [s["time_ms"] for s in stages if s.get("stage") in {2, 10}]
                     if write_stage_times:
                         io_write_ms = sum(write_stage_times)
-            except Exception as e:
+            except Exception:
                 pass
 
-        # If metrics parsing was unavailable, fallback to wall process time minus file writing
         effective_process_ms = compute_ms if compute_ms is not None else max(0.0, wall_process_ms - io_write_ms)
 
-        # 5. Move/save processed colored clusters PCD to main_scans/
+        # ── 5. SAVE PROCESSED CLUSTERED PCD TO processed_scans/ ──────────────────
         produced_clust_pcd = self.out_temp_dir / "06_clusters.pcd"
-        if produced_clust_pcd.is_file():
-            self.processed_count += 1
-            dest_filename = f"processed_frame_{self.processed_count:06d}_{time.strftime('%H%M%S')}.pcd"
-            dest_path = os.path.join(self.args.out, dest_filename)
-            shutil.copyfile(produced_clust_pcd, dest_path)
+        processed_dest_path = os.path.join(self.args.processed_dir, f"processed_{frame_tag}")
+
+        if produced_clust_pcd.is_file() and produced_clust_pcd.stat().st_size > 200:
+            shutil.copyfile(produced_clust_pcd, processed_dest_path)
+
+            # Optionally save intermediate segmentation stages (ground plane & obstacles)
+            if self.args.save_stages:
+                ground_src = self.out_temp_dir / "04_ransac_inliers.pcd"
+                obs_src = self.out_temp_dir / "05_ground_plane_removed.pcd"
+                if ground_src.is_file():
+                    shutil.copyfile(ground_src, os.path.join(self.args.processed_dir, f"ground_{frame_tag}"))
+                if obs_src.is_file():
+                    shutil.copyfile(obs_src, os.path.join(self.args.processed_dir, f"obstacles_{frame_tag}"))
 
             print(
-                f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx} -> "
-                f"Processing time: {effective_process_ms:6.2f} ms "
-                f"(pure compute, writing time excluded) | "
+                f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
+                f"Raw: {len(pts):,} pts saved to {self.args.raw_dir}/ | "
+                f"Compute: {effective_process_ms:5.2f} ms (no write overhead) | "
+                f"Ground: {ground_inliers:,} pts | "
+                f"Obstacles: {obstacle_points:,} pts | "
                 f"Clusters: {clusters_found:2d} | "
-                f"Input pts: {len(pts):,} | "
-                f"Saved: {dest_path}"
+                f"Saved: {processed_dest_path}"
             )
         else:
+            # Fallback if 0 clusters were formed: save downsampled / obstacle points so user can diagnose
+            down_src = self.out_temp_dir / "01_downsampled.pcd"
+            if down_src.is_file():
+                shutil.copyfile(down_src, processed_dest_path)
+
             print(
-                f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx} -> "
-                f"Processing time: {effective_process_ms:6.2f} ms | "
-                f"No clusters detected / no output written."
+                f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
+                f"Raw: {len(pts):,} pts saved to {self.args.raw_dir}/ | "
+                f"Compute: {effective_process_ms:5.2f} ms | "
+                f"Ground: {ground_inliers:,} | Obstacles: {obstacle_points:,} | "
+                f"Clusters: {clusters_found:2d} (Tip: tune --min-cluster or --cluster-tolerance)"
             )
 
 
@@ -388,27 +458,49 @@ def main():
         help="Periodic capture interval in seconds (default: 500ms / 0.5s)",
     )
     ap.add_argument(
-        "--out",
+        "--raw-dir",
         default="main_scans",
-        help="Destination directory for processed per-frame clustered PCDs",
+        help="Destination directory for raw captured PCD frames from iPhone",
+    )
+    ap.add_argument(
+        "--processed-dir",
+        default="processed_scans",
+        help="Destination directory for processed clustered PCD frames",
+    )
+
+    # Pipeline Selection
+    ap.add_argument(
+        "--pipeline",
+        choices=["auto", "ultra", "rvv_clust"],
+        default="auto",
+        help="Pipeline binary to run (ultra recommended for demonstrations)",
     )
     ap.add_argument(
         "--bin",
         default=None,
-        help="Path to compiled pipeline_3d_rvv_clust executable (auto-discovered if omitted)",
+        help="Explicit path to pipeline executable (overrides --pipeline discovery)",
+    )
+    ap.add_argument(
+        "--save-stages",
+        action="store_true",
+        help="Also export ground plane and obstacle-only PCDs into processed_scans/",
     )
 
-    # Algorithm & Pipeline Tuning
-    ap.add_argument("--leaf-size", type=float, default=0.10, help="Voxel downsample leaf size (m)")
-    ap.add_argument("--cluster-tolerance", type=float, default=0.15, help="Euclidean clustering radius (m)")
-    ap.add_argument("--min-cluster", type=int, default=50, help="Minimum points per cluster")
+    # Algorithm & Pipeline Tuning (Optimized defaults for indoor handheld LiDAR)
+    ap.add_argument("--leaf-size", type=float, default=0.08, help="Voxel downsample leaf size in meters")
+    ap.add_argument("--cluster-tolerance", type=float, default=0.18, help="Euclidean clustering radius in meters")
+    ap.add_argument("--min-cluster", type=int, default=25, help="Minimum points per cluster")
     ap.add_argument("--max-cluster", type=int, default=100000, help="Maximum points per cluster")
-    ap.add_argument("--ransac-iters", type=int, default=100, help="RANSAC plane fit iterations")
+    ap.add_argument("--ransac-iters", type=int, default=150, help="RANSAC plane fit iterations")
     ap.add_argument("--ror-radius", type=float, default=0.25, help="Radius outlier removal radius (m)")
     ap.add_argument("--ror-min-pts", type=int, default=2, help="Minimum neighbor count for ROR")
     ap.add_argument("--skip-sor", action="store_true", help="Bypass outlier removal filtering stage")
     ap.add_argument("--ground-angle-thresh", type=float, default=45.0, help="Max ground plane normal tilt (deg)")
-    ap.add_argument("--no-ground-prior", action="store_true", help="Disable ground normal orientation prior")
+    ap.add_argument(
+        "--ground-prior",
+        action="store_true",
+        help="Force vehicle +Z ground normal prior (default is False: unconstrained plane for handheld iPhone)",
+    )
     ap.add_argument("--optical-frame", action="store_true", help="Set camera optical frame (+Y down)")
 
     # Pinhole & Point Cloud Range
@@ -428,32 +520,35 @@ def main():
 
     args = ap.parse_args()
 
-    # Ensure output directory exists
-    os.makedirs(args.out, exist_ok=True)
+    # Ensure output directories exist
+    os.makedirs(args.raw_dir, exist_ok=True)
+    os.makedirs(args.processed_dir, exist_ok=True)
 
     # Locate executable
-    pipeline_bin = find_pipeline_binary(args.bin)
+    pipeline_bin, pipeline_type = find_pipeline_binary(args.pipeline, args.bin)
     if not args.fake and not pipeline_bin.is_file():
         print(f"\n[WARNING] Pipeline binary not found at: {pipeline_bin}")
-        print("  On Orange Pi RV2, compile it with:")
+        print("  To build on Orange Pi RV2:")
         print("    cmake -B build/rvv -DRISCV_ARCH=rv64gcv")
-        print("    cmake --build build/rvv -j8 --target pipeline_3d_rvv_clust\n")
+        print(f"    cmake --build build/rvv -j8 --target {pipeline_bin.name}\n")
 
-    print("=" * 72)
+    print("=" * 76)
     print("  RVPoint Real-Time LiDAR Stream Server (Hardware RVV 1.0)")
-    print("=" * 72)
-    print(f"Target Binary       : {pipeline_bin}")
-    print(f"Periodic Capture    : Every {args.interval * 1000.0:.0f} ms ({1.0 / args.interval:.1f} Hz)")
-    print(f"Output Directory    : {args.out}/ (Processed PCD per frame)")
-    print(f"Voxel Leaf Size     : {args.leaf_size} m | Tolerance: {args.cluster_tolerance} m")
-    print(f"RANSAC Iterations   : {args.ransac_iters} | Min Cluster: {args.min_cluster}")
-    print("-" * 72)
+    print("=" * 76)
+    print(f"Pipeline Binary      : {pipeline_bin} [{pipeline_type}]")
+    print(f"Periodic Capture     : Every {args.interval * 1000.0:.0f} ms ({1.0 / args.interval:.1f} Hz)")
+    print(f"Raw Frames Output    : {args.raw_dir}/ (Original 3D iPhone scans)")
+    print(f"Processed Output     : {args.processed_dir}/ (Segmented & Clustered scans)")
+    print(f"Voxel Leaf Size      : {args.leaf_size} m | Tolerance: {args.cluster_tolerance} m")
+    print(f"Min Cluster Size     : {args.min_cluster} pts | RANSAC Iters: {args.ransac_iters}")
+    print(f"Plane Prior          : {'Vehicle +Z' if args.ground_prior else 'Unconstrained (Handheld Phone)'}")
+    print("-" * 76)
     print("Connect your iPhone LiDAR Streamer app to one of these IP addresses:")
     for ip in get_local_ips():
         print(f"    --> {ip}:{args.port}")
-    print("=" * 72)
+    print("=" * 76)
 
-    processor = FrameProcessor(args, pipeline_bin)
+    processor = FrameProcessor(args, pipeline_bin, pipeline_type)
 
     # Start background processing thread that enforces the 500ms capture interval
     proc_thread = threading.Thread(target=processor.process_live_loop, daemon=True)
