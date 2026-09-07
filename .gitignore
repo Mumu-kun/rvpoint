@@ -46,3 +46,27 @@ data/
 docs/plans
 .clangd
 .agents/
+
+#demonstration app
+demonstration/lidar-env
+demonstration/scans
+demonstration/main_scans
+main_scans/
+
+
+# macOS metadata
+.DS_Store
+._*
+
+# Xcode / iOS App (demonstration/LIDAR_APP_IOS)
+## User-specific Xcode data (layouts, breakpoints, schemes)
+xcuserdata/
+*.xcuserdata
+*.xcuserstate
+*.xcscmblueprint
+
+## Xcode build products and caches
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
