@@ -371,6 +371,14 @@ class FrameProcessor:
         write_binary_pcd(self.in_pcd_temp, pts)
 
         # ── 2. ASSEMBLE COMMAND FOR THE PERCEPTION PIPELINE ────────────────────────
+        if not self.pipeline_bin.is_file():
+            print(
+                f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
+                f"Raw: {len(pts):,} pts saved to {self.args.raw_dir}/ | "
+                f"[Pipeline binary not found at {self.pipeline_bin}]"
+            )
+            return
+
         cmd = []
         if self.args.qemu:
             cmd.extend(["qemu-riscv64", "-cpu", "rv64,v=true,vlen=128"])
@@ -621,8 +629,8 @@ def main():
     print(f"Raw Frames Output    : {args.raw_dir}/ (Original 3D iPhone scans)")
     print(f"Processed Output     : {args.processed_dir}/ (Segmented & Clustered scans)")
     print(f"Voxel Leaf Size      : {args.leaf_size} m | Tolerance: {args.cluster_tolerance} m")
-    print(f"Min Cluster Size     : {args.min_cluster} pts | RANSAC Iters: {args.ransac_iters}")
-    print(f"Plane Prior          : {'Vehicle +Z' if args.ground_prior else 'Unconstrained (Handheld Phone)'}")
+    prior_str = "Unconstrained (Any Angle)" if args.unconstrained_plane else ("Vehicle +Z" if args.vehicle_frame else "iPhone Optical Frame (+Y Vertical)")
+    print(f"Plane Prior          : {prior_str}")
     print("-" * 76)
     print("Connect your iPhone LiDAR Streamer app to one of these IP addresses:")
     for ip in get_local_ips():
