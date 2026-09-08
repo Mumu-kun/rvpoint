@@ -393,6 +393,7 @@ class FrameProcessor:
             "--min-cluster", str(self.args.min_cluster),
             "--max-cluster", str(self.args.max_cluster),
             "--ransac-iters", str(self.args.ransac_iters),
+            "--ransac-dist", str(self.args.ransac_dist),
             "--ror-radius", str(self.args.ror_radius),
             "--ror-min-pts", str(self.args.ror_min_pts),
             "--ground-angle-thresh", str(self.args.ground_angle_thresh),
@@ -585,16 +586,17 @@ def main():
 
     # Algorithm & Pipeline Tuning (Optimized defaults for indoor handheld LiDAR)
     ap.add_argument("--leaf-size", type=float, default=0.03, help="Voxel downsample leaf size in meters (default: 0.03 = 3cm)")
-    ap.add_argument("--cluster-tolerance", type=float, default=0.12, help="Euclidean clustering radius in meters (default: 0.12 = 12cm)")
-    ap.add_argument("--min-cluster", type=int, default=20, help="Minimum points per cluster (default: 20)")
+    ap.add_argument("--cluster-tolerance", type=float, default=0.10, help="Euclidean clustering radius in meters (default: 0.10 = 10cm)")
+    ap.add_argument("--min-cluster", type=int, default=15, help="Minimum points per cluster (default: 15)")
     ap.add_argument("--max-cluster", type=int, default=100000, help="Maximum points per cluster")
     ap.add_argument("--ransac-iters", type=int, default=250, help="RANSAC plane fit iterations (default: 250)")
+    ap.add_argument("--ransac-dist", type=float, default=0.06, help="RANSAC ground plane inlier distance threshold in meters (default: 0.06 = 6cm)")
     ap.add_argument("--use-sor", action="store_true", help="Use statistical outlier removal (SOR) filter")
     ap.add_argument("--use-ror", action="store_true", help="Use radius outlier removal (ROR) filter (default)")
     ap.add_argument("--skip-sor", action="store_true", help="Bypass outlier removal filtering stage")
     ap.add_argument("--ror-radius", type=float, default=0.25, help="Radius outlier removal radius (m)")
     ap.add_argument("--ror-min-pts", type=int, default=2, help="Minimum neighbor count for ROR")
-    ap.add_argument("--ground-angle-thresh", type=float, default=35.0, help="Max ground plane normal tilt in degrees (default: 35.0)")
+    ap.add_argument("--ground-angle-thresh", type=float, default=15.0, help="Max ground plane normal tilt in degrees (default: 15.0)")
     ap.add_argument(
         "--no-ground-prior",
         "--unconstrained-plane",
