@@ -398,6 +398,9 @@ class FrameProcessor:
             "--ground-angle-thresh", str(self.args.ground_angle_thresh),
         ])
 
+        if self.args.progress:
+            cmd.append("--progress")
+
         # Ground plane orientation prior for iPhone LiDAR:
         # In ARKit world coordinates, +Y is vertical (ground normal is [0, 1, 0]).
         # Passing --optical-frame tells RANSAC the floor is perpendicular to +Y,
@@ -412,6 +415,8 @@ class FrameProcessor:
 
         if self.args.skip_sor:
             cmd.append("--skip-sor")
+        elif self.args.use_sor:
+            cmd.append("--use-sor")
         else:
             cmd.append("--use-ror")
 
@@ -425,6 +430,9 @@ class FrameProcessor:
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         t_end = time.perf_counter()
         wall_process_ms = (t_end - t_start) * 1000.0
+
+        if self.args.progress and res.stdout:
+            print(res.stdout.strip())
 
         if res.returncode != 0:
             print(f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx} pipeline failed (exit code {res.returncode}):")
@@ -571,18 +579,26 @@ def main():
         help="Also export ground plane and obstacle-only PCDs into processed_scans/",
     )
 
+    # Diagnostic / Log Options
+    ap.add_argument("--progress", action="store_true", help="Print verbose stage-by-stage execution progress")
+    ap.add_argument("--json", action="store_true", help="Enable stage timing JSON metrics generation (default: active)")
+
     # Algorithm & Pipeline Tuning (Optimized defaults for indoor handheld LiDAR)
     ap.add_argument("--leaf-size", type=float, default=0.03, help="Voxel downsample leaf size in meters (default: 0.03 = 3cm)")
     ap.add_argument("--cluster-tolerance", type=float, default=0.12, help="Euclidean clustering radius in meters (default: 0.12 = 12cm)")
     ap.add_argument("--min-cluster", type=int, default=20, help="Minimum points per cluster (default: 20)")
     ap.add_argument("--max-cluster", type=int, default=100000, help="Maximum points per cluster")
     ap.add_argument("--ransac-iters", type=int, default=250, help="RANSAC plane fit iterations (default: 250)")
+    ap.add_argument("--use-sor", action="store_true", help="Use statistical outlier removal (SOR) filter")
+    ap.add_argument("--use-ror", action="store_true", help="Use radius outlier removal (ROR) filter (default)")
+    ap.add_argument("--skip-sor", action="store_true", help="Bypass outlier removal filtering stage")
     ap.add_argument("--ror-radius", type=float, default=0.25, help="Radius outlier removal radius (m)")
     ap.add_argument("--ror-min-pts", type=int, default=2, help="Minimum neighbor count for ROR")
-    ap.add_argument("--skip-sor", action="store_true", help="Bypass outlier removal filtering stage")
     ap.add_argument("--ground-angle-thresh", type=float, default=35.0, help="Max ground plane normal tilt in degrees (default: 35.0)")
     ap.add_argument(
+        "--no-ground-prior",
         "--unconstrained-plane",
+        dest="unconstrained_plane",
         action="store_true",
         help="Accept any planar orientation without horizontal ground constraint",
     )
