@@ -291,6 +291,134 @@ def fake_frame(t: float) -> Dict:
     }
 
 
+SYNC_MAGIC = b"RVP\x01"
+
+
+class PCDSyncBroadcaster:
+    """
+    Lightweight TCP broadcaster that streams generated PCD frames (raw & processed)
+    live to connected client workstations (e.g. Mac viewer) on port 9001.
+    """
+
+    def __init__(self, host: str = "0.0.0.0", port: int = 9001, raw_dir: str = "main_scans", processed_dir: str = "processed_scans"):
+        self.host = host
+        self.port = port
+        self.raw_dir = raw_dir
+        self.processed_dir = processed_dir
+        self.clients: List[socket.socket] = []
+        self.lock = threading.Lock()
+        self.running = True
+        self.server_sock = None
+        self._thread = None
+
+    def start(self):
+        try:
+            self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_sock.bind((self.host, self.port))
+            self.server_sock.listen(5)
+            self.server_sock.settimeout(1.0)
+            self._thread = threading.Thread(target=self._listen_loop, daemon=True)
+            self._thread.start()
+            print(f"[{time.strftime('%H:%M:%S')}] Live PCD Sync Broadcaster listening on port {self.port} (ready for Mac client)")
+        except Exception as e:
+            print(f"[Warning] Failed to start Live PCD Sync Broadcaster on port {self.port}: {e}")
+
+    def _listen_loop(self):
+        while self.running:
+            try:
+                client_sock, addr = self.server_sock.accept()
+            except socket.timeout:
+                continue
+            except Exception:
+                break
+
+            client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            print(f"[{time.strftime('%H:%M:%S')}] Mac client connected for PCD sync from {addr[0]}:{addr[1]}")
+            with self.lock:
+                self.clients.append(client_sock)
+
+            # Send catchup files in background thread so accept loop isn't blocked
+            threading.Thread(target=self._send_catchup, args=(client_sock,), daemon=True).start()
+
+    def _send_catchup(self, client_sock: socket.socket):
+        """Send all existing PCD files in raw_dir and processed_dir upon initial connection."""
+        try:
+            raw_files = sorted(Path(self.raw_dir).glob("*.pcd"), key=os.path.getmtime)
+            for f in raw_files:
+                self._send_file_to_client(client_sock, category=1, filename=f.name, file_path=str(f))
+
+            prc_files = sorted(Path(self.processed_dir).glob("*.pcd"), key=os.path.getmtime)
+            for f in prc_files:
+                cat = 3 if f.name.startswith("clusters_only_") else 2
+                self._send_file_to_client(client_sock, category=cat, filename=f.name, file_path=str(f))
+        except Exception:
+            self._remove_client(client_sock)
+
+    def _send_file_to_client(self, client_sock: socket.socket, category: int, filename: str, file_path: str):
+        with open(file_path, "rb") as f:
+            data = f.read()
+        name_bytes = filename.encode("utf-8")
+        packet = SYNC_MAGIC + struct.pack("!BH", category, len(name_bytes)) + name_bytes + struct.pack("!I", len(data)) + data
+        client_sock.sendall(packet)
+
+    def broadcast_file(self, category: int, filename: str, file_path: str):
+        """Broadcast a newly written file to all connected clients."""
+        with self.lock:
+            active_clients = list(self.clients)
+        if not active_clients:
+            return
+
+        try:
+            with open(file_path, "rb") as f:
+                data = f.read()
+            name_bytes = filename.encode("utf-8")
+            packet = SYNC_MAGIC + struct.pack("!BH", category, len(name_bytes)) + name_bytes + struct.pack("!I", len(data)) + data
+        except Exception:
+            return
+
+        dead_clients = []
+        for c in active_clients:
+            try:
+                c.sendall(packet)
+            except Exception:
+                dead_clients.append(c)
+
+        if dead_clients:
+            with self.lock:
+                for dc in dead_clients:
+                    if dc in self.clients:
+                        self.clients.remove(dc)
+                        try:
+                            dc.close()
+                        except Exception:
+                            pass
+
+    def _remove_client(self, client_sock: socket.socket):
+        with self.lock:
+            if client_sock in self.clients:
+                self.clients.remove(client_sock)
+                try:
+                    client_sock.close()
+                except Exception:
+                    pass
+
+    def stop(self):
+        self.running = False
+        if self.server_sock:
+            try:
+                self.server_sock.close()
+            except Exception:
+                pass
+        with self.lock:
+            for c in self.clients:
+                try:
+                    c.close()
+                except Exception:
+                    pass
+            self.clients.clear()
+
+
 class FrameProcessor:
     """Processes captured frames and writes both raw frames and clustered outputs."""
 
@@ -316,7 +444,18 @@ class FrameProcessor:
         self.out_temp_dir = self.temp_base / "out"
         self.out_temp_dir.mkdir(parents=True, exist_ok=True)
 
+        self.sync_broadcaster = None
+        if not getattr(args, "no_sync", False):
+            self.sync_broadcaster = PCDSyncBroadcaster(
+                port=getattr(args, "sync_port", 9001),
+                raw_dir=args.raw_dir,
+                processed_dir=args.processed_dir,
+            )
+            self.sync_broadcaster.start()
+
     def cleanup(self):
+        if self.sync_broadcaster:
+            self.sync_broadcaster.stop()
         shutil.rmtree(self.temp_base, ignore_errors=True)
 
     def submit_frame(self, frame: Dict):
@@ -366,6 +505,9 @@ class FrameProcessor:
         # ── 1. SAVE RAW ORIGINAL FRAME TO main_scans/ ─────────────────────────────
         raw_dest_path = os.path.join(self.args.raw_dir, frame_tag)
         write_binary_pcd(raw_dest_path, pts)
+
+        if self.sync_broadcaster:
+            self.sync_broadcaster.broadcast_file(category=1, filename=frame_tag, file_path=raw_dest_path)
 
         # Also write to temporary scratch file for pipeline execution
         write_binary_pcd(self.in_pcd_temp, pts)
@@ -519,6 +661,14 @@ class FrameProcessor:
                 if down_src.is_file():
                     shutil.copyfile(down_src, processed_dest_path)
 
+        # Broadcast processed and cluster frames to connected Mac receivers
+        if self.sync_broadcaster:
+            if os.path.isfile(processed_dest_path):
+                self.sync_broadcaster.broadcast_file(category=2, filename=f"processed_{frame_tag}", file_path=processed_dest_path)
+            clusters_path = os.path.join(self.args.processed_dir, f"clusters_only_{frame_tag}")
+            if os.path.isfile(clusters_path):
+                self.sync_broadcaster.broadcast_file(category=3, filename=f"clusters_only_{frame_tag}", file_path=clusters_path)
+
         # Optionally save raw intermediate stages
         if self.args.save_stages:
             if ground_src.is_file():
@@ -625,11 +775,35 @@ def main():
     ap.add_argument("--fake", action="store_true", help="Generate synthetic test frames (no iPhone needed)")
     ap.add_argument("--qemu", action="store_true", help="Run executable through qemu-riscv64 for cross-testing")
 
+    # Live PCD Sync Streamer options
+    ap.add_argument("--sync-port", type=int, default=9001, help="Port to stream PCD frames live to Mac receiver (default: 9001)")
+    ap.add_argument("--no-sync", action="store_true", help="Disable live PCD streaming to Mac")
+    ap.add_argument("--no-clean", action="store_true", help="Do not wipe prior scan directories at startup")
+
     args = ap.parse_args()
 
     # Ensure output directories exist
     os.makedirs(args.raw_dir, exist_ok=True)
     os.makedirs(args.processed_dir, exist_ok=True)
+
+    # Automatically wipe previous scan directories so the session starts completely fresh
+    if not args.no_clean:
+        clean_dirs = {
+            args.raw_dir, args.processed_dir,
+            "main_scans", "mains", "processed_scans", "prcsd", "processed"
+        }
+        cleaned_total = 0
+        for d in clean_dirs:
+            p = Path(d)
+            if p.is_dir():
+                for f in p.glob("*.pcd"):
+                    try:
+                        f.unlink()
+                        cleaned_total += 1
+                    except Exception:
+                        pass
+        if cleaned_total > 0:
+            print(f"[{time.strftime('%H:%M:%S')}] Wiped {cleaned_total} old scan files from previous session.")
 
     # Locate executable
     pipeline_bin, pipeline_type = find_pipeline_binary(args.pipeline, args.bin)
