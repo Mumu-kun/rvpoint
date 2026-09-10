@@ -94,6 +94,7 @@ rvpoint/
 - **Canonical Namespace**: Always write new classes and algorithms inside `namespace rvpoint { ... }`.
 - **Public API Exposure**: When creating new modules, expose their public header inside `src/include/rvpoint.h`.
 - **Data Representation**: Prefer `PointCloudSoA` (`in.x`, `in.y`, `in.z` contiguous buffers) over AoS `std::vector<PointXYZ>` for vector-accelerated algorithms to enable sequential `__riscv_vle32_v_f32m8` loads.
+- **Design & Vector Standards**: Consult [`docs/guides/CODEBASE_DESIGN_AND_RVV_STANDARDS.md`](docs/guides/CODEBASE_DESIGN_AND_RVV_STANDARDS.md) for deep module interface guidelines, seam placement, and RVV 1.0 intrinsics invariants (unit-stride, LMUL allocation, zero-heap loops).
 
 ### B. Executables & Perception Pipelines (`eval/`)
 - **Pipelines**: Place end-to-end perception pipelines in `eval/pipelines/<pipeline_name>.cpp`.
