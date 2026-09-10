@@ -95,10 +95,10 @@ int main(int argc, char **argv) {
   PointCloudSoA cloud_soa = {x.data(), y.data(), z.data(), (size_t)n};
 
   // 2. Voxel Grid Downsampling
-  std::cout << "\n[Step 2] Voxel Grid Downsampling (Leaf=0.01)..." << std::endl;
+  std::cout << "\n[Step 2] Voxel Grid Downsampling (Leaf=0.20)..." << std::endl;
   std::vector<PointXYZ> filtered_points(n);
   size_t n_filtered =
-      voxel_grid_downsamp_rvv_v2(cloud_soa, filtered_points.data(), 0.01f);
+      voxel_grid_downsamp_rvv_v2(cloud_soa, filtered_points.data(), 0.20f);
   std::cout << "Filtered count: " << n_filtered << " (Original: " << n << ")"
             << std::endl;
 
@@ -114,8 +114,8 @@ int main(int argc, char **argv) {
   PointCloudSoA voxel_soa = {vx.data(), vy.data(), vz.data(), n_filtered};
 
   float plane_model[4];
-  float ransac_thresh = 0.005f;
-  int ransac_iters = 1000;
+  float ransac_thresh = 0.05f;
+  int ransac_iters = 100;
 
   int n_plane_inliers = ransac_plane_rvv(voxel_soa, ransac_thresh, ransac_iters, plane_model);
 
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
   std::cout << "Continuing pipeline with " << n_filtered << " object points (ground removed)." << std::endl;
 
   // 3. Statistical Outlier Removal (SOR)
-  std::cout << "\n[Step 3] Statistical Outlier Removal (K=50, Std=1.0)..."
+  std::cout << "\n[Step 3] Statistical Outlier Removal (K=10, Std=1.0)..."
             << std::endl;
   std::vector<float> fx(n_filtered), fy(n_filtered), fz(n_filtered);
   for (size_t i = 0; i < n_filtered; ++i) {
@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
 
   std::vector<PointXYZ> sor_points(n_filtered);
 
-  size_t n_sor = sor_rvv(filtered_soa, sor_points.data(), 50, 1.0f);
+  size_t n_sor = sor_rvv(filtered_soa, sor_points.data(), 10, 1.0f);
   std::cout << "SOR Filtered count: " << n_sor << " (Original: " << n_filtered
             << ")" << std::endl;
 

@@ -1,4 +1,4 @@
-Here is the complete, categorized list of all command lines in the repository:
+> **Physical Hardware Reference**: For standalone board commands targeting the Orange Pi RV2 (SpacemiT K1 Octa-Core RV64GCV), see [BOARD_BENCHMARK_GUIDE.md](file:///d:/rvpoint/rvpoint/docs/guides/BOARD_BENCHMARK_GUIDE.md).
 
 ---
 
@@ -46,11 +46,23 @@ Here is the complete, categorized list of all command lines in the repository:
     --progress --json --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000
 ```
 
-#### E. Official Debian PCL 1.14 Baseline (`run_pcl_pipeline.sh`)
-*Runs standard unaccelerated Point Cloud Library 1.14 (Debian packages reference).*
+#### E. Official Debian PCL 1.14 Pipeline (`official_pcl_pipeline`)
+*Runs genuine Debian Point Cloud Library 1.14 (`libpcl-dev` shared libraries: `pcl::VoxelGrid`, `pcl::StatisticalOutlierRemoval` / `pcl::RadiusOutlierRemoval`, `pcl::NormalEstimation`, `pcl::SACSegmentation`, `pcl::EuclideanClusterExtraction`).*
 ```bash
-./scripts/run_pcl_pipeline.sh data/pcd_compressed/0000000090.pcd \
-    --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000
+# Standard SOR baseline:
+./scripts/run.sh official_pcl_pipeline data/pcd_compressed/0000000090.pcd \
+    --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000 --no-write
+
+# Radius Outlier Removal (ROR) mode:
+./scripts/run.sh official_pcl_pipeline data/pcd_compressed/0000000090.pcd \
+    --progress --use-ror --ror-radius 0.25 --ror-min-pts 2 --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000 --no-write
+```
+
+#### F. Standalone Scalar PCL Baseline Replicate (`pcl_standalone_pipeline`)
+*Runs zero-dependency standalone scalar C++ implementation replicating standard PCL 1.14 algorithms.*
+```bash
+./scripts/run.sh --backend scalar pcl_standalone_pipeline data/pcd_compressed/0000000090.pcd \
+    --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000 --no-write
 ```
 
 ---
@@ -64,10 +76,10 @@ Here is the complete, categorized list of all command lines in the repository:
     --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000
 ```
 
-#### B. Official Open-Source Scalar 2.5D Baseline (`run_25d_scalar_pipeline.sh`)
+#### B. Official Open-Source Scalar 2.5D Baseline (`scalar_25d_baseline`)
 *Runs the open-source pure C++ scalar 2.5D baseline (`-march=rv64gc -O3`).*
 ```bash
-./scripts/run_25d_scalar_pipeline.sh data/pcd_compressed/0000000080.pcd \
+./scripts/run.sh --backend scalar scalar_25d_baseline data/pcd_compressed/0000000080.pcd \
     --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000
 ```
 

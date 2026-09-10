@@ -16,7 +16,7 @@ Comprehensive reference guide for all command-line parameters, options, default 
   --progress \
   --json \
   --leaf-size 0.10 \
-  --use-ror \
+  --use-sor \
   --ror-radius 0.25 \
   --ror-min-pts 2 \
   --ransac-iters 250 \

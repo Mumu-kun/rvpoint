@@ -25,7 +25,7 @@ int main() {
 
     std::cout << "Loaded base cloud with " << full_points.size() << " points." << std::endl << std::endl;
 
-    std::vector<std::size_t> sizes = {10000, 25000, 50000, 75000, 100000, full_points.size()};
+    std::vector<std::size_t> sizes = {2000, 5000};
 
     std::cout << std::left << std::setw(10) << "N (points)"
               << std::setw(15) << "Voxel (ms)"

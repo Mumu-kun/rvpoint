@@ -34,9 +34,9 @@ RVPoint targets RISC-V 64-bit vector architectures (`rv64gcv`) and requires GCC 
 
 ---
 
-## 2. Inviolate Workspace Hierarchy (6-Folder Root Policy)
+## 2. Inviolate Workspace Hierarchy (7-Folder Root Policy)
 
-The root directory must strictly maintain this 6-folder structure. **NEVER create arbitrary folders or files at the workspace root.**
+The root directory must strictly maintain this 7-folder structure. **NEVER create arbitrary folders or files at the workspace root.**
 
 ```text
 rvpoint/
@@ -54,25 +54,31 @@ rvpoint/
 │   └── include/                # Public umbrella header (rvpoint.h) & rvv_pcl forwarder
 │
 ├── eval/                       # [2] ALL EXECUTABLES & EVALUATION SUITE
-│   ├── pipelines/              # All standalone perception pipelines (pipeline_3d_ultimate, etc.)
+│   ├── pipelines/              # All standalone perception pipelines (pipeline_3d_intra, etc.)
 │   ├── benchmarks/             # Standalone benchmark utilities (ablation_bench, etc.)
 │   ├── tests/                  # Two-tier test suite (fast/ and experimental/)
 │   └── notebooks/              # Research & Kaggle/gem5 notebooks
 │
-├── env/                        # [3] ENVIRONMENT & TOOLCHAINS
+├── demonstration/              # [3] LIVE HARDWARE DEMOS, STREAMERS & VISUALIZERS
+│   ├── LIDAR_APP_IOS/          # iOS Swift LiDAR streaming capture application
+│   ├── server_main.py          # Real-time multi-threaded perception daemon & visualizer
+│   ├── pcd_server.py           # TCP PCD sync broadcaster
+│   └── receive_scans.py        # Client receiver utility
+│
+├── env/                        # [4] ENVIRONMENT & TOOLCHAINS
 │   ├── cmake/                  # CMake toolchain files (riscv.cmake, riscv_linux.cmake)
 │   ├── linux/                  # Linux / container installer scripts
 │   ├── wsl.sh                  # Quick WSL launcher
 │   ├── setup.sh                # Main setup entrypoint
 │   └── activate.sh             # Environment activator
 │
-├── scripts/                    # [4] AUTOMATION & RUNNERS
+├── scripts/                    # [5] AUTOMATION & RUNNERS
 │   ├── build.sh, run.sh, test.sh # Core runners
 │   ├── viz/                    # Visualization & MCAP tools (export_mcap.py, serve_mcap.py)
 │   ├── gem5/                   # gem5 simulation & cycle benchmarks
 │   └── bench/                  # Batch sweeps & baseline comparison scripts
 │
-├── docs/                       # [5] DOCUMENTATION & SPECS
+├── docs/                       # [6] DOCUMENTATION & SPECS
 │   ├── ARCHITECTURE.md         # Core library architecture & algorithm spec
 │   ├── WORKSPACE.md            # Dual-audience workspace specification
 │   ├── CHANGELOG.md            # Version & release history
@@ -81,8 +87,8 @@ rvpoint/
 │   ├── presentation/           # Slide decks & Marp presentations
 │   └── plans/                  # Design & implementation plans
 │
-├── data/                       # [6] INPUT POINT CLOUD DATASETS (data/pcd_compressed/*.pcd)
-└── output/                     # [7] UNIFIED OUTPUT DESTINATION (git-ignored)
+├── data/                       # [7] INPUT POINT CLOUD DATASETS (data/pcd_compressed/*.pcd)
+└── output/                     # [8] UNIFIED OUTPUT DESTINATION (git-ignored)
 ```
 
 ---

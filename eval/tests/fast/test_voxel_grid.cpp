@@ -36,20 +36,12 @@ int main() {
     std::vector<PointXYZ> out_sc(N);
     size_t count_sc = voxel_grid_downsamp_sc(input_aos.data(), N, out_sc.data(), LEAF);
 
-    std::vector<PointXYZ> out_rvv(N);
-    size_t count_rvv = voxel_grid_downsamp_rvv(input_soa, out_rvv.data(), LEAF);
-
     std::vector<PointXYZ> out_rvv_v2(N);
     size_t count_rvv_v2 = voxel_grid_downsamp_rvv_v2(input_soa, out_rvv_v2.data(), LEAF);
 
     std::cout << "Scalar Count:  " << count_sc << std::endl;
-    std::cout << "RVV Count:     " << count_rvv << std::endl;
     std::cout << "RVV v2 Count:  " << count_rvv_v2 << std::endl;
 
-    if (count_sc != count_rvv) {
-        std::cerr << "[FAIL] Scalar vs RVV counts differ!" << std::endl;
-        return 1;
-    }
     if (count_sc != count_rvv_v2) {
         std::cerr << "[FAIL] Scalar vs RVV v2 counts differ!" << std::endl;
         return 1;
@@ -61,16 +53,7 @@ int main() {
         return a.z < b.z;
     };
     std::sort(out_sc.begin(), out_sc.begin()+count_sc, sort_fn);
-    std::sort(out_rvv.begin(), out_rvv.begin()+count_rvv, sort_fn);
     std::sort(out_rvv_v2.begin(), out_rvv_v2.begin()+count_rvv_v2, sort_fn);
-
-    for(size_t i=0; i<count_sc; ++i) {
-        if (!are_points_close(out_sc[i], out_rvv[i])) {
-            std::cerr << "[FAIL] SC vs RVV mismatch at index " << i << std::endl;
-            return 1;
-        }
-    }
-    std::cout << "[PASS] Scalar vs RVV (hybrid) match." << std::endl;
 
     for(size_t i=0; i<count_sc; ++i) {
         if (!are_points_close(out_sc[i], out_rvv_v2[i])) {

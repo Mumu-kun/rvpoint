@@ -184,7 +184,11 @@ build_backend() {
         local cache_gem5="$(sed -n 's/^GEM5_BUILD:BOOL=//p' "$cache_file" | head -n 1)"
         local cache_build_type="$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' "$cache_file" | head -n 1)"
         local expected_gem5="$([ "$GEM5_BUILD" = true ] && echo ON || echo OFF)"
-        if [ -n "$cxx_compiler" ] && [[ "$cxx_compiler" != *riscv64* ]]; then
+        local cache_toolchain="$(sed -n 's/^CMAKE_TOOLCHAIN_FILE:[^=]*=//p' "$cache_file" | head -n 1)"
+        if [ -n "$cache_toolchain" ] && ([ "$cache_toolchain" != "$toolchain_file" ] || [ ! -f "$cache_toolchain" ]); then
+            echo "==> Detected stale or invalid toolchain file in CMake cache ($cache_toolchain -> $toolchain_file), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -n "$cxx_compiler" ] && [[ "$cxx_compiler" != *riscv64* ]]; then
             echo "==> Detected stale host compiler in CMake cache ($cxx_compiler), reconfiguring $b_name..."
             rm -rf "$b_dir"
         elif [ -n "$cache_arch" ] && [ "$cache_arch" != "$riscv_arch" ]; then
@@ -211,6 +215,7 @@ build_backend() {
             -DCMAKE_BUILD_TYPE=Release \
             -DRISCV_ARCH="$riscv_arch" \
             -DRISCV_ABI="lp64d" \
+            -DRVPOINT_USE_RVV="$rvv_cmake" \
             -DRVV_PCL_USE_RVV="$rvv_cmake" \
             -DGEM5_BUILD="$rvv_gem5_arg"
         echo "$TOOLCHAIN" > "$marker"

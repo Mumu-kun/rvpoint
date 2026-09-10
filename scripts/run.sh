@@ -228,6 +228,9 @@ echo ""
 # --- Run target in QEMU ---
 QEMU_BIN="$(find_qemu)"
 QEMU_FLAGS=(${QEMU_SYSROOT_FLAGS:-})
+if [ -d "/usr/riscv64-linux-gnu" ]; then
+    QEMU_FLAGS+=("-L" "/usr/riscv64-linux-gnu")
+fi
 if [ "$BACKEND" = "rvv" ]; then
     QEMU_FLAGS+=("-cpu" "rv64,v=true,vlen=128")
 else
