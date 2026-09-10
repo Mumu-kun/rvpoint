@@ -292,6 +292,7 @@ def fake_frame(t: float) -> Dict:
 
 
 SYNC_MAGIC = b"RVP\x01"
+POINTS_STREAM_MAGIC = b"RVPT"
 
 
 class PCDSyncBroadcaster:
@@ -374,6 +375,60 @@ class PCDSyncBroadcaster:
                 data = f.read()
             name_bytes = filename.encode("utf-8")
             packet = SYNC_MAGIC + struct.pack("!BH", category, len(name_bytes)) + name_bytes + struct.pack("!I", len(data)) + data
+        except Exception:
+            return
+
+        dead_clients = []
+        for c in active_clients:
+            try:
+                c.sendall(packet)
+            except Exception:
+                dead_clients.append(c)
+
+        if dead_clients:
+            with self.lock:
+                for dc in dead_clients:
+                    if dc in self.clients:
+                        self.clients.remove(dc)
+                        try:
+                            dc.close()
+                        except Exception:
+                            pass
+
+    def broadcast_points(
+        self,
+        frame_idx: int,
+        fx: np.ndarray,
+        fy: np.ndarray,
+        fz: np.ndarray,
+        frgb: np.ndarray,
+        ground_count: int,
+        obs_count: int,
+        clusters_count: int,
+        compute_ms: float,
+        wall_ms: float,
+    ):
+        """Broadcast live parsed 3D points directly to connected visualizers."""
+        with self.lock:
+            active_clients = list(self.clients)
+        if not active_clients or len(fx) == 0:
+            return
+
+        try:
+            # Layout: [x, y, z, rgb] each float32 (16 bytes per point)
+            point_data = np.column_stack([fx, fy, fz, frgb]).astype(np.float32).tobytes()
+            # Header: MAGIC(4B) + frame_idx(4B) + point_count(4B) + ground_count(4B) + clusters_count(4B) + compute_ms(4B) + wall_ms(4B)
+            header = struct.pack(
+                "!4sIIIIff",
+                POINTS_STREAM_MAGIC,
+                int(frame_idx),
+                int(len(fx)),
+                int(ground_count),
+                int(clusters_count),
+                float(compute_ms),
+                float(wall_ms),
+            )
+            packet = header + point_data
         except Exception:
             return
 
@@ -502,23 +557,37 @@ class FrameProcessor:
         time_tag = time.strftime("%H%M%S")
         frame_tag = f"frame_{self.processed_count:06d}_{time_tag}.pcd"
 
-        # ── 1. SAVE RAW ORIGINAL FRAME TO main_scans/ ─────────────────────────────
+        # ── 1. SAVE RAW ORIGINAL FRAME TO main_scans/ (IF SAVE_SCANS ENABLED) ────
         raw_dest_path = os.path.join(self.args.raw_dir, frame_tag)
-        write_binary_pcd(raw_dest_path, pts)
+        if self.args.save_scans:
+            write_binary_pcd(raw_dest_path, pts)
+            if self.sync_broadcaster:
+                self.sync_broadcaster.broadcast_file(category=1, filename=frame_tag, file_path=raw_dest_path)
 
-        if self.sync_broadcaster:
-            self.sync_broadcaster.broadcast_file(category=1, filename=frame_tag, file_path=raw_dest_path)
-
-        # Also write to temporary scratch file for pipeline execution
+        # Always write to temporary scratch file for pipeline execution (RAM /dev/shm)
         write_binary_pcd(self.in_pcd_temp, pts)
 
         # ── 2. ASSEMBLE COMMAND FOR THE PERCEPTION PIPELINE ────────────────────────
         if not self.pipeline_bin.is_file():
             print(
                 f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
-                f"Raw: {len(pts):,} pts saved to {self.args.raw_dir}/ | "
-                f"[Pipeline binary not found at {self.pipeline_bin}]"
+                f"Raw: {len(pts):,} pts | "
+                f"[Pipeline binary not found at {self.pipeline_bin} - broadcasting raw stream]"
             )
+            if self.sync_broadcaster:
+                frgb = np.full(len(pts), pack_rgb_float(0, 200, 255), dtype=np.float32)
+                self.sync_broadcaster.broadcast_points(
+                    frame_idx=frame_idx,
+                    fx=pts[:, 0],
+                    fy=pts[:, 1],
+                    fz=pts[:, 2],
+                    frgb=frgb,
+                    ground_count=0,
+                    obs_count=len(pts),
+                    clusters_count=1,
+                    compute_ms=0.5,
+                    wall_ms=0.5,
+                )
             return
 
         cmd = []
@@ -614,11 +683,16 @@ class FrameProcessor:
 
         effective_process_ms = compute_ms if compute_ms is not None else max(0.0, wall_process_ms - io_write_ms)
 
-        # ── 5. SAVE PROCESSED CLUSTERED PCD TO processed_scans/ ──────────────────
+        # ── 5. ASSEMBLE POINTS & OPTIONALLY SAVE PROCESSED PCD TO DISK ────────────
         produced_clust_pcd = self.out_temp_dir / "06_clusters.pcd"
         ground_src = self.out_temp_dir / "04_ransac_inliers.pcd"
         obs_src = self.out_temp_dir / "05_ground_plane_removed.pcd"
         processed_dest_path = os.path.join(self.args.processed_dir, f"processed_{frame_tag}")
+
+        fx = np.array([], dtype=np.float32)
+        fy = np.array([], dtype=np.float32)
+        fz = np.array([], dtype=np.float32)
+        frgb = np.array([], dtype=np.float32)
 
         merged_saved = False
         # If pipeline_3d_ultra was used, 04_ransac_inliers.pcd exists: create a unified full-scene visualization
@@ -639,51 +713,81 @@ class FrameProcessor:
                         all_z.append(c_data["z"])
                         all_rgb.append(c_data["rgb"])
 
-                fx = np.concatenate(all_x)
-                fy = np.concatenate(all_y)
-                fz = np.concatenate(all_z)
-                frgb = np.concatenate(all_rgb)
+                fx = np.concatenate(all_x).astype(np.float32)
+                fy = np.concatenate(all_y).astype(np.float32)
+                fz = np.concatenate(all_z).astype(np.float32)
+                frgb = np.concatenate(all_rgb).astype(np.float32)
 
-                save_pcd_xyzrgb(processed_dest_path, fx, fy, fz, frgb)
+                if self.args.save_scans:
+                    save_pcd_xyzrgb(processed_dest_path, fx, fy, fz, frgb)
+                    # Also save the isolated clusters as clusters_only_*.pcd
+                    if produced_clust_pcd.is_file():
+                        shutil.copyfile(produced_clust_pcd, os.path.join(self.args.processed_dir, f"clusters_only_{frame_tag}"))
                 merged_saved = True
-
-                # Also save the isolated clusters as clusters_only_*.pcd
-                if produced_clust_pcd.is_file():
-                    shutil.copyfile(produced_clust_pcd, os.path.join(self.args.processed_dir, f"clusters_only_{frame_tag}"))
-            except Exception as e:
+            except Exception:
                 pass
 
         if not merged_saved:
             if produced_clust_pcd.is_file() and produced_clust_pcd.stat().st_size > 200:
-                shutil.copyfile(produced_clust_pcd, processed_dest_path)
+                c_fields, c_data = load_pcd_binary_data(produced_clust_pcd)
+                fx = c_data["x"].astype(np.float32)
+                fy = c_data["y"].astype(np.float32)
+                fz = c_data["z"].astype(np.float32)
+                if "rgb" in c_fields:
+                    frgb = c_data["rgb"].astype(np.float32)
+                else:
+                    frgb = np.full(len(fx), pack_rgb_float(0, 220, 255), dtype=np.float32)
+                if self.args.save_scans:
+                    shutil.copyfile(produced_clust_pcd, processed_dest_path)
             else:
                 down_src = self.out_temp_dir / "01_downsampled.pcd"
                 if down_src.is_file():
-                    shutil.copyfile(down_src, processed_dest_path)
+                    d_fields, d_data = load_pcd_binary_data(down_src)
+                    fx = d_data["x"].astype(np.float32)
+                    fy = d_data["y"].astype(np.float32)
+                    fz = d_data["z"].astype(np.float32)
+                    frgb = np.full(len(fx), pack_rgb_float(180, 180, 180), dtype=np.float32)
+                    if self.args.save_scans:
+                        shutil.copyfile(down_src, processed_dest_path)
 
-        # Broadcast processed and cluster frames to connected Mac receivers
-        if self.sync_broadcaster:
+        # ── 6. BROADCAST LIVE 3D POINTS TO CONNECTED HOST VISUALIZERS ───────────────
+        if self.sync_broadcaster and len(fx) > 0:
+            self.sync_broadcaster.broadcast_points(
+                frame_idx=frame_idx,
+                fx=fx,
+                fy=fy,
+                fz=fz,
+                frgb=frgb,
+                ground_count=ground_inliers,
+                obs_count=obstacle_points,
+                clusters_count=clusters_found,
+                compute_ms=effective_process_ms,
+                wall_ms=wall_process_ms,
+            )
+
+        # Broadcast files if save_scans is enabled
+        if self.args.save_scans and self.sync_broadcaster:
             if os.path.isfile(processed_dest_path):
                 self.sync_broadcaster.broadcast_file(category=2, filename=f"processed_{frame_tag}", file_path=processed_dest_path)
             clusters_path = os.path.join(self.args.processed_dir, f"clusters_only_{frame_tag}")
             if os.path.isfile(clusters_path):
                 self.sync_broadcaster.broadcast_file(category=3, filename=f"clusters_only_{frame_tag}", file_path=clusters_path)
 
-        # Optionally save raw intermediate stages
-        if self.args.save_stages:
+        # Optionally save raw intermediate stages if save_scans is enabled
+        if self.args.save_scans and self.args.save_stages:
             if ground_src.is_file():
                 shutil.copyfile(ground_src, os.path.join(self.args.processed_dir, f"ground_{frame_tag}"))
             if obs_src.is_file():
                 shutil.copyfile(obs_src, os.path.join(self.args.processed_dir, f"obstacles_{frame_tag}"))
 
+        save_status = f"Saved: {processed_dest_path}" if self.args.save_scans else "Stream-Only (0 disk writes)"
         print(
             f"[{time.strftime('%H:%M:%S')}] Frame #{frame_idx:04d} -> "
-            f"Raw: {len(pts):,} pts ({self.args.raw_dir}/) | "
             f"Compute: {effective_process_ms:5.2f} ms | "
             f"Ground: {ground_inliers:,} pts | "
             f"Obstacles: {obstacle_points:,} pts | "
             f"Clusters: {clusters_found:2d} | "
-            f"Saved: {processed_dest_path}"
+            f"{save_status}"
         )
 
 
@@ -775,6 +879,20 @@ def main():
     ap.add_argument("--fake", action="store_true", help="Generate synthetic test frames (no iPhone needed)")
     ap.add_argument("--qemu", action="store_true", help="Run executable through qemu-riscv64 for cross-testing")
 
+    # Storage & Streaming Control
+    ap.add_argument(
+        "--save-scans",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save captured and processed PCDs to disk in mains/ and prcsd/ (disable with --no-save-scans or --stream-only)",
+    )
+    ap.add_argument(
+        "--stream-only",
+        dest="save_scans",
+        action="store_false",
+        help="Stream processed points directly to host viewer without writing PCDs to disk",
+    )
+
     # Live PCD Sync Streamer options
     ap.add_argument("--sync-port", type=int, default=9001, help="Port to stream PCD frames live to Mac receiver (default: 9001)")
     ap.add_argument("--no-sync", action="store_true", help="Disable live PCD streaming to Mac")
@@ -782,12 +900,13 @@ def main():
 
     args = ap.parse_args()
 
-    # Ensure output directories exist
-    os.makedirs(args.raw_dir, exist_ok=True)
-    os.makedirs(args.processed_dir, exist_ok=True)
+    # Ensure output directories exist if disk storage is enabled
+    if args.save_scans:
+        os.makedirs(args.raw_dir, exist_ok=True)
+        os.makedirs(args.processed_dir, exist_ok=True)
 
     # Automatically wipe previous scan directories so the session starts completely fresh
-    if not args.no_clean:
+    if not args.no_clean and args.save_scans:
         clean_dirs = {
             args.raw_dir, args.processed_dir,
             "main_scans", "mains", "processed_scans", "prcsd", "processed"
@@ -818,8 +937,10 @@ def main():
     print("=" * 76)
     print(f"Pipeline Binary      : {pipeline_bin} [{pipeline_type}]")
     print(f"Periodic Capture     : Every {args.interval * 1000.0:.0f} ms ({1.0 / args.interval:.1f} Hz)")
-    print(f"Raw Frames Output    : {args.raw_dir}/ (Original 3D iPhone scans)")
-    print(f"Processed Output     : {args.processed_dir}/ (Segmented & Clustered scans)")
+    storage_mode = f"Enabled ({args.raw_dir}/ & {args.processed_dir}/)" if args.save_scans else "Disabled (Stream-Only / 0 disk writes)"
+    print(f"Disk PCD Storage     : {storage_mode}")
+    if not args.no_sync:
+        print(f"Live Stream Server   : Port {args.sync_port} (TCP binary RVPT protocol)")
     print(f"Voxel Leaf Size      : {args.leaf_size} m | Tolerance: {args.cluster_tolerance} m")
     prior_str = "Unconstrained (Any Angle)" if args.unconstrained_plane else ("Vehicle +Z" if args.vehicle_frame else "iPhone Optical Frame (+Y Vertical)")
     print(f"Plane Prior          : {prior_str}")
