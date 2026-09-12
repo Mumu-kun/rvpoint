@@ -52,22 +52,8 @@ void get_inds_in_radius_rvv(const float* x, const float* y, const float* z,
                             std::vector<int>& out_indices,
                             std::vector<float>& out_dists)
 {
-#if defined(GEM5_BUILD) || !defined(__riscv_vector)
-    // ── gem5-safe / scalar fallback path ──────
-    std::vector<float> gx(n), gy(n), gz(n), gd(n);
-    for (std::size_t i = 0; i < n; ++i) {
-        int idx = subset_indices[i];
-        gx[i] = x[idx]; gy[i] = y[idx]; gz[i] = z[idx];
-    }
-    get_dist_sq_rvv(gx.data(), gy.data(), gz.data(), qx, qy, qz, gd.data(), n);
-    for (std::size_t i = 0; i < n; ++i) {
-        if (gd[i] <= r2) {
-            out_indices.push_back(subset_indices[i]);
-            out_dists.push_back(gd[i]);
-        }
-    }
-#else
-    // ── Full RVV path: vluxei32 indexed gather + vcompress filter ─────────────
+#if defined(__riscv_vector)
+    // ── Full RVV path: vluxei32 indexed gather + vectorized Euclidean distance ─────────────
     std::size_t i = 0;
     while (i < n) {
         std::size_t vl = __riscv_vsetvl_e32m2(n - i);
@@ -96,12 +82,39 @@ void get_inds_in_radius_rvv(const float* x, const float* y, const float* z,
             size_t old_size = out_indices.size();
             out_indices.resize(old_size + count);
             out_dists.resize(old_size + count);
+#ifndef GEM5_BUILD
             __riscv_vse32_v_i32m2(&out_indices[old_size],
                 __riscv_vcompress_vm_i32m2(v_idx, mask, vl), count);
             __riscv_vse32_v_f32m2(&out_dists[old_size],
                 __riscv_vcompress_vm_f32m2(dist2, mask, vl), count);
+#else
+            alignas(64) int t_idx[kMaxVectorFloatsM8];
+            alignas(64) float t_d2[kMaxVectorFloatsM8];
+            alignas(8) uint8_t m_bytes[kMaxVectorMaskBytesM8] = {0};
+            __riscv_vse32_v_i32m2(t_idx, v_idx, vl);
+            __riscv_vse32_v_f32m2(t_d2, dist2, vl);
+            __riscv_vsm_v_b16(m_bytes, mask, vl);
+            size_t written = 0;
+            for (size_t k = 0; k < vl; ++k) {
+                if ((m_bytes[k >> 3] >> (k & 7)) & 1) {
+                    out_indices[old_size + written] = t_idx[k];
+                    out_dists[old_size + written] = t_d2[k];
+                    written++;
+                }
+            }
+#endif
         }
         i += vl;
+    }
+#else
+    for (std::size_t i = 0; i < n; ++i) {
+        int idx = subset_indices[i];
+        float dx = x[idx] - qx, dy = y[idx] - qy, dz = z[idx] - qz;
+        float d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 <= r2) {
+            out_indices.push_back(idx);
+            out_dists.push_back(d2);
+        }
     }
 #endif
 }

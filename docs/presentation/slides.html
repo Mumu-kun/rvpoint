@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RVPoint - Capstone Proposal Presentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800;900&display=swap');
+  
+  @page {
+    size: 16in 9in;
+    margin: 0;
+  }
+  
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #070A12;
+    color: #0F172A;
+    font-weight: 600;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .slide {
+    width: 16in;
+    height: 9in;
+    page-break-after: always;
+    page-break-inside: avoid;
+    background: #F1F4F9;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0.50in 0.70in;
+  }
+
+  /* Header structure */
+  .slide-header {
+    border-bottom: 2.5px solid #E2E8F0;
+    padding-bottom: 0.12in;
+    margin-bottom: 0.22in;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  
+  .category-kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.19in;
+    font-weight: 800;
+    color: #4F46E5;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 0.04in;
+  }
+  
+  .slide-title {
+    font-size: 0.42in;
+    font-weight: 900;
+    color: #0B1120;
+    letter-spacing: -0.8px;
+    line-height: 1.15;
+  }
+  
+  .slide-counter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.19in;
+    font-weight: 800;
+    color: #64748B;
+  }
+  
+  /* Slide Content Area */
+  .slide-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.32in;
+    height: 100%;
+  }
+  
+  .grid-3col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.25in;
+    height: 100%;
+  }
+
+  /* High-Impact Cards */
+  .card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 14px;
+    padding: 0.38in 0.42in;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  }
+  
+  .card-indigo {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-left: 6px solid #4F46E5;
+    border-radius: 14px;
+    padding: 0.38in 0.42in;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  }
+  
+  .card-teal {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-left: 6px solid #0D9488;
+    border-radius: 14px;
+    padding: 0.38in 0.42in;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  }
+
+  .card-amber {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-left: 6px solid #D97706;
+    border-radius: 14px;
+    padding: 0.38in 0.42in;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  }
+  
+  .card-title {
+    font-size: 0.30in;
+    font-weight: 900;
+    color: #0B1120;
+    margin-bottom: 0.16in;
+    letter-spacing: -0.4px;
+    line-height: 1.22;
+  }
+  
+  .card-p {
+    font-size: 0.24in;
+    color: #1E293B;
+    font-weight: 600;
+    line-height: 1.62;
+    margin-bottom: 0.16in;
+  }
+
+  .hero-stat {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.70in;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 0.08in;
+  }
+  
+  .badge {
+    display: inline-block;
+    padding: 0.06in 0.18in;
+    border-radius: 7px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.17in;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    width: fit-content;
+  }
+  
+  .badge-indigo { background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; }
+  .badge-teal { background: #F0FDFA; color: #0F766E; border: 1px solid #99F6E4; }
+  .badge-amber { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
+  .badge-rose { background: #FFF1F2; color: #9F1239; border: 1px solid #FECDD3; }
+
+  /* High-Legibility Tables */
+  table.tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.18in;
+    margin-top: 0.06in;
+    background: #FFFFFF;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  }
+  
+  table.tbl th {
+    background: #0B1120;
+    color: #FFFFFF;
+    padding: 0.12in 0.16in;
+    font-weight: 800;
+    text-align: left;
+    font-size: 0.18in;
+  }
+  
+  table.tbl td {
+    padding: 0.11in 0.16in;
+    border-bottom: 1px solid #E5E7EB;
+    color: #1E293B;
+    font-size: 0.17in;
+    font-weight: 650;
+  }
+  
+  table.tbl tr:nth-child(even) {
+    background: #F8FAFC;
+  }
+  
+  table.tbl tr.row-highlight {
+    background: #F0FDFA;
+    font-weight: 800;
+    color: #0F766E;
+  }
+  
+  table.tbl tr.row-highlight td {
+    color: #0F766E;
+    font-weight: 800;
+  }
+
+  /* High-Res Image Frames */
+  .img-box {
+    background: #070A12;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #1E293B;
+  }
+  
+  .img-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .caption {
+    font-size: 0.17in;
+    color: #1E293B;
+    margin-top: 0.06in;
+    font-weight: 750;
+  }
+
+  /* Title Slide Specifics */
+  .title-canvas {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: linear-gradient(135deg, #090D16 0%, #131B2E 100%);
+    color: #FFFFFF;
+    padding: 0.85in 1.05in;
+    border-radius: 16px;
+  }
+  
+  .title-badge {
+    background: rgba(79, 70, 229, 0.25);
+    border: 1.5px solid #818CF8;
+    color: #C7D2FE;
+    padding: 0.07in 0.20in;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.19in;
+    font-weight: 800;
+    display: inline-block;
+    width: fit-content;
+    margin-bottom: 0.30in;
+  }
+  
+  .title-main {
+    font-size: 0.65in;
+    font-weight: 900;
+    line-height: 1.15;
+    margin-bottom: 0.18in;
+    color: #FFFFFF;
+    letter-spacing: -1.2px;
+  }
+  
+  .title-sub {
+    font-size: 0.30in;
+    font-weight: 600;
+    color: #94A3B8;
+    margin-bottom: 0.55in;
+  }
+  
+  .title-meta {
+    display: flex;
+    gap: 0.8in;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.21in;
+    font-weight: 700;
+    color: #CBD5E1;
+    border-top: 1.5px solid rgba(255, 255, 255, 0.2);
+    padding-top: 0.28in;
+  }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1: Title -->
+<div class="slide">
+  <div class="title-canvas">
+    <div class="title-badge">CAPSTONE PROJECT: EMBEDDED SPATIAL AI & ROBOTICS</div>
+    <div class="title-main">RVPoint: RISC-V Vector 3D Point Cloud Processing Library</div>
+    <div class="title-sub">High-Performance Perception Library & Hardware Testbed Evaluation</div>
+    <div class="title-meta">
+      <div><strong>Type:</strong> Modular C++17 Library</div>
+      <div><strong>Architecture:</strong> RVV 1.0 (64-bit)</div>
+      <div><strong>Scope:</strong> Hardware Demonstration</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 2: Motivation -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[01. MOTIVATION & PROBLEM]</div>
+      <div class="slide-title">The Point Cloud Processing Bottleneck in Edge Robotics</div>
+    </div>
+    <div class="slide-counter">02 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="grid-2col">
+      <div class="card-indigo">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">THE CHALLENGE</div>
+        <div class="card-title">Dense 3D Perception Stacks</div>
+        <p class="card-p">• Autonomous mobile robots produce <strong>100,000+ points per frame</strong>.</p>
+        <p class="card-p">• Classical libraries (PCL, Open3D) rely on heavy x86 CPUs or power-hungry GPUs.</p>
+        <p class="card-p">• Existing RISC-V ecosystems lack an open-source, vector-accelerated point cloud library.</p>
+      </div>
+      <div class="card-teal">
+        <div class="badge badge-teal" style="margin-bottom: 0.16in;">THE SOLUTION</div>
+        <div class="card-title">RVPoint: Native RISC-V Vector Library</div>
+        <p class="card-p">• Open-standard, royalty-free data-parallel vector computing directly in low-power silicon.</p>
+        <p class="card-p">• Wide vector registers process multiple 3D spatial points simultaneously.</p>
+        <p class="card-p">• <strong>RVPoint</strong> delivers a modular, zero-dependency C++17 library for embedded robotics.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 3: Project Overview -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[02. LIBRARY ARCHITECTURE]</div>
+      <div class="slide-title">RVPoint: Modular C++17 Vector Perception Library</div>
+    </div>
+    <div class="slide-counter">03 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="grid-3col">
+      <div class="card">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">ZERO RUNTIME BLOAT</div>
+        <div class="card-title">Modular C++17 Core</div>
+        <p class="card-p">Zero third-party library dependencies (no Eigen, PCL, or Boost bloat). Direct RVV 1.0 vector intrinsic kernels with clean C++ APIs and scalar fallback paths.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">SPATIAL ACCELERATION</div>
+        <div class="card-title">Accelerated Data Structures</div>
+        <p class="card-p">Native Structure-of-Arrays (SoA) containers, cache-optimized PointerOctree, and SpatialHash grid engines built directly into the library.</p>
+      </div>
+      <div class="card card-teal">
+        <div class="badge badge-teal" style="margin-bottom: 0.16in;">PERCEPTION ALGORITHMS</div>
+        <div class="card-title">Full Algorithmic Suite</div>
+        <p class="card-p">Modular library components for Voxel Downsampling, Statistical & Radius Filtering, Covariance & Normal Estimation, RANSAC Model Fitting, and Clustering.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 4: Pipeline Flow -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[03. PIPELINE COMPOSITION]</div>
+      <div class="slide-title">10-Stage Autonomous Perception Pipeline</div>
+    </div>
+    <div class="slide-counter">04 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div style="display: flex; flex-direction: column; gap: 0.24in; height: 100%;">
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.18in;">
+        <div class="card" style="padding: 0.22in 0.20in;">
+          <div class="badge badge-indigo">STAGE 01-02</div>
+          <div style="font-weight: 800; font-size: 0.24in; margin-top: 0.08in;">Voxel Grid</div>
+          <div style="font-size: 0.18in; font-weight: 600; color: #64748B;">Spatial Downsample</div>
+        </div>
+        <div class="card" style="padding: 0.22in 0.20in;">
+          <div class="badge badge-indigo">STAGE 03</div>
+          <div style="font-weight: 800; font-size: 0.24in; margin-top: 0.08in;">PointerOctree</div>
+          <div style="font-size: 0.18in; font-weight: 600; color: #64748B;">Spatial Indexing</div>
+        </div>
+        <div class="card card-teal" style="padding: 0.22in 0.20in; border-left: 5px solid #0D9488;">
+          <div class="badge badge-teal">STAGE 04-05</div>
+          <div style="font-weight: 800; font-size: 0.24in; margin-top: 0.08in;">Pointer SOR</div>
+          <div style="font-size: 0.18in; font-weight: 600; color: #0F766E;">Noise Purging</div>
+        </div>
+        <div class="card" style="padding: 0.22in 0.20in;">
+          <div class="badge badge-indigo">STAGE 06-07</div>
+          <div style="font-weight: 800; font-size: 0.24in; margin-top: 0.08in;">Normals</div>
+          <div style="font-size: 0.18in; font-weight: 600; color: #64748B;">Surface Covariance</div>
+        </div>
+        <div class="card card-teal" style="padding: 0.22in 0.20in; border-left: 5px solid #0D9488;">
+          <div class="badge badge-teal">STAGE 08-10</div>
+          <div style="font-weight: 800; font-size: 0.24in; margin-top: 0.08in;">RANSAC & Cluster</div>
+          <div style="font-size: 0.18in; font-weight: 600; color: #0F766E;">Obstacle Extraction</div>
+        </div>
+      </div>
+      <div class="card-indigo" style="flex: 1; justify-content: center;">
+        <div class="card-title" style="font-size: 0.32in;">Deterministic Memory Hoisting & Pipeline Verification</div>
+        <p class="card-p">• All intermediate stage memory buffers are pre-allocated upon startup, ensuring <strong>zero runtime heap allocations</strong> inside the library execution loop.</p>
+        <p class="card-p">• Verified across 131 continuous LiDAR driving frames with zero memory leaks and 100% geometric equivalence.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 5: Visual Stage Showcase -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[04. VISUALIZATION]</div>
+      <div class="slide-title">Staged Point Cloud Transformation (Open3D Renders)</div>
+    </div>
+    <div class="slide-counter">05 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.20in; margin-bottom: 0.20in; height: 2.7in;">
+      <div style="display: flex; flex-direction: column;">
+        <div class="img-box" style="flex: 1;"><img src=""></div>
+        <div class="caption">1. Voxel Grid (18.5k pts, -84%)</div>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <div class="img-box" style="flex: 1;"><img src=""></div>
+        <div class="caption">2. Pointer SOR (16.6k inliers)</div>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <div class="img-box" style="flex: 1;"><img src=""></div>
+        <div class="caption">3. RANSAC Ground (42.3k pts)</div>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <div class="img-box" style="flex: 1;"><img src=""></div>
+        <div class="caption">4. Obstacles Cloud (56.4k pts)</div>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 0.25in; flex: 1;">
+      <div class="img-box" style="height: 100%;"><img src=""></div>
+      <div class="card-teal" style="justify-content: center;">
+        <div class="badge badge-teal" style="margin-bottom: 0.12in;">STAGE 5: FINAL OUTPUT</div>
+        <div class="hero-stat" style="color: #0D9488; font-size: 0.76in;">74 Clusters</div>
+        <p class="card-p">Physical objects (vehicles, pedestrians, barriers) segmented with unique cluster IDs and 3D height shading for path planning.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 6: Spatial Search Ablation -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[05. SPATIAL SEARCH ABLATION]</div>
+      <div class="slide-title">Spatial Neighbor & Radius Search Engine Analysis</div>
+    </div>
+    <div class="slide-counter">06 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="grid-2col">
+      <div>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Spatial Search Engine</th>
+              <th>Index Build</th>
+              <th>Query Latency</th>
+              <th>Search Mechanism</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row-highlight">
+              <td><strong>PointerOctree (RVV Accelerated)</strong></td>
+              <td><strong>9.67 ms</strong></td>
+              <td><strong>0.740 ms</strong></td>
+              <td>Contiguous leaf buffers + vector distance checking</td>
+            </tr>
+            <tr>
+              <td><strong>SpatialHash Grid</strong></td>
+              <td>16.93 ms</td>
+              <td><strong>0.884 ms</strong></td>
+              <td>O(1) direct 3D grid cell spatial hashing</td>
+            </tr>
+            <tr>
+              <td><strong>Global RVV Scan</strong></td>
+              <td><strong>0.00 ms</strong></td>
+              <td><strong>0.965 ms</strong></td>
+              <td>Zero index build; linear vector memory stream</td>
+            </tr>
+            <tr style="background: #FFF1F2;">
+              <td>Standard Octree (Baseline)</td>
+              <td>11.11 ms</td>
+              <td>0.794 ms</td>
+              <td>Classical tree with dynamic pointer chasing</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size: 0.15in; font-weight: 600; color: #64748B; margin-top: 0.10in;">
+          *Empirically measured in QEMU (rv64gcv, 128-bit VLEN) on N=18,542 points, radius=0.03m.
+        </div>
+      </div>
+      <div class="card-indigo" style="justify-content: center;">
+        <div class="badge badge-indigo" style="margin-bottom: 0.14in;">VECTOR ACCELERATION</div>
+        <div class="hero-stat" style="color: #4F46E5;">RVV Native</div>
+        <p class="card-p">
+          <strong>PointerOctree</strong> combines logarithmic spatial tree partitioning with flattened leaf coordinate arrays, enabling vector distance calculations directly across contiguous memory without cache-thrashing pointer dereferences.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 7: SOR Ablation -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[06. NOISE REMOVAL ABLATION]</div>
+      <div class="slide-title">Statistical Outlier Removal (SOR) 5-Way Ablation</div>
+    </div>
+    <div class="slide-counter">07 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="grid-2col">
+      <div>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>SOR Filter Variant</th>
+              <th>Execution Time</th>
+              <th>Speedup vs Scalar</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Scalar Brute-Force O(N²)</td>
+              <td>15,824.8 ms</td>
+              <td>1.00x (Baseline)</td>
+            </tr>
+            <tr>
+              <td>Vector Brute-Force O(N²)</td>
+              <td>9,744.7 ms</td>
+              <td><strong>1.62x</strong></td>
+            </tr>
+            <tr>
+              <td>Spatial Hash Grid SOR</td>
+              <td>1,511.9 ms</td>
+              <td><strong>10.47x</strong></td>
+            </tr>
+            <tr>
+              <td>Standard Octree SOR</td>
+              <td>462.4 ms</td>
+              <td><strong>34.22x</strong></td>
+            </tr>
+            <tr class="row-highlight">
+              <td><strong>PointerOctree SOR [RVPoint]</strong></td>
+              <td><strong>281.7 ms</strong></td>
+              <td><span class="badge badge-teal" style="font-size: 0.16in;">56.17x FASTER</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size: 0.15in; font-weight: 600; color: #64748B; margin-top: 0.10in;">
+          *Empirically measured on N=18,542 downsampled points (MeanK=50, std_threshold=1.0).
+        </div>
+      </div>
+      <div class="card-teal" style="justify-content: center;">
+        <div class="badge badge-teal" style="margin-bottom: 0.14in;">EMPIRICAL SPEEDUP</div>
+        <div class="hero-stat" style="color: #0D9488;">56.17x</div>
+        <p class="card-p">
+          Noise removal previously consumed <strong>94% of perception latency</strong>. Combining O(N log N) PointerOctree spatial partitioning with vector memory loads accelerates filtering from <strong>15.82s down to 281.7 ms</strong>.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 8: Full Pipeline Speedup Matrix -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[07. FULL PIPELINE MATRIX]</div>
+      <div class="slide-title">Full-Pipeline Scalar vs. RVPoint Vector Speedup Matrix</div>
+    </div>
+    <div class="slide-counter">08 / 12</div>
+  </div>
+  <div class="slide-body">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Pipeline Processing Stage</th>
+          <th>Scalar Baseline</th>
+          <th>RVV Vectorized</th>
+          <th>Speedup</th>
+          <th>Optimization Mechanism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Voxel Grid Downsampling</strong></td>
+          <td>148.2 ms</td>
+          <td><strong>40.9 ms</strong></td>
+          <td><span class="badge badge-teal">3.62x</span></td>
+          <td>Vector sorting & parallel reduction</td>
+        </tr>
+        <tr style="background: #FFF1F2;">
+          <td><strong>Statistical Outlier (SOR)</strong></td>
+          <td>32,912.4 ms (94.6%)</td>
+          <td><strong>287.2 ms</strong></td>
+          <td><span class="badge badge-rose">114.6x</span></td>
+          <td>PointerOctree + vector coordinate loads</td>
+        </tr>
+        <tr>
+          <td><strong>Surface Normal Estimation</strong></td>
+          <td>425.4 ms</td>
+          <td><strong>141.2 ms</strong></td>
+          <td><span class="badge badge-teal">3.01x</span></td>
+          <td>Vectorized covariance accumulation</td>
+        </tr>
+        <tr>
+          <td><strong>RANSAC Ground Fit</strong></td>
+          <td>975.6 ms</td>
+          <td><strong>397.4 ms</strong></td>
+          <td><span class="badge badge-teal">2.45x</span></td>
+          <td>Parallel plane distance & inlier masking</td>
+        </tr>
+        <tr>
+          <td><strong>Euclidean Clustering</strong></td>
+          <td>291.2 ms</td>
+          <td><strong>148.5 ms</strong></td>
+          <td><span class="badge badge-teal">1.96x</span></td>
+          <td>PointerOctree BFS + zero-alloc buffers</td>
+        </tr>
+        <tr class="row-highlight" style="font-size: 0.20in;">
+          <td><strong>TOTAL PIPELINE LATENCY</strong></td>
+          <td><strong>34,790.8 ms (34.8s)</strong></td>
+          <td><strong>888.6 ms (<0.9s)</strong></td>
+          <td><span class="badge badge-teal" style="font-size: 0.17in;">39.15x END-TO-END</span></td>
+          <td><strong>Full Stack Vector Optimization</strong></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size: 0.15in; font-weight: 600; color: #64748B; margin-top: 0.12in;">
+      *Full pipeline benchmark demonstrating RVPoint modular library performance on 114,278-point raw LiDAR input frame.
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 9: The Simulation Gap -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[08. HARDWARE JUSTIFICATION]</div>
+      <div class="slide-title">Complementary Verification: Simulation vs. Physical Silicon</div>
+    </div>
+    <div class="slide-counter">09 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="grid-2col">
+      <div class="card">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">SOFTWARE SIMULATION (COMPLETED)</div>
+        <div class="card-title">What Simulation Verifies</div>
+        <p class="card-p">• <strong>Algorithmic Correctness:</strong> Proves mathematical equivalence of RVV 1.0 intrinsics.</p>
+        <p class="card-p">• <strong>Asymptotic Complexity:</strong> Validates <strong style="color: #4F46E5; font-family: 'JetBrains Mono', monospace;">O(N log N)</strong> algorithmic scaling.</p>
+        <p class="card-p">• <strong>Functional Limits:</strong> Software translation cannot model hardware clock cycles or memory controller arbitration.</p>
+      </div>
+      <div class="card-indigo">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">PHYSICAL SILICON (THE OBJECTIVE)</div>
+        <div class="card-title">What Hardware Benchmarking Captures</div>
+        <p class="card-p">• <strong>Physical Memory Hierarchy:</strong> Measures L1/L2 cache hit rates and DDR bus latency.</p>
+        <p class="card-p">• <strong>Hardware VPU Throughput:</strong> Benchmarks true parallel arithmetic execution units.</p>
+        <p class="card-p">• <strong>Hardware PMU Counters:</strong> Captures real cycle counts, branch predictions, and stalls.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 10: Performance Projections -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[09. PERFORMANCE PROJECTIONS]</div>
+      <div class="slide-title">Projected Performance on Physical RISC-V Hardware</div>
+    </div>
+    <div class="slide-counter">10 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="grid-3col">
+      <div class="card">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">HARDWARE VPUS</div>
+        <div class="card-title">Dedicated Vector Execution</div>
+        <p class="card-p">Physical vector arithmetic units execute wide SIMD operations in dedicated hardware ALUs per clock cycle, uninhibited by software translation overhead.</p>
+      </div>
+      <div class="card">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">CACHE BURST FILLS</div>
+        <div class="card-title">Memory Burst Synergy</div>
+        <p class="card-p">Contiguous Structure-of-Arrays coordinate buffers saturate 64-byte CPU cache lines with zero wasted bandwidth or strided memory stalls.</p>
+      </div>
+      <div class="card card-teal">
+        <div class="badge badge-teal" style="margin-bottom: 0.16in;">REAL-TIME OBJECTIVE</div>
+        <div class="card-title">Sub-100ms Target</div>
+        <p class="card-p">On native 1.6 GHz multi-core RISC-V development hardware, end-to-end perception is projected to achieve sub-100ms execution times for robotics navigation.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 11: Candidate Dev Board Matrix -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[10. HARDWARE TESTBED]</div>
+      <div class="slide-title">Candidate Dev Board Matrix (RVV 1.0 Focus)</div>
+    </div>
+    <div class="slide-counter">11 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div style="display: grid; grid-template-columns: 1.3fr 1.7fr; gap: 0.32in; height: 100%;">
+      <div class="card-indigo">
+        <div class="badge badge-teal" style="margin-bottom: 0.14in;">PRIMARY TARGET PLATFORM</div>
+        <div class="card-title" style="font-size: 0.34in; margin-bottom: 0.12in;">Orange Pi RV2</div>
+        <div style="font-size: 0.22in; color: #1E293B; font-weight: 600; line-height: 1.65;">
+          <div><strong>Processor:</strong> SpacemiT K1 (8-Core 64-bit)</div>
+          <div><strong>Vector Standard:</strong> Official RVV 1.0 Standard</div>
+          <div><strong>Vector Width:</strong> 256-bit VLEN</div>
+          <div><strong>Memory Config:</strong> 4GB / 8GB / 16GB LPDDR4X</div>
+        </div>
+        <p class="card-p" style="margin-top: 0.18in; color: #4F46E5; font-weight: 700; font-size: 0.22in;">
+          8 CPU cores with 256-bit vector registers provide an 8-core RVV 1.0 testbed for multi-core vector benchmarking.
+        </p>
+      </div>
+      <div>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Dev Board</th>
+              <th>Processor SoC</th>
+              <th>Vector Standard</th>
+              <th>Vector Width</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row-highlight">
+              <td><strong>Orange Pi RV2</strong></td>
+              <td>SpacemiT K1 (8-Core)</td>
+              <td>RVV 1.0 (Official)</td>
+              <td>256-bit VLEN</td>
+            </tr>
+            <tr>
+              <td><strong>Kendryte K230</strong></td>
+              <td>Canaan K230 (Dual-Core)</td>
+              <td>RVV 1.0 (Official)</td>
+              <td>128-bit VLEN</td>
+            </tr>
+            <tr>
+              <td><strong>Milk-V Meles</strong></td>
+              <td>T-Head C910 (Quad-Core)</td>
+              <td>RVV 0.7.1 (Draft)</td>
+              <td>128-bit VLEN</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="card" style="margin-top: 0.20in; padding: 0.22in 0.28in;">
+          <strong style="font-size: 0.22in; color: #0B1120;">Target Platform:</strong>
+          <p class="card-p" style="margin-top: 0.06in; margin-bottom: 0; font-size: 0.21in;">Orange Pi RV2 selected as the primary physical testbed for native RISC-V Vector benchmarking.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 12: Roadmap & Deliverables -->
+<div class="slide">
+  <div class="slide-header">
+    <div>
+      <div class="category-kicker">[11. ROADMAP & DELIVERABLES]</div>
+      <div class="slide-title">Capstone Project Roadmap & Demonstration Milestones</div>
+    </div>
+    <div class="slide-counter">12 / 12</div>
+  </div>
+  <div class="slide-body">
+    <div class="grid-3col">
+      <div class="card">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">PHASE 1 [COMPLETED]</div>
+        <div class="card-title">Modular Library Core</div>
+        <p class="card-p">• Complete modular C++17 library.</p>
+        <p class="card-p">• <strong>56.2x SOR speedup</strong> verified in QEMU.</p>
+        <p class="card-p">• MCAP export validated across 131 frames.</p>
+      </div>
+      <div class="card-indigo">
+        <div class="badge badge-indigo" style="margin-bottom: 0.16in;">PHASE 2 [HARDWARE SETUP]</div>
+        <div class="card-title">Hardware Bring-Up</div>
+        <p class="card-p">• Deploy on RVV 1.0 development board.</p>
+        <p class="card-p">• Native toolchain & Linux environment.</p>
+        <p class="card-p">• Hardware PMU cycle & cache profiling.</p>
+      </div>
+      <div class="card-teal">
+        <div class="badge badge-teal" style="margin-bottom: 0.16in;">PHASE 3 [FINAL DEFENSE]</div>
+        <div class="card-title">Capstone Demonstration</div>
+        <p class="card-p">• Multi-frame continuous dataset playback.</p>
+        <p class="card-p">• On-board hardware latency verification.</p>
+        <p class="card-p">• Open-source library release & defense.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
