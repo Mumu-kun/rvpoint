@@ -139,3 +139,20 @@ Before completing any task, agents MUST verify that the changes build cleanly an
 ./scripts/run.sh <target_name>
 ```
 *(Wrap with `wsl -d rvpoint bash -c "source env/activate.sh && <cmd>"` when on Windows host).*
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown files in `docs/plans/`. Zero remote issue tracking. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Status headers in local issue/spec files (`Status: ready-for-agent`, etc.). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout in `docs/CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+

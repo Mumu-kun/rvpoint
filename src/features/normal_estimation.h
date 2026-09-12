@@ -38,6 +38,10 @@ public:
   void set_backend(Backend b) noexcept { backend_ = b; }
   Backend backend() const noexcept { return backend_; }
 
+  NormalEstimation& threads(int num_threads) noexcept { num_threads_ = num_threads; return *this; }
+  void set_num_threads(int num_threads) noexcept { num_threads_ = num_threads; }
+  int num_threads() const noexcept { return num_threads_; }
+
   void reserve(std::size_t max_points);
 
   /**
@@ -51,6 +55,7 @@ public:
   void operator()(const PointCloud& in, PointCloud& normals, int k, float radius,
                   float vpx, float vpy, float vpz) {
     (*this)(in.view(), normals, k, radius, vpx, vpy, vpz);
+  }
 
   // Store-piped external search grid overloads
   void operator()(const PointCloudView& in, const Fast3DSpatialGrid& grid, PointCloud& normals,
@@ -92,12 +97,15 @@ private:
   float vp_y_ = 0.0f;
   float vp_z_ = 0.0f;
   int eigen_iters_ = 4;
+  int num_threads_ = 0;
   Backend backend_ = Backend::Auto;
 
   // Instance-owned scratch workspaces and spatial acceleration
   Fast3DSpatialGrid grid_;
   std::vector<int> neighbors_;
   std::vector<float> dists2_;
+  std::vector<std::vector<int>> thread_neighbors_;
+  std::vector<std::vector<float>> thread_dists2_;
 };
 
 } // namespace rvpoint

@@ -11,6 +11,10 @@
 #include <riscv_vector.h>
 #endif
 
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
+
 namespace rvpoint {
 
 // Helper: Diagonalize 3x3 symmetric matrix A
@@ -88,6 +92,16 @@ NormalEstimation::NormalEstimation(int k, float radius, float vp_x, float vp_y, 
     : k_(k), radius_(radius), vp_x_(vp_x), vp_y_(vp_y), vp_z_(vp_z), backend_(backend) {}
 
 void NormalEstimation::reserve(std::size_t max_points) {
+    int max_th = num_threads_ > 0 ? num_threads_ : 8;
+#if defined(_OPENMP)
+    max_th = std::max(max_th, omp_get_max_threads());
+#endif
+    thread_neighbors_.resize(max_th);
+    thread_dists2_.resize(max_th);
+    for (int t = 0; t < max_th; ++t) {
+        thread_neighbors_[t].reserve(std::min<size_t>(max_points, 512));
+        thread_dists2_[t].reserve(std::min<size_t>(max_points, 512));
+    }
     neighbors_.reserve(max_points);
     dists2_.reserve(max_points);
     grid_ = Fast3DSpatialGrid(radius_ > 0.0f ? radius_ : 0.2f, max_points);
@@ -123,28 +137,41 @@ void NormalEstimation::compute(const PointCloudView& in, const Fast3DSpatialGrid
     float search_r = radius > 0.0f ? radius : (radius_ > 0.0f ? radius_ : 0.2f);
     float r2 = search_r * search_r;
 
-    grid_.cell_size_ = search_r;
-    grid_.inv_cell_ = 1.0f / search_r;
-    grid_.build(in);
+    int eff_threads = num_threads_;
+#if defined(_OPENMP)
+    if (eff_threads <= 0) eff_threads = omp_get_max_threads();
+    if (omp_in_parallel()) eff_threads = 1; // anti-oversubscription
+#else
+    eff_threads = 1;
+#endif
 
-    for (size_t i = 0; i < n; ++i) {
+    if (static_cast<int>(thread_neighbors_.size()) < eff_threads) {
+        thread_neighbors_.resize(eff_threads);
+        thread_dists2_.resize(eff_threads);
+        for (int t = 0; t < eff_threads; ++t) {
+            thread_neighbors_[t].reserve(256);
+            thread_dists2_[t].reserve(256);
+        }
+    }
+
+    auto process_point = [&](size_t i, std::vector<int>& nbrs, std::vector<float>& dists) {
         const float qx = in.x[i];
         const float qy = in.y[i];
         const float qz = in.z[i];
 
-        grid_.radiusSearch(qx, qy, qz, r2, neighbors_, dists2_);
+        grid.radiusSearch(qx, qy, qz, r2, nbrs, dists);
 
-        if (neighbors_.size() < 3) {
+        if (nbrs.size() < 3) {
             nx[i] = 0.0f;
             ny[i] = 0.0f;
             nz[i] = 1.0f;
-            continue;
+            return;
         }
 
-        size_t actual_k = neighbors_.size();
+        size_t actual_k = nbrs.size();
         if (k > 0 && actual_k > static_cast<size_t>(k + 1)) {
             actual_k = static_cast<size_t>(k + 1);
-            std::partial_sort(neighbors_.begin(), neighbors_.begin() + actual_k, neighbors_.end(),
+            std::partial_sort(nbrs.begin(), nbrs.begin() + actual_k, nbrs.end(),
                               [&](int a, int b) {
                                   float da = (in.x[a] - qx) * (in.x[a] - qx) +
                                              (in.y[a] - qy) * (in.y[a] - qy) +
@@ -158,7 +185,7 @@ void NormalEstimation::compute(const PointCloudView& in, const Fast3DSpatialGrid
 
         float cx = 0.0f, cy = 0.0f, cz = 0.0f;
         for (size_t j = 0; j < actual_k; ++j) {
-            int idx = neighbors_[j];
+            int idx = nbrs[j];
             cx += in.x[idx];
             cy += in.y[idx];
             cz += in.z[idx];
@@ -170,7 +197,7 @@ void NormalEstimation::compute(const PointCloudView& in, const Fast3DSpatialGrid
 
         float cov[3][3] = {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
         for (size_t j = 0; j < actual_k; ++j) {
-            int idx = neighbors_[j];
+            int idx = nbrs[j];
             float dx = in.x[idx] - cx;
             float dy = in.y[idx] - cy;
             float dz = in.z[idx] - cz;
@@ -187,7 +214,25 @@ void NormalEstimation::compute(const PointCloudView& in, const Fast3DSpatialGrid
 
         simple_eigen3x3_smallest(cov, nx[i], ny[i], nz[i], eigen_iters_);
         flipNormalTowardsViewpoint(PointXYZ{qx, qy, qz}, vpx, vpy, vpz, nx[i], ny[i], nz[i]);
+    };
+
+#if defined(_OPENMP)
+    #pragma omp parallel num_threads(eff_threads) if(eff_threads > 1)
+    {
+        int tid = omp_get_thread_num();
+        auto& t_nbrs = thread_neighbors_[tid];
+        auto& t_dists = thread_dists2_[tid];
+
+        #pragma omp for schedule(dynamic, 128)
+        for (size_t i = 0; i < n; ++i) {
+            process_point(i, t_nbrs, t_dists);
+        }
     }
+#else
+    for (size_t i = 0; i < n; ++i) {
+        process_point(i, neighbors_, dists2_);
+    }
+#endif
 }
 
 } // namespace rvpoint

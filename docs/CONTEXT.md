@@ -36,16 +36,16 @@ _Avoid_: Abstract filter base class, polymorphic interface, vtable hierarchy, ex
 Internal pre-allocated workspace memory (hash tables, PRNG states, candidate arrays, radix buffers) managed entirely within an algorithm class instance to guarantee zero heap allocations during execution.
 _Avoid_: Dynamic allocation in hot loop, per-frame malloc, std::vector::resize in steady state
 
-**Slotted Register File (RegisterFile)**:
-An extensible, heterogeneous typed execution context storing pre-allocated representations (point clouds, spatial index grids, surface normals, planes, cluster indices) accessed via registered `SlotId` handles, pre-allocated at setup time to guarantee zero heap allocations and 1-cycle direct memory access.
-_Avoid_: Point-cloud-only context, string-keyed blackboard in hot loop, std::unordered_map or std::any in perception loop
+**FrameContext (formerly RegisterFile)**:
+An extensible, heterogeneous typed execution context storing pre-allocated representations (point clouds, spatial index grids, surface normals, planes, cluster indices) accessed via registered `SlotId` handles, pre-allocated at setup time to guarantee zero heap allocations and 1-cycle direct memory access during frame processing.
+_Avoid_: Point-cloud-only context, string-keyed blackboard in hot loop, std::unordered_map or std::any in perception loop, confusing with ICP scan registration or CPU hardware registers
 
 **SlotId**:
-A 16-bit lightweight integer handle resolved once during pipeline setup representing an offset into the RegisterFile, enabling single-instruction pointer dereferencing on RISC-V.
+A 16-bit lightweight integer handle resolved once during pipeline setup representing an offset into the FrameContext, enabling single-instruction pointer dereferencing on RISC-V.
 _Avoid_: Runtime string hashing, string tags in hot path
 
 **ConfigStore**:
-A symmetrical parameter repository mirroring the data register file, storing typed configuration values (floats, ints, booleans) accessible by name or `ParamId` for dynamic runtime parameter tuning.
+A symmetrical parameter repository mirroring the FrameContext, storing typed configuration values (floats, ints, booleans) accessible by name or `ParamId` for dynamic runtime parameter tuning.
 _Avoid_: Hardcoded constants, static defines for tunable thresholds
 
 **ParamId**:
@@ -105,15 +105,15 @@ The canonical 10-stage evaluation pipeline combining VoxelGrid downsampling, Fas
 _Avoid_: Hardcoded monolithic execution loops, unversioned pipeline aliases
 
 **SpatialGridBuilder**:
-A stateless zero-allocation DAG functor that constructs or updates a `Fast3DSpatialGrid` inside a pre-allocated `RegisterFile` slot in-place. Allows downstream spatial search stages (ROR, normal estimation) to consume shared spatial acceleration structures without redundant index builds or dynamic heap allocations.
+A stateless zero-allocation DAG functor that constructs or updates a `Fast3DSpatialGrid` inside a pre-allocated `FrameContext` slot in-place. Allows downstream spatial search stages (ROR, normal estimation) to consume shared spatial acceleration structures without redundant index builds or dynamic heap allocations.
 _Avoid_: In-lambda ad-hoc grid allocations, per-stage independent grid rebuilding
 
 **Radius Outlier Removal (ROR)**:
 A spatial density filter that removes points with fewer than $K$ neighbors within a Euclidean ball of radius $R$, accelerated via uniform spatial grid hashing.
 _Avoid_: Statistical outlier removal (when radius density is intended), brute-force radius filter
 
-**SlotRetention**:
-The temporal lifecycle contract of a register slot across consecutive frames: `Ephemeral` (reset every frame), `Persistent` (survives frame resets for running accumulators and state estimators), `History<N>` (ring-buffered across $N$ frames with automatic ping-pong pointer swapping for differential algorithms like ICP or velocity estimation), and `External` (non-owning pointer viewing memory managed outside the pipeline).
+**SlotLifetime (formerly SlotRetention)**:
+The temporal lifecycle contract of a slot in the `FrameContext` across consecutive frames: `Ephemeral` (reset every frame), `Persistent` (survives frame resets for running accumulators and state estimators), `History<N>` (ring-buffered across $N$ frames with automatic ping-pong pointer swapping for differential algorithms like ICP or velocity estimation), and `External` (non-owning pointer viewing memory managed outside the pipeline).
 _Avoid_: Manual per-stage frame caching, global static state
 
 **ExternalSlot**:
@@ -122,22 +122,29 @@ _Avoid_: Deep-copying external state into registers, artificial wrapper buffers
 
 **ExecutionMode**:
 The multi-core scheduling paradigm chosen for the PipelineManager:
-- `IntraFrame`: All 8 CPU cores execute one stage at a time in sequence using intra-stage data-parallel vectorization, delivering minimal latency ($<18\text{ ms}$) for live obstacle avoidance.
-- `TemporalPipelined`: Core clusters process overlapping frames concurrently ($N+1$ on Cluster 0, $N$ on Cluster 1) via Cluster Islanding, delivering maximal streaming throughput ($>70\text{ FPS}$) for mapping and SLAM.
-- `TaskFarm`: An asynchronous worker pool where $W$ worker threads each independently process an entire frame from end to end. Fully compatible with live continuous sensor streams as well as offline dataset playback.
-_Avoid_: Uncontrolled thread over-subscription, hardcoded threading models
+- `IntraFrame`: All allocated CPU cores execute each stage of a single frame sequentially, accelerating internal computations via `KernelParallel` or `SpatialSlabEngine` strategies to achieve minimal end-to-end latency ($<18\text{ ms}$) for closed-loop control.
+- `FrameWorkerPool (formerly TaskFarm)`: An asynchronous worker pool where $W$ worker threads each independently process an entire frame from end to end using pre-allocated, private worker `FrameContext` instances, maximizing sustained stream throughput ($>60\text{ FPS}$).
+_Avoid_: Uncontrolled thread over-subscription, hardcoded threading models, DAG-level pipeline stage queues
 
-**StreamResequencer**:
-A lock-free monotonic re-order buffer used in TaskFarm streaming mode that reassembles asynchronously completed frames into strict chronological timestamp order before dispatching to downstream consumers.
-_Avoid_: Out-of-order frame delivery to controllers, blocking worker threads
+**KernelParallel (formerly PointLoop)**:
+Data-parallel loop execution (`#pragma omp parallel for schedule(...)`) across points within an individual kernel (e.g. Radius Outlier Removal, Normal Estimation, Radix Sorting) querying a shared spatial acceleration structure.
+_Avoid_: Hand-rolled thread pools inside algorithms, nested OpenMP parallel loops
 
-**ClusterIslanding**:
-A hardware-conscious thread affinity topology for the 8-core SpacemiT K1 (two 4-core clusters with independent L2 caches) that pins early pipeline stages to Cluster 0 (Cores 0–3) and late pipeline stages to Cluster 1 (Cores 4–7) to eliminate thread over-subscription and cross-cluster L2 cache evictions during temporal pipelining.
-_Avoid_: Global thread contention, 16-thread over-subscription on 8 cores
+**SpatialSlabEngine (formerly SpatialSlab)**:
+A geometric domain decomposition strategy and composite engine that slices a point cloud along a spatial axis into $K$ equal-population slabs with a halo overlap region $\delta$. It allows $K$ cores or clusters to independently construct local spatial acceleration structures, compute local neighborhood features (surface normals, radius/statistical outlier filters), and cluster components, with an optional boundary stitching pass for graph connectivity across cuts.
+_Avoid_: Unbounded slab memory allocations, fixed coordinate axis assumptions without parameterization
 
-**Loop-Carried Temporal Hazard**:
-A data dependency where an early pipeline stage on Frame $N+1$ requires the computed output of a late stage on Frame $N$, creating a pipeline stall unless mitigated via double-buffering or decoupled estimator state.
-_Avoid_: Unsynchronized cross-frame reads, race conditions between overlapping frames
+**ForwardCellClustering**:
+A cell-centric Euclidean clustering functor that traverses occupied 3D spatial hash grid cells and evaluates point-pair distances only within the home cell and across exactly 13 canonical forward neighbor cells (half of 26 3D neighbors). Connected components are merged using zero-allocation Union-Find, cutting redundant symmetric distance checks by $2\times$.
+_Avoid_: Point-centric 27-cell queries when pairwise symmetry can be exploited, heap allocations inside cell traversal loops
+
+**CoreCluster**:
+A named hardware grouping of CPU cores sharing a unified cache hierarchy (e.g. SpacemiT K1 Cluster 0: Cores 0–3 sharing 1 MB L2 cache; Cluster 1: Cores 4–7 sharing 1 MB L2 cache).
+_Avoid_: Arbitrary OS thread migration, cross-cluster L2 cache invalidation storms
+
+**ClusterTopology**:
+A hardware-aware configuration mapping pipeline workers or intra-frame stages to specific `CoreCluster` affinity masks via POSIX `pthread_setaffinity_np`.
+_Avoid_: Hardcoding CPU core IDs across different target architectures
 
 
 ## Vehicle & Kinematics

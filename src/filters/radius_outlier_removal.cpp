@@ -1,6 +1,10 @@
 #include "filters/radius_outlier_removal.h"
 #include <algorithm>
 
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
+
 namespace rvpoint {
 
 RadiusOutlierRemoval::RadiusOutlierRemoval(float search_radius, int min_neighbors, Backend backend)
@@ -8,9 +12,9 @@ RadiusOutlierRemoval::RadiusOutlierRemoval(float search_radius, int min_neighbor
 
 void RadiusOutlierRemoval::reserve(std::size_t max_points) {
     grid_ = Fast3DSpatialGrid(search_radius_, max_points);
+    keep_.reserve(max_points);
 }
 
-std::size_t RadiusOutlierRemoval::operator()(const PointCloudView& in, PointCloud& out, float search_radius, int min_neighbors) {
 std::size_t RadiusOutlierRemoval::operator()(const PointCloudView& in, const Fast3DSpatialGrid& grid,
                                               PointCloud& out, float search_radius, int min_neighbors) {
     if (in.empty()) {
@@ -18,20 +22,40 @@ std::size_t RadiusOutlierRemoval::operator()(const PointCloudView& in, const Fas
         return 0;
     }
 
-    if (grid_.cell_size_ != search_radius) {
-        grid_ = Fast3DSpatialGrid(search_radius, in.n);
+    if (keep_.size() < in.n) {
+        keep_.resize(in.n);
     }
-    grid_.build(in);
+    std::fill(keep_.begin(), keep_.begin() + in.n, uint8_t(0));
+
+    int eff_threads = num_threads_;
+#if defined(_OPENMP)
+    if (eff_threads <= 0) eff_threads = omp_get_max_threads();
+    if (omp_in_parallel()) eff_threads = 1; // anti-oversubscription inside active parallel regions
+#else
+    eff_threads = 1;
+#endif
+
+    float r2 = search_radius * search_radius;
+    const float* px = in.x;
+    const float* py = in.y;
+    const float* pz = in.z;
+    uint8_t* keep_ptr = keep_.data();
+
+#if defined(_OPENMP)
+    #pragma omp parallel for num_threads(eff_threads) schedule(dynamic, 128) if(eff_threads > 1)
+#endif
+    for (std::size_t i = 0; i < in.n; ++i) {
+        int count = grid.countNeighbors(px[i], py[i], pz[i], r2, min_neighbors);
+        if (count >= min_neighbors) {
+            keep_ptr[i] = 1;
+        }
+    }
 
     out.clear();
     out.reserve(in.n);
-
-    float r2 = search_radius * search_radius;
     for (std::size_t i = 0; i < in.n; ++i) {
-        int count = grid_.countNeighbors(in.x[i], in.y[i], in.z[i], r2, min_neighbors);
-        int count = grid.countNeighbors(in.x[i], in.y[i], in.z[i], r2, min_neighbors);
-        if (count >= min_neighbors) {
-            out.push_back(in.x[i], in.y[i], in.z[i]);
+        if (keep_ptr[i]) {
+            out.push_back(px[i], py[i], pz[i]);
         }
     }
 
@@ -57,4 +81,3 @@ std::size_t RadiusOutlierRemoval::operator()(const PointCloudView& in, PointClou
 }
 
 } // namespace rvpoint
-

@@ -56,6 +56,28 @@ int main() {
         }
     }
 
+    // 4. Test multi-threaded KernelParallel parity
+    RadiusOutlierRemoval ror_parallel(0.5f, 5);
+    ror_parallel.threads(4);
+    ror_parallel.reserve(N_TOTAL);
+
+    PointCloud filtered_parallel;
+    size_t parallel_count = ror_parallel(cloud.view(), filtered_parallel);
+    if (parallel_count != filtered_count) {
+        std::cerr << "[FAIL] Multi-thread parity failed! Single: " << filtered_count
+                  << " vs Parallel: " << parallel_count << std::endl;
+        return 1;
+    }
+    for (size_t i = 0; i < filtered_count; ++i) {
+        if (filtered.x[i] != filtered_parallel.x[i] ||
+            filtered.y[i] != filtered_parallel.y[i] ||
+            filtered.z[i] != filtered_parallel.z[i]) {
+            std::cerr << "[FAIL] Multi-thread point order mismatch at index " << i << std::endl;
+            return 1;
+        }
+    }
+    std::cout << "[PASS] Multi-threaded ROR (4 threads) bit-exact parity verified!\n";
+
     std::cout << "[PASS] Radius Outlier Removal successfully filtered outliers!\n";
     return 0;
 }

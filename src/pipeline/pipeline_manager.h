@@ -1,8 +1,15 @@
 #pragma once
 
 #include "core/point_types.h"
+#include "core/cluster_topology.h"
+#include "pipeline/frame_context.h"
 #include "pipeline/register_file.h"
 #include "pipeline/tagged_binding.h"
+#include "pipeline/stream_resequencer.h"
+
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 #include <string>
 #include <vector>
@@ -14,8 +21,15 @@
 #include <cassert>
 #include <stdexcept>
 #include <iostream>
+#include <atomic>
+#include <thread>
 
 namespace rvpoint {
+
+enum class ExecutionMode {
+  IntraFrame,
+  FrameWorkerPool
+};
 
 /**
  * @brief Hook attached to a specific parameter ID that fires whenever the parameter changes.
@@ -87,6 +101,46 @@ struct ProbeEntry {
   std::string slot_name;
   RegisterId slot_id;
   std::function<void(const RegisterFile&, RegisterId)> callback;
+};
+
+/**
+ * @brief Independent pipeline worker instance for FrameWorkerPool execution.
+ * Owns a private cloned FrameContext and private node invocations with zero shared state.
+ */
+class PipelineWorker {
+public:
+  size_t id = 0;
+  FrameContext rf;
+  std::vector<CompiledNode> nodes;
+  RegisterId primary_input_id;
+
+  void execute_frame(const PointCloudView& cloud) {
+    if (!primary_input_id.is_valid()) {
+      throw std::runtime_error("Primary input slot not configured in worker!");
+    }
+    rf.reset_frame();
+    if (rf.type_id(primary_input_id) == typeid(PointCloudView)) {
+      rf.get_mut<PointCloudView>(primary_input_id) = cloud;
+    } else {
+      rf.get_mut<PointCloud>(primary_input_id).copy_from(cloud);
+    }
+    for (auto& node : nodes) {
+      node.invoke_thunk(&node);
+    }
+  }
+
+  void execute_frame(const PointCloud& cloud) {
+    execute_frame(cloud.view());
+  }
+
+  template <typename FeederFn, typename = std::enable_if_t<std::is_invocable_v<FeederFn, FrameContext&>>>
+  void execute_frame(FeederFn&& feeder) {
+    rf.reset_frame();
+    feeder(rf);
+    for (auto& node : nodes) {
+      node.invoke_thunk(&node);
+    }
+  }
 };
 
 /**
@@ -205,6 +259,133 @@ public:
   double last_pipeline_time_ms() const noexcept { return total_pipeline_time_ms_; }
   const std::vector<CompiledNode>& nodes() const noexcept { return nodes_; }
 
+  // --- Multi-Core Execution Mode & FrameWorkerPool ---
+  ExecutionMode execution_mode() const noexcept { return mode_; }
+  void set_execution_mode(ExecutionMode mode) noexcept {
+    mode_ = mode;
+    enforce_anti_oversubscription();
+  }
+
+  PipelineWorker create_worker(size_t worker_id = 0) const {
+    PipelineWorker worker;
+    worker.id = worker_id;
+    worker.rf = rf_.clone_prototype();
+    worker.nodes = nodes_;
+    worker.primary_input_id = primary_input_id_;
+
+    for (auto& node : worker.nodes) {
+      node.bound_args.clear();
+      for (const auto& arg : node.arg_bindings) {
+        node.bound_args.push_back(worker.rf.get_pointer(arg.id));
+      }
+    }
+    return worker;
+  }
+
+  std::vector<PipelineWorker> create_worker_pool(size_t num_workers = 4) const {
+    enforce_anti_oversubscription();
+    std::vector<PipelineWorker> pool;
+    pool.reserve(num_workers);
+    for (size_t i = 0; i < num_workers; ++i) {
+      pool.push_back(create_worker(i));
+    }
+    return pool;
+  }
+
+  template <typename FrameContainer, typename SinkFn>
+  void run_worker_pool(const FrameContainer& frames, SinkFn&& sink, size_t num_workers = 4) const {
+    enforce_anti_oversubscription();
+    if (num_workers == 0) num_workers = 1;
+    auto workers = create_worker_pool(num_workers);
+    size_t num_frames = frames.size();
+
+#if defined(_OPENMP)
+    #pragma omp parallel for num_threads(num_workers) schedule(dynamic, 1)
+#endif
+    for (size_t i = 0; i < num_frames; ++i) {
+      int tid = 0;
+#if defined(_OPENMP)
+      tid = omp_get_thread_num();
+#endif
+      auto& worker = workers[tid];
+      worker.execute_frame(frames[i]);
+      sink(i, worker.rf);
+    }
+  }
+
+  template <typename FrameContainer, typename ResultExtractorFn, typename OrderedSinkFn>
+  void run_worker_pool_resequenced(const FrameContainer& frames,
+                                   ResultExtractorFn&& extractor,
+                                   OrderedSinkFn&& ordered_sink,
+                                   size_t num_workers = 4) const
+  {
+    enforce_anti_oversubscription();
+    if (num_workers == 0) num_workers = 1;
+    auto workers = create_worker_pool(num_workers);
+    size_t num_frames = frames.size();
+
+    using ResultT = std::decay_t<std::invoke_result_t<ResultExtractorFn, const FrameContext&>>;
+    StreamResequencer<ResultT> resequencer([&](uint64_t seq_id, ResultT res) {
+      ordered_sink(seq_id, std::move(res));
+    });
+
+#if defined(_OPENMP)
+    #pragma omp parallel for num_threads(num_workers) schedule(dynamic, 1)
+#endif
+    for (size_t i = 0; i < num_frames; ++i) {
+      int tid = 0;
+#if defined(_OPENMP)
+      tid = omp_get_thread_num();
+#endif
+      auto& worker = workers[tid];
+      worker.execute_frame(frames[i]);
+      ResultT res = extractor(worker.rf);
+      resequencer.push(i, std::move(res));
+    }
+  }
+
+  template <typename FrameT, typename ResultExtractorFn, typename OrderedSinkFn>
+  void run_worker_pool_streaming(FrameQueue<FrameT>& queue,
+                                 ResultExtractorFn&& extractor,
+                                 OrderedSinkFn&& ordered_sink,
+                                 const std::atomic<bool>& stop_token,
+                                 size_t num_workers = 4) const
+  {
+    enforce_anti_oversubscription();
+    if (num_workers == 0) num_workers = 1;
+    auto workers = create_worker_pool(num_workers);
+
+    using ResultT = std::decay_t<std::invoke_result_t<ResultExtractorFn, const FrameContext&>>;
+    StreamResequencer<ResultT> resequencer([&](uint64_t seq_id, ResultT res) {
+      ordered_sink(seq_id, std::move(res));
+    });
+
+    std::atomic<uint64_t> next_seq{0};
+
+#if defined(_OPENMP)
+    #pragma omp parallel num_threads(num_workers)
+#endif
+    {
+      int tid = 0;
+#if defined(_OPENMP)
+      tid = omp_get_thread_num();
+#endif
+      auto& worker = workers[tid];
+      FrameT frame;
+
+      while (!stop_token.load(std::memory_order_relaxed) || !queue.empty()) {
+        if (queue.pop(frame)) {
+          uint64_t seq = next_seq.fetch_add(1, std::memory_order_relaxed);
+          worker.execute_frame(frame);
+          ResultT res = extractor(worker.rf);
+          resequencer.push(seq, std::move(res));
+        } else {
+          std::this_thread::yield();
+        }
+      }
+    }
+  }
+
 private:
   RegisterFile rf_;
   std::vector<CompiledNode> nodes_;
@@ -215,6 +396,7 @@ private:
   std::string primary_input_name_;
   RegisterId primary_input_id_;
   double total_pipeline_time_ms_ = 0.0;
+  ExecutionMode mode_ = ExecutionMode::IntraFrame;
 
   template <typename FeederFn>
   void execute_frame_internal(FeederFn&& feeder);

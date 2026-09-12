@@ -282,7 +282,6 @@ int main(int argc, char** argv) {
     const std::filesystem::path output_dir =
         positional_args.size() >= 2 ? std::filesystem::path(positional_args[1])
                                     : std::filesystem::path("results") / (input_stem.string() + "_pipeline_ultra");
-                                    : std::filesystem::path("output") / (input_stem.string() + "_pipeline_ultra");
 
     if (!disable_disk) {
         std::error_code dir_ec;
@@ -331,7 +330,6 @@ int main(int argc, char** argv) {
         grid = rvpoint::Fast3DSpatialGrid(radius, std::max<size_t>(65536, in.n));
         grid.build(in);
     });
-    .kernel(rvpoint::SpatialGridBuilder{});
 
     // Node 3: Outlier Filter (ROR or SOR or pass-through) (Stage 5)
     if (skip_sor) {
@@ -373,7 +371,6 @@ int main(int argc, char** argv) {
         grid = rvpoint::Fast3DSpatialGrid(radius, std::max<size_t>(65536, in.n));
         grid.build(in);
     });
-    .kernel(rvpoint::SpatialGridBuilder{});
 
     // Node 5: Surface Normal Estimation (Stage 7)
     if (skip_normals) {
@@ -456,10 +453,6 @@ int main(int argc, char** argv) {
 
     // Retrieve slot representations for stage timing and telemetry
     const auto& rf = pm.registers();
-    const auto& down_cloud = rf.get<rvpoint::PointCloud>(rf.get_id("downsampled_cloud"));
-    const auto& filt_cloud = rf.get<rvpoint::PointCloud>(rf.get_id("filtered_cloud"));
-    const auto& obs_cloud  = rf.get<rvpoint::PointCloud>(rf.get_id("obstacle_cloud"));
-    const auto& clusters   = rf.get<rvpoint::ClusterResult>(rf.get_id("clusters"));
     const auto& down_cloud   = rf.get<rvpoint::PointCloud>(rf.get_id("downsampled_cloud"));
     const auto& filt_cloud   = rf.get<rvpoint::PointCloud>(rf.get_id("filtered_cloud"));
     const auto& ground_plane = rf.get<rvpoint::PlaneModel>(rf.get_id("ground_plane"));

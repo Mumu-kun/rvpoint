@@ -25,12 +25,17 @@ public:
   void set_backend(Backend b) noexcept { backend_ = b; }
   Backend backend() const noexcept { return backend_; }
 
+  RadiusOutlierRemoval& threads(int num_threads) noexcept { num_threads_ = num_threads; return *this; }
+  void set_num_threads(int num_threads) noexcept { num_threads_ = num_threads; }
+  int num_threads() const noexcept { return num_threads_; }
+
   void reserve(std::size_t max_points);
 
   std::size_t operator()(const PointCloudView& in, PointCloud& out, float search_radius, int min_neighbors);
   std::size_t operator()(const PointCloudView& in, PointCloud& out);
   std::size_t operator()(const PointCloud& in, PointCloud& out, float search_radius, int min_neighbors) {
     return (*this)(in.view(), out, search_radius, min_neighbors);
+  }
 
   // Store-piped external search grid overloads
   std::size_t operator()(const PointCloudView& in, const Fast3DSpatialGrid& grid, PointCloud& out, float search_radius, int min_neighbors);
@@ -60,8 +65,10 @@ public:
 private:
   float search_radius_ = 0.5f;
   int min_neighbors_ = 5;
+  int num_threads_ = 0;
   Backend backend_ = Backend::Auto;
   Fast3DSpatialGrid grid_;
+  std::vector<uint8_t> keep_;
 };
 
 } // namespace rvpoint

@@ -102,7 +102,11 @@ void PipelineManager::step(const PointCloudView& cloud) {
   }
 
   execute_frame_internal([&](RegisterFile& rf) {
-    rf.get_mut<PointCloud>(primary_input_id_).copy_from(cloud);
+    if (rf.type_id(primary_input_id_) == typeid(PointCloudView)) {
+      rf.get_mut<PointCloudView>(primary_input_id_) = cloud;
+    } else {
+      rf.get_mut<PointCloud>(primary_input_id_).copy_from(cloud);
+    }
   });
 }
 

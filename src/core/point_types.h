@@ -126,6 +126,7 @@ public:
   }
 
   std::size_t size() const noexcept { return n; }
+  std::size_t capacity() const noexcept { return x.capacity(); }
   bool empty() const noexcept { return n == 0; }
 
   PointXYZ operator[](std::size_t i) const noexcept {
@@ -208,9 +209,18 @@ struct ClusterResult {
     offsets.clear();
   }
 
-  void reserve(std::size_t num_indices, std::size_t num_clusters = 64) {
+  void reserve(std::size_t num_indices, std::size_t num_clusters) {
     indices.reserve(num_indices);
     offsets.reserve(num_clusters + 1);
+  }
+
+  void reserve(std::size_t num_indices) {
+    indices.reserve(num_indices);
+    offsets.reserve(65);
+  }
+
+  std::size_t capacity() const noexcept {
+    return indices.capacity();
   }
 
   std::size_t num_clusters() const noexcept {
