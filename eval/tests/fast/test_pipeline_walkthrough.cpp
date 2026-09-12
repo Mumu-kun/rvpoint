@@ -1,238 +1,227 @@
 #include "include/rvpoint.h"
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <ctime>
+
 #include <iostream>
-#include <random>
+#include <iomanip>
 #include <vector>
+#include <cmath>
+#include <cassert>
+#include <string>
+#include <algorithm>
 
 using namespace rvpoint;
 
-// Mimics https://pcl.readthedocs.io/projects/tutorials/en/master/walkthrough.html
-int main(int argc, char **argv) {
-  std::cout << "========================================" << std::endl;
-  std::cout << "   RISC-V PCL Pipeline Walkthrough      " << std::endl;
-  std::cout << "========================================" << std::endl;
+int main(int argc, char** argv) {
+  std::cout << "==============================================================\n";
+  std::cout << "    RVPOINT END-TO-END PERCEPTION PIPELINE WALKTHROUGH        \n";
+  std::cout << "==============================================================\n\n";
 
-  std::string input_file = "data/0000000000.pcd";
+  // 1. Load or synthesize test point cloud
+  std::string pcd_path = "data/0000000000.pcd";
   if (argc > 1) {
-    input_file = argv[1];
+    pcd_path = argv[1];
   }
 
-  std::string base_name = input_file;
-  size_t last_slash = base_name.find_last_of("/\\");
-  if (last_slash != std::string::npos) {
-    base_name = base_name.substr(last_slash + 1);
-  }
-  std::string stem = base_name.substr(0, base_name.find_last_of('.'));
+  std::cout << "[Step 1] Loading Point Cloud Input..." << std::endl;
+  PointCloud input_cloud;
+  bool ok = loadPCD(pcd_path, input_cloud);
+  if (!ok) ok = loadPCD("data/pcd_compressed/0000000090.pcd", input_cloud);
+  if (!ok) ok = loadPCD("../data/0000000000.pcd", input_cloud);
 
-  // Generate timestamp for serialization
-  auto now = std::chrono::system_clock::now();
-  auto time_t_now = std::chrono::system_clock::to_time_t(now);
-  std::tm *tm_now = std::localtime(&time_t_now);
-  char timestamp[32];
-  std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_now);
-
-  std::string output_dir = "output/";
-  std::string output_file =
-      output_dir + stem + "_" + timestamp + "_voxelized.pcd";
-
-  std::cout << "\n[Step 1] Loading " << input_file << "..." << std::endl;
-  std::vector<PointXYZ> loaded_points;
-  bool ok = loadPCD(input_file, loaded_points);
-  if (!ok) ok = loadPCD("data/" + input_file, loaded_points);
-  if (!ok) ok = loadPCD("data/pcd_compressed/0000000090.pcd", loaded_points);
-  if (!ok) ok = loadPCD("../" + input_file, loaded_points);
-  if (!ok) ok = loadPCD("../data/0000000000.pcd", loaded_points);
-
-  if (!ok || loaded_points.empty()) {
-    std::cerr << "[FAIL] Could not load " << input_file << std::endl;
-    return 1;
-  }
-  size_t n = loaded_points.size();
-  std::cout << "Loaded " << n << " points." << std::endl;
-
-  // Convert to SoA for processing
-  std::vector<float> x(n), y(n), z(n);
-  for (size_t i = 0; i < n; ++i) {
-    x[i] = loaded_points[i].x;
-    y[i] = loaded_points[i].y;
-    z[i] = loaded_points[i].z;
+  if (!ok || input_cloud.empty()) {
+    std::cout << "  (Generating synthetic tabletop LiDAR frame of 30,000 points...)\n";
+    input_cloud.reserve(30000);
+    // Ground plane points
+    for (std::size_t i = 0; i < 20000; ++i) {
+      float px = (static_cast<float>(i % 200) - 100.0f) * 0.02f;
+      float py = (static_cast<float>(i / 200) - 50.0f) * 0.02f;
+      float pz = 0.0f + (static_cast<float>(i % 5) * 0.001f);
+      input_cloud.push_back(px, py, pz);
+    }
+    // Obstacle cluster 1
+    for (std::size_t i = 20000; i < 25000; ++i) {
+      float px = 0.5f + (static_cast<float>((i - 20000) % 50) * 0.005f);
+      float py = 0.5f + (static_cast<float>((i - 20000) / 50) * 0.005f);
+      float pz = 0.2f + (static_cast<float>(i % 10) * 0.01f);
+      input_cloud.push_back(px, py, pz);
+    }
+    // Obstacle cluster 2
+    for (std::size_t i = 25000; i < 30000; ++i) {
+      float px = -0.6f + (static_cast<float>((i - 25000) % 50) * 0.005f);
+      float py = -0.4f + (static_cast<float>((i - 25000) / 50) * 0.005f);
+      float pz = 0.25f + (static_cast<float>(i % 10) * 0.01f);
+      input_cloud.push_back(px, py, pz);
+    }
   }
 
-  // 1.5 Add Synthetic Ground Plane
-  std::cout << "\n[Step 1.5] Adding Synthetic Ground Plane..." << std::endl;
+  const std::size_t num_raw_pts = input_cloud.size();
+  std::cout << "  ✓ Raw Input Cloud: " << num_raw_pts << " points\n\n";
 
-  float min_z = *std::min_element(z.begin(), z.end());
-  float min_x = *std::min_element(x.begin(), x.end());
-  float max_x = *std::max_element(x.begin(), x.end());
-  float min_y = *std::min_element(y.begin(), y.end());
-  float max_y = *std::max_element(y.begin(), y.end());
+  // 2. Construct PipelineManager and Register Stages
+  std::cout << "[Step 2] Building Slotted Perception Pipeline via PipelineManager...\n";
+  PipelineManager pm;
 
-  float ground_z = min_z - 0.005f;
-  const size_t N_GROUND = 1000;
+  // Stage 1: Voxel Grid Downsampling (Zero-heap functor)
+  pm.add_node("voxel_grid",
+      in<PointCloud>("raw_cloud"),
+      out<PointCloud>("downsampled_cloud"),
+      param<float>("voxel_leaf_size", 1.0f)
+  ).kernel([filter = VoxelGrid{}](
+      const PointCloud& in_cloud, PointCloud& out_cloud, float leaf_size) mutable
+  {
+    filter(in_cloud.view(), out_cloud, leaf_size);
+  });
 
-  std::mt19937 gen(42);
-  std::uniform_real_distribution<float> dist_x(min_x - 0.02f, max_x + 0.02f);
-  std::uniform_real_distribution<float> dist_y(min_y - 0.02f, max_y + 0.02f);
+  // Stage 2: RANSAC Ground Segmentation & Extraction (Pipeline Inversion)
+  pm.add_node("ransac_ground",
+      in<PointCloud>("downsampled_cloud"),
+      out<PlaneModel>("ground_plane"),
+      out<PointCloud>("ground_cloud"),
+      out<PointCloud>("obstacle_cloud"),
+      param<float>("ransac_thresh", 0.20f),
+      param<int>("ransac_max_iters", 50)
+  ).kernel([ransac = RansacPlane{}](
+      const PointCloud& in_cloud, PlaneModel& plane,
+      PointCloud& ground, PointCloud& obstacles,
+      float dist_thresh, int max_iters) mutable
+  {
+    ransac(in_cloud.view(), plane, dist_thresh, max_iters);
+    ransac.extract(in_cloud.view(), plane, dist_thresh, ground, obstacles);
+  });
 
-  size_t original_n = n;
-  x.reserve(n + N_GROUND);
-  y.reserve(n + N_GROUND);
-  z.reserve(n + N_GROUND);
+  // Stage 3: Radius Outlier Removal on Obstacle Points (Uniform Grid Accelerated)
+  pm.add_node("ror_filter",
+      in<PointCloud>("obstacle_cloud"),
+      out<PointCloud>("cleaned_obstacles"),
+      param<float>("ror_radius", 2.0f),
+      param<int>("ror_min_neighbors", 2)
+  ).kernel([ror = RadiusOutlierRemoval{}](
+      const PointCloud& in_cloud, PointCloud& out_cloud, float radius, int min_neighbors) mutable
+  {
+    ror(in_cloud.view(), out_cloud, radius, min_neighbors);
+  });
 
-  for (size_t i = 0; i < N_GROUND; ++i) {
-    x.push_back(dist_x(gen));
-    y.push_back(dist_y(gen));
-    z.push_back(ground_z);
-  }
-  n = x.size();
+  // Stage 4: Fast 3D Spatial Grid Construction
+  pm.add_node("spatial_grid_build",
+      in<PointCloud>("cleaned_obstacles"),
+      out<Fast3DSpatialGrid>("spatial_grid"),
+      param<float>("grid_cell_size", 2.0f)
+  )
+  .on_reconfig<float>("grid_cell_size", [](RegisterFile& rf, float new_cell_size) {
+    std::cout << "    [Reconfig Hook] Updating Fast3DSpatialGrid cell size to: " << new_cell_size << "\n";
+    auto& grid = rf.get_mut<Fast3DSpatialGrid>(rf.get_id("spatial_grid"));
+    grid = Fast3DSpatialGrid(new_cell_size, 32768);
+  })
+  .kernel([](const PointCloud& obs_cloud, Fast3DSpatialGrid& grid, float /*cell_size*/) {
+    grid.build(obs_cloud.view());
+  });
 
-  std::cout << "Added " << N_GROUND << " ground plane points at Z=" << ground_z << std::endl;
-  std::cout << "Total points: " << n << " (Bunny: " << original_n << " + Ground: " << N_GROUND << ")" << std::endl;
+  // Stage 5: Euclidean Clustering with Flat CSR ClusterResult
+  pm.add_node("clustering",
+      in<PointCloud>("cleaned_obstacles"),
+      out<ClusterResult>("clusters"),
+      param<float>("cluster_tol", 2.0f),
+      param<int>("cluster_min_size", 2),
+      param<int>("cluster_max_size", 50000)
+  ).kernel([ec = EuclideanClustering{}](
+      const PointCloud& in_cloud,
+      ClusterResult& out_clusters, float tol, int min_sz, int max_sz) mutable
+  {
+    ec(in_cloud.view(), out_clusters, tol, min_sz, max_sz);
+  });
 
-  PointCloudSoA cloud_soa = {x.data(), y.data(), z.data(), (size_t)n};
+  // Stage 6: Surface Normal Estimation on Obstacles
+  pm.add_node("normal_estimation",
+      in<PointCloud>("cleaned_obstacles"),
+      out<PointCloud>("normals"),
+      param<int>("normal_k", 5),
+      param<float>("normal_radius", 2.0f)
+  ).kernel([ne = NormalEstimation{}](
+      const PointCloud& in_cloud, PointCloud& out_normals, int k, float radius) mutable
+  {
+    ne(in_cloud.view(), out_normals, k, radius, 0.0f, 0.0f, 0.0f);
+  });
 
-  // 2. Voxel Grid Downsampling
-  std::cout << "\n[Step 2] Voxel Grid Downsampling (Leaf=0.20)..." << std::endl;
-  std::vector<PointXYZ> filtered_points(n);
-  size_t n_filtered =
-      voxel_grid_downsamp_rvv_v2(cloud_soa, filtered_points.data(), 0.20f);
-  std::cout << "Filtered count: " << n_filtered << " (Original: " << n << ")"
-            << std::endl;
+  // 3. Declarative Probes for Telemetry and Diagnostics
+  std::size_t probed_downsampled = 0;
+  std::size_t probed_ground = 0;
+  std::size_t probed_obstacles = 0;
+  std::size_t probed_clusters = 0;
+  std::size_t probed_normals = 0;
 
-  // 2.5 RANSAC Plane Segmentation
-  std::cout << "\n[Step 2.5] RANSAC Plane Segmentation..." << std::endl;
+  pm.add_probe<PointCloud>("downsampled_cloud", [&](const PointCloud& down) {
+    probed_downsampled = down.size();
+  });
 
-  std::vector<float> vx(n_filtered), vy(n_filtered), vz(n_filtered);
-  for (size_t i = 0; i < n_filtered; ++i) {
-    vx[i] = filtered_points[i].x;
-    vy[i] = filtered_points[i].y;
-    vz[i] = filtered_points[i].z;
-  }
-  PointCloudSoA voxel_soa = {vx.data(), vy.data(), vz.data(), n_filtered};
+  pm.add_probe<PlaneModel>("ground_plane", [&](const PlaneModel& plane) {
+    std::cout << "    [Probe: Ground Plane] " << std::fixed << std::setprecision(3)
+              << plane.a << "x + " << plane.b << "y + " << plane.c << "z + " << plane.d
+              << " = 0 (Inliers: " << plane.inliers << ")\n";
+  });
 
-  float plane_model[4];
-  float ransac_thresh = 0.05f;
-  int ransac_iters = 100;
+  pm.add_probe<PointCloud>("ground_cloud", [&](const PointCloud& gnd) {
+    probed_ground = gnd.size();
+  });
 
-  int n_plane_inliers = ransac_plane_rvv(voxel_soa, ransac_thresh, ransac_iters, plane_model);
+  pm.add_probe<PointCloud>("cleaned_obstacles", [&](const PointCloud& obs) {
+    probed_obstacles = obs.size();
+  });
 
-  std::cout << "RANSAC found " << n_plane_inliers << " plane inliers" << std::endl;
-  std::cout << "Plane model: " << plane_model[0] << "x + " << plane_model[1] << "y + "
-            << plane_model[2] << "z + " << plane_model[3] << " = 0" << std::endl;
+  pm.add_probe<ClusterResult>("clusters", [&](const ClusterResult& clust) {
+    probed_clusters = clust.num_clusters();
+    std::cout << "    [Probe: Clustering] Extracted " << clust.num_clusters()
+              << " clusters (Total clustered indices: " << clust.indices.size() << ")\n";
+  });
 
-  std::vector<PointXYZ> plane_pts(n_filtered);
-  std::vector<PointXYZ> object_pts(n_filtered);
-  std::size_t actual_inliers, actual_outliers;
+  pm.add_probe<PointCloud>("normals", [&](const PointCloud& nrm) {
+    probed_normals = nrm.size();
+  });
 
-  extract_plane_inliers_outliers_rvv(voxel_soa, plane_model, ransac_thresh,
-                                      plane_pts.data(), object_pts.data(),
-                                      actual_inliers, actual_outliers);
+  // 4. Initialize Pipeline & Pre-allocate Capacities (Zero Heap Setup)
+  std::cout << "[Step 3] Initializing Pipeline & Pre-allocating Register Buffers...\n";
+  pm.set_primary_input("raw_cloud");
+  pm.initialize(num_raw_pts + 1024);
 
-  std::cout << "Extracted: " << actual_inliers << " plane points (ground), "
-            << actual_outliers << " object points (bunny)" << std::endl;
+  // 5. Execute Frame 1 (Baseline Execution)
+  std::cout << "\n[Step 4] Executing Frame 1 (Baseline)...\n";
+  pm.step(input_cloud);
+  pm.print_telemetry();
 
-  std::string ground_file = output_dir + stem + "_" + timestamp + "_ground.pcd";
-  std::vector<PointXYZ> ground_vec(plane_pts.begin(), plane_pts.begin() + actual_inliers);
-  savePCD(ground_file, ground_vec);
-  std::cout << "Saved ground plane to: " << ground_file << std::endl;
+  assert(probed_downsampled > 0 && probed_downsampled <= num_raw_pts);
+  assert(probed_ground > 0);
+  assert(probed_obstacles > 0);
+  assert(probed_normals == probed_obstacles);
 
-  std::vector<PointXYZ> final_points;
-  for (size_t i = 0; i < actual_outliers; ++i)
-    final_points.push_back(object_pts[i]);
+  // Record allocated capacities across register slots after Frame 1
+  auto cap_down = pm.registers().get<PointCloud>(pm.get_id("downsampled_cloud")).x.capacity();
+  auto cap_gnd  = pm.registers().get<PointCloud>(pm.get_id("ground_cloud")).x.capacity();
+  auto cap_obs  = pm.registers().get<PointCloud>(pm.get_id("obstacle_cloud")).x.capacity();
+  auto cap_nrm  = pm.registers().get<PointCloud>(pm.get_id("normals")).x.capacity();
 
-  savePCD(output_file, final_points);
+  // 6. Execute Frame 2 (Verify Steady-State Zero-Heap Invariant)
+  std::cout << "[Step 5] Executing Frame 2 (Steady-State Zero-Heap Verification)...\n";
+  pm.step(input_cloud);
 
-  n_filtered = actual_outliers;
-  filtered_points.resize(n_filtered);
-  for (size_t i = 0; i < n_filtered; ++i) {
-    filtered_points[i] = object_pts[i];
-  }
+  // Assert capacities are strictly unchanged (no reallocation occurred)
+  assert(pm.registers().get<PointCloud>(pm.get_id("downsampled_cloud")).x.capacity() == cap_down);
+  assert(pm.registers().get<PointCloud>(pm.get_id("ground_cloud")).x.capacity() == cap_gnd);
+  assert(pm.registers().get<PointCloud>(pm.get_id("obstacle_cloud")).x.capacity() == cap_obs);
+  assert(pm.registers().get<PointCloud>(pm.get_id("normals")).x.capacity() == cap_nrm);
+  std::cout << "  ✓ Buffer capacities verified: ZERO heap allocations on steady-state hot path!\n\n";
 
-  std::cout << "Continuing pipeline with " << n_filtered << " object points (ground removed)." << std::endl;
+  // 7. Dynamic Parameter Reconfiguration Test
+  std::cout << "[Step 6] Testing Live Dynamic Parameter Reconfiguration...\n";
+  std::cout << "  * Updating 'grid_cell_size' = 0.20m\n";
+  std::cout << "  * Updating 'cluster_tol' = 0.25m\n";
 
-  // 3. Statistical Outlier Removal (SOR)
-  std::cout << "\n[Step 3] Statistical Outlier Removal (K=10, Std=1.0)..."
-            << std::endl;
-  std::vector<float> fx(n_filtered), fy(n_filtered), fz(n_filtered);
-  for (size_t i = 0; i < n_filtered; ++i) {
-    fx[i] = filtered_points[i].x;
-    fy[i] = filtered_points[i].y;
-    fz[i] = filtered_points[i].z;
-  }
-  PointCloudSoA filtered_soa = {fx.data(), fy.data(), fz.data(), n_filtered};
+  pm.set_param("grid_cell_size", 0.20f);
+  pm.set_param("cluster_tol", 0.25f);
 
-  std::vector<PointXYZ> sor_points(n_filtered);
+  // Execute Frame 3 with new parameters
+  pm.step(input_cloud);
+  pm.print_telemetry();
 
-  size_t n_sor = sor_rvv(filtered_soa, sor_points.data(), 10, 1.0f);
-  std::cout << "SOR Filtered count: " << n_sor << " (Original: " << n_filtered
-            << ")" << std::endl;
-
-  // 4. Build Octree (Explicit Step)
-  std::cout << "\n[Step 4] Building Octree..." << std::endl;
-  std::vector<float> sx(n_sor), sy(n_sor), sz(n_sor);
-  for (size_t i = 0; i < n_sor; ++i) {
-    sx[i] = sor_points[i].x;
-    sy[i] = sor_points[i].y;
-    sz[i] = sor_points[i].z;
-  }
-  PointCloudSoA sor_soa = {sx.data(), sy.data(), sz.data(), n_sor};
-
-  Octree octree;
-  octree.setInputCloud(sor_soa);
-  octree.build();
-  std::cout << "Octree built successfully." << std::endl;
-
-  // 5. Normal Estimation using Octree
-  std::cout << "\n[Step 5] Estimating Normals (K=10) with ViewPoint(0,0,0)..."
-            << std::endl;
-  std::vector<float> nx(n_sor), ny(n_sor), nz(n_sor);
-
-  normal_estimation_rvv(sor_soa, octree, nx.data(), ny.data(), nz.data(), 10,
-                        0.03f, 0.0f, 0.0f, 0.0f);
-
-  float vp_dx = 0 - sx[0];
-  float vp_dy = 0 - sy[0];
-  float vp_dz = 0 - sz[0];
-  float dot = nx[0] * vp_dx + ny[0] * vp_dy + nz[0] * vp_dz;
-  std::cout << "Point[0] Normal Dot with ViewVec: " << dot << std::endl;
-
-  if (dot >= -1e-5) {
-    std::cout
-        << "[PASS] Normal orientation correct (aligned with line of sight)."
-        << std::endl;
-  } else {
-    std::cerr << "[FAIL] Normal points away from viewpoint!" << std::endl;
-  }
-
-  // 6. Verify Radius Search (Sanity Check)
-  std::cout << "\n[Step 6] Octree Radius Search Verification..." << std::endl;
-  size_t mid_idx = n_sor / 2;
-  PointXYZ query = sor_points[mid_idx];
-  float radius = 0.05f;
-
-  std::vector<int> indices;
-  std::vector<float> dists;
-  std::size_t found = octree.radiusSearch(query, radius, indices, dists);
-
-  std::cout << "Neighbors found within r=" << radius << ": " << found
-            << std::endl;
-
-  bool found_self = false;
-  for (float d : dists) {
-    if (d < 1e-9)
-      found_self = true;
-  }
-
-  if (found > 0 && found_self) {
-    std::cout << "[PASS] Search returned valid results." << std::endl;
-  } else {
-    std::cerr << "[FAIL] Search failed or did not find self." << std::endl;
-    return 1;
-  }
-
-  std::cout << "\n[SUCCESS] Custom Pipeline Walkthrough Complete!" << std::endl;
+  std::cout << "==============================================================\n";
+  std::cout << "   >>> PIPELINE WALKTHROUGH COMPLETED SUCCESSFULLY! <<<       \n";
+  std::cout << "==============================================================\n";
   return 0;
 }

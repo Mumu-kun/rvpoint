@@ -20,6 +20,7 @@ output/
 results/
 renders/
 board_result/
+m5out/
 *.pcd
 *.png
 
@@ -47,6 +48,7 @@ data/
 docs/plans
 .clangd
 .agents/
+.scratch/
 # Demonstration app
 demonstration/lidar-env
 demonstration/scans

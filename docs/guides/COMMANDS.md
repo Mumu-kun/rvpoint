@@ -1,4 +1,4 @@
-> **Physical Hardware Reference**: For standalone board commands targeting the Orange Pi RV2 (SpacemiT K1 Octa-Core RV64GCV), see [BOARD_BENCHMARK_GUIDE.md](file:///d:/rvpoint/rvpoint/docs/guides/BOARD_BENCHMARK_GUIDE.md).
+> **Physical Hardware Reference**: For standalone board commands targeting the Orange Pi RV2 (SpacemiT K1 Octa-Core RV64GCV), see [BOARD_BENCHMARK_GUIDE.md](BOARD_BENCHMARK_GUIDE.md).
 
 ---
 
@@ -63,6 +63,16 @@
 ```bash
 ./scripts/run.sh --backend scalar pcl_standalone_pipeline data/pcd_compressed/0000000090.pcd \
     --progress --leaf-size 0.10 --cluster-tolerance 0.15 --min-cluster 50 --max-cluster 100000 --no-write
+```
+
+#### G. Slotted Register-File Perception Pipeline Prototype (`pipeline_prototype`)
+*Demonstrates the zero-heap, zero-vtable slotted register file pipeline engine with topological DAG scheduling and dynamic parameter reconfiguration (ADR-0012).*
+```bash
+# RVV 1.0 vectorized backend:
+./scripts/run.sh pipeline_prototype data/pcd_compressed/0000000090.pcd
+
+# Scalar backend:
+./scripts/run.sh --backend scalar pipeline_prototype data/pcd_compressed/0000000090.pcd
 ```
 
 ---
@@ -140,5 +150,9 @@
 
 #### C. Run All Unit Tests
 ```bash
+# Run default RVV 1.0 unit test suite (13 tests):
 ./scripts/test.sh
+
+# Run Scalar unit test suite (12 tests):
+./scripts/test.sh --backend scalar
 ```

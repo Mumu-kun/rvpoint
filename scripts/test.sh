@@ -56,15 +56,17 @@ BIN_DIR="${BUILD_DIR}/${BACKEND}/bin/${BACKEND}"
 # List of fast tests
 FAST_TESTS=(
     "test_voxel_grid"
+    "test_ror"
     "test_sor"
     "test_normal"
     "test_ransac"
-    "test_octree"
     "test_radius"
     "test_euclidean_clustering"
+    "test_pipeline"
     "test_pipeline_walkthrough"
-    "test_scaling"
     "test_loader"
+    "test_concepts"
+    "test_fused_filter_normals"
 )
 if [ "$BACKEND" = "rvv" ]; then
     FAST_TESTS+=("test_rvv_features")

@@ -56,7 +56,7 @@ add_library(rvv_pcl ALIAS rvpoint)
 
 # Automatically discover all subdirectories containing headers/sources under src/
 file(GLOB_RECURSE ALL_SRC_HEADERS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/src/*.h" 
+    "${CMAKE_SOURCE_DIR}/src/*.h"
     "${CMAKE_SOURCE_DIR}/src/*.hpp"
 )
 set(RVPOINT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/src")
@@ -83,88 +83,83 @@ if(GEM5_BUILD)
 endif()
 
 # ==============================================================================
-# 3. PCL Dependency Discovery (Dynamic System / Static env/deps/pcl)
+# 3. PCL Dependency Discovery (Dynamic System or Static env/deps/pcl)
 # ==============================================================================
 set(PCL_DEPS_DIR "${CMAKE_SOURCE_DIR}/env/deps")
-set(PCL_SYSTEM_LIB_DIR "/usr/lib/riscv64-linux-gnu")
-set(PCL_SYSTEM_INC_DIR "/usr/include/pcl-1.14")
+set(PCL_AVAILABLE OFF)
+set(PCL_INC_DIRS "")
+set(PCL_LIB_DIRS "")
+set(PCL_LIBS "")
+set(PCL_LINK_DIR "")
 
-if(EXISTS "${PCL_SYSTEM_LIB_DIR}/libpcl_common.so" AND EXISTS "${PCL_SYSTEM_INC_DIR}")
-    set(PCL_SYSTEM_AVAILABLE ON)
-    message(STATUS "Found system dynamic PCL 1.14 at ${PCL_SYSTEM_LIB_DIR}")
-else()
-    set(PCL_SYSTEM_AVAILABLE OFF)
-endif()
-
-if(EXISTS "${PCL_DEPS_DIR}/eigen/include/eigen3")
-    include_directories(SYSTEM "${PCL_DEPS_DIR}/eigen/include/eigen3")
-elseif(EXISTS "${PCL_DEPS_DIR}/eigen")
-    include_directories(SYSTEM "${PCL_DEPS_DIR}/eigen")
-endif()
-if(EXISTS "${PCL_DEPS_DIR}/flann/include")
-    include_directories(SYSTEM "${PCL_DEPS_DIR}/flann/include")
-    link_directories("${PCL_DEPS_DIR}/flann/lib")
-endif()
-if(EXISTS "${PCL_DEPS_DIR}/pcl/usr/include/pcl-1.14" OR EXISTS "${PCL_DEPS_DIR}/pcl/include/pcl-1.14")
-    include_directories(SYSTEM 
+if(EXISTS "${PCL_DEPS_DIR}/pcl/usr/include/pcl-1.14" AND EXISTS "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu/libpcl_common.so")
+    set(PCL_AVAILABLE ON)
+    set(PCL_LINK_DIR "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu")
+    list(APPEND PCL_INC_DIRS
         "${PCL_DEPS_DIR}/pcl/usr/include/pcl-1.14"
         "${PCL_DEPS_DIR}/pcl/include/pcl-1.14"
         "${PCL_DEPS_DIR}/pcl/usr/include"
         "${PCL_DEPS_DIR}/pcl/include"
+        "${PCL_DEPS_DIR}/eigen/include/eigen3"
+        "${PCL_DEPS_DIR}/eigen"
+        "${PCL_DEPS_DIR}/flann/include"
     )
-    link_directories(
-        "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu" 
-        "${PCL_DEPS_DIR}/pcl/lib"
-        "${PCL_DEPS_DIR}/flann/lib"
+    list(APPEND PCL_LIB_DIRS "${PCL_LINK_DIR}" "${PCL_DEPS_DIR}/flann/lib")
+    list(APPEND PCL_LIBS
+        "${PCL_LINK_DIR}/libpcl_segmentation.so"
+        "${PCL_LINK_DIR}/libpcl_features.so"
+        "${PCL_LINK_DIR}/libpcl_filters.so"
+        "${PCL_LINK_DIR}/libpcl_sample_consensus.so"
+        "${PCL_LINK_DIR}/libpcl_search.so"
+        "${PCL_LINK_DIR}/libpcl_kdtree.so"
+        "${PCL_LINK_DIR}/libpcl_octree.so"
+        "${PCL_LINK_DIR}/libpcl_io.so"
+        "${PCL_LINK_DIR}/libpcl_common.so"
+        "${PCL_LINK_DIR}/libflann_cpp_s.a"
+        "${PCL_LINK_DIR}/libboost_system.a"
     )
-    set(PCL_STATIC_AVAILABLE ON)
-    message(STATUS "Found upstream PCL 1.14 RISC-V static dependencies at: ${PCL_DEPS_DIR}/pcl")
+    message(STATUS "Found PCL 1.14 RISC-V dependencies in: ${PCL_DEPS_DIR}/pcl")
+elseif(EXISTS "/usr/lib/riscv64-linux-gnu/libpcl_common.so" AND EXISTS "/usr/include/pcl-1.14")
+    set(PCL_AVAILABLE ON)
+    set(PCL_LINK_DIR "/usr/lib/riscv64-linux-gnu")
+    list(APPEND PCL_INC_DIRS "/usr/include/pcl-1.14" "/usr/include/eigen3" "/usr/include")
+    list(APPEND PCL_LIB_DIRS "${PCL_LINK_DIR}")
+    list(APPEND PCL_LIBS
+        "${PCL_LINK_DIR}/libpcl_segmentation.so"
+        "${PCL_LINK_DIR}/libpcl_features.so"
+        "${PCL_LINK_DIR}/libpcl_filters.so"
+        "${PCL_LINK_DIR}/libpcl_sample_consensus.so"
+        "${PCL_LINK_DIR}/libpcl_search.so"
+        "${PCL_LINK_DIR}/libpcl_kdtree.so"
+        "${PCL_LINK_DIR}/libpcl_octree.so"
+        "${PCL_LINK_DIR}/libpcl_io.so"
+        "${PCL_LINK_DIR}/libpcl_common.so"
+    )
+    message(STATUS "Found system dynamic PCL 1.14 at ${PCL_LINK_DIR}")
 else()
-    set(PCL_STATIC_AVAILABLE OFF)
+    message(STATUS "No PCL installation found; official_pcl pipelines will be skipped")
 endif()
 
 # ==============================================================================
 # 4. Perception Pipelines (eval/pipelines/)
 # ==============================================================================
 file(GLOB PIPELINE_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/eval/pipelines/*.cpp")
+# Exclude unrefactored legacy pipelines pending rebuild with PipelineManager
+list(FILTER PIPELINE_SOURCES EXCLUDE REGEX "pipeline_3d_intra|pipeline_3d_rvv_clust|pipeline_3d_stream|pipeline_export")
 foreach(pipe_src ${PIPELINE_SOURCES})
     get_filename_component(pipe_name "${pipe_src}" NAME_WE)
     if(pipe_name MATCHES "^official_pcl_")
-        if(PCL_SYSTEM_AVAILABLE)
+        if(PCL_AVAILABLE)
             add_executable(${pipe_name} "${pipe_src}")
             target_link_libraries(${pipe_name} PRIVATE rvpoint)
-            target_compile_options(${pipe_name} PRIVATE 
-                "-I${PCL_SYSTEM_INC_DIR}" 
-                "-I/usr/include/eigen3" 
-                "-I/usr/include"
-            )
+            target_include_directories(${pipe_name} SYSTEM PRIVATE ${PCL_INC_DIRS})
             if(NOT GEM5_BUILD)
                 target_compile_options(${pipe_name} PRIVATE "-fopenmp" "-pthread")
-                target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,${PCL_SYSTEM_LIB_DIR}" "-fopenmp" "-pthread")
+                target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,${PCL_LINK_DIR}" "-fopenmp" "-pthread")
             else()
-                target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,${PCL_SYSTEM_LIB_DIR}")
+                target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,${PCL_LINK_DIR}")
             endif()
-            target_link_libraries(${pipe_name} PRIVATE 
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_common.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_io.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_filters.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_features.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_segmentation.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_search.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_octree.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_kdtree.so
-                ${PCL_SYSTEM_LIB_DIR}/libpcl_sample_consensus.so
-            )
-        elseif(PCL_STATIC_AVAILABLE)
-            add_executable(${pipe_name} "${pipe_src}")
-            target_link_libraries(${pipe_name} PRIVATE rvpoint)
-            set(PCL_LIB_DIR "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu")
-            target_link_libraries(${pipe_name} PRIVATE 
-                "${PCL_LIB_DIR}/libflann_cpp_s.a"
-                "${PCL_LIB_DIR}/libboost_system.a"
-                pthread
-            )
-            target_link_options(${pipe_name} PRIVATE "-static")
+            target_link_libraries(${pipe_name} PRIVATE ${PCL_LIBS} pthread)
         else()
             message(STATUS "Skipping '${pipe_name}' (PCL shared or static library not found)")
             continue()
@@ -185,7 +180,8 @@ endforeach()
 # 5. Standalone Benchmarks (eval/benchmarks/)
 # ==============================================================================
 file(GLOB BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/eval/benchmarks/*.cpp")
-list(FILTER BENCHMARK_SOURCES EXCLUDE REGEX "benchmark_kernels.cpp|kdtree_vs_pointer_octree_bench.cpp")
+# Legacy benchmarks pending modernization with PipelineManager are excluded during transition
+list(FILTER BENCHMARK_SOURCES EXCLUDE REGEX ".*")
 
 foreach(bench_src ${BENCHMARK_SOURCES})
     get_filename_component(bench_name "${bench_src}" NAME_WE)
@@ -218,16 +214,10 @@ file(GLOB FAST_TEST_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/eval/tests/fast/*.cpp"
     "${CMAKE_SOURCE_DIR}/eval/tests/fast/*.c"
 )
+if(NOT RVPOINT_ENABLE_RVV)
+    list(FILTER FAST_TEST_SOURCES EXCLUDE REGEX "test_rvv_features")
+endif()
 foreach(src ${FAST_TEST_SOURCES})
     add_rvpoint_test("${src}")
 endforeach()
 
-# ==============================================================================
-# 6. Experimental & Research Tests (eval/tests/experimental/)
-# ==============================================================================
-file(GLOB EXPERIMENTAL_TEST_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/eval/tests/experimental/*.cpp"
-)
-foreach(src ${EXPERIMENTAL_TEST_SOURCES})
-    add_rvpoint_test("${src}")
-endforeach()

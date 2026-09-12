@@ -109,6 +109,12 @@ public:
 #### Pattern C: Link-Time Substitution
 Maintain a clean, non-virtual C++ interface in a shared header. CMake compiles `actuator_linux_pwm.cpp` for target hardware builds, and links `actuator_mock.cpp` for desktop test binaries.
 
+#### Pattern D: Non-Virtual Deep Class Pattern (ADR-0011)
+Core algorithm components (`VoxelGrid`, `RadiusOutlierRemoval`, `StatisticalOutlierRemoval`, `NormalEstimation`, `RansacPlane`, `EuclideanClustering`) are stateful, zero-vtable C++ classes that own their persistent scratch buffers across frames (ADR-0010). Interoperability is verified via static C++ concepts (`search_concepts.h`, `filter_concept.h`, `segmentation_concepts.h`), enabling 100% compiler inlining and vectorization without virtual method dispatch.
+
+#### Pattern E: Slotted Register-File Pipeline Engine (ADR-0012)
+Pipelines are constructed as Directed Acyclic Graphs (DAGs) over an extendible, pre-allocated `RegisterFile`. Stages communicate via typed, pre-bound slot pointers (`in<T>`, `out<T>`, `param<T>`), eliminating string hashing, heap allocations, and runtime downcasts in the hot loop. DAG execution is scheduled at compile/setup time via Kahn's algorithm with stage-level lifecycle and probe hooks.
+
 ---
 
 ## 3. RVV 1.0 Vector Optimization Standards

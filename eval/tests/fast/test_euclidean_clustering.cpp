@@ -385,6 +385,78 @@ static void test_against_naive_random() {
           "Random cloud: cluster membership matches naive BFS exactly");
 }
 
+static void test_functor_and_cluster_result() {
+    std::cout << "[DEBUG] Running test_functor_and_cluster_result..." << std::endl;
+    // 2 blobs of 5 points each
+    std::vector<PointXYZ> pts;
+    for (int i = 0; i < 5; ++i) pts.push_back({0.0f + i * 0.01f, 0.0f, 0.0f});
+    for (int i = 0; i < 5; ++i) pts.push_back({10.0f + i * 0.01f, 10.0f, 10.0f});
+
+    auto buf = make_cloud(pts);
+
+    EuclideanClustering ec(0.1f, 1, 100);
+    ec.reserve(pts.size());
+
+    ClusterResult cr_grid;
+    ec.set_use_spatial_grid(true);
+    ec(buf.cloud, cr_grid);
+
+    CHECK(cr_grid.num_clusters() == 2, "ClusterResult grid: exactly 2 clusters");
+    CHECK(cr_grid.offsets.size() == 3, "ClusterResult offsets: size == num_clusters + 1");
+    CHECK(cr_grid.indices.size() == 10, "ClusterResult indices: total points == 10");
+
+    auto [c0_idx, c0_len] = cr_grid.cluster(0);
+    auto [c1_idx, c1_len] = cr_grid.cluster(1);
+    CHECK(c0_len == 5 && c1_len == 5, "ClusterResult cluster lengths both 5");
+
+    ClusterResult cr_direct;
+    ec.set_use_spatial_grid(false);
+    ec(buf.cloud, cr_direct);
+    CHECK(cr_direct.num_clusters() == 2, "ClusterResult direct search: exactly 2 clusters");
+
+    // Multi-frame stability check
+    for (int frame = 0; frame < 5; ++frame) {
+        ec(buf.cloud, cr_grid);
+        if (cr_grid.num_clusters() != 2) {
+            CHECK(false, "ClusterResult multi-frame consistency failed");
+            return;
+        }
+    }
+    CHECK(true, "ClusterResult multi-frame stability verified");
+}
+
+static void test_symmetric_union_find() {
+    std::cout << "[DEBUG] Running test_symmetric_union_find...\n" << std::flush;
+    std::vector<PointXYZ> pts;
+    for (int i = 0; i < 5; ++i) pts.push_back({0.0f + i * 0.01f, 0.0f, 0.0f});
+    for (int i = 0; i < 5; ++i) pts.push_back({10.0f + i * 0.01f, 10.0f, 10.0f});
+    auto buf = make_cloud(pts);
+
+    EuclideanClustering ec_uf(0.1f, 1, 100);
+    ec_uf.set_method(ClusteringMethod::SymmetricUnionFind);
+    ec_uf.reserve(pts.size());
+
+    ClusterResult cr;
+    ec_uf(buf.cloud, cr);
+
+    CHECK(cr.num_clusters() == 2, "SymmetricUnionFind: exactly 2 clusters");
+    CHECK(cr.offsets.size() == 3, "SymmetricUnionFind offsets: size == num_clusters + 1");
+    CHECK(cr.indices.size() == 10, "SymmetricUnionFind indices: total points == 10");
+
+    auto [c0_idx, c0_len] = cr.cluster(0);
+    auto [c1_idx, c1_len] = cr.cluster(1);
+    CHECK(c0_len == 5 && c1_len == 5, "SymmetricUnionFind cluster lengths both 5");
+
+    // Verify indices in each cluster match blob definitions
+    std::vector<uint32_t> all_indices(cr.indices.begin(), cr.indices.end());
+    std::sort(all_indices.begin(), all_indices.end());
+    bool all_present = true;
+    for (uint32_t i = 0; i < 10; ++i) {
+        if (all_indices[i] != i) all_present = false;
+    }
+    CHECK(all_present, "SymmetricUnionFind: all 10 point indices present and preserved");
+}
+
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -399,6 +471,8 @@ int main() {
     test_indices_sorted(); std::cout << std::flush;
     test_tolerance_boundary(); std::cout << std::flush;
     test_against_naive_random(); std::cout << std::flush;
+    test_functor_and_cluster_result(); std::cout << std::flush;
+    test_symmetric_union_find(); std::cout << std::flush;
 
     std::cout << "\n------------------------------------------\n";
     std::cout << "Results: " << g_passed << " passed, " << g_failed << " failed.\n" << std::flush;

@@ -13,8 +13,11 @@
 
 #include "filters/voxel_grid.h"
 #include "filters/statistical_outlier_removal.h"
+#include "filters/radius_outlier_removal.h"
+#include "filters/filter_concept.h"
 
 #include "features/normal_estimation.h"
+#include "features/fused_filter_normals.h"
 
 #include "search/octree.h"
 #include "search/spatial_hashing.h"
@@ -23,9 +26,15 @@
 #include "search/caravan_radius_search.h"
 #include "search/caravan_pointer_octree.h"
 #include "search/fast_3d_spatial_grid.h"
+#include "search/search_concepts.h"
 
 #include "segmentation/ransac_plane.h"
 #include "segmentation/euclidean_clustering.h"
+#include "segmentation/segmentation_concepts.h"
+
+#include "pipeline/register_file.h"
+#include "pipeline/tagged_binding.h"
+#include "pipeline/pipeline_manager.h"
 
 #include "io/simple_pcd_loader.h"
 // IWYU pragma: end_exports

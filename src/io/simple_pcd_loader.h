@@ -102,7 +102,7 @@ inline bool parsePCDHeader(std::ifstream& file, PCDHeader& header, std::size_t& 
 
 } // namespace detail
 
-inline bool loadPCD(const std::string& filename, PointCloudSoA& cloud) {
+inline bool loadPCD(const std::string& filename, PointCloud& cloud) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << std::endl;
@@ -138,7 +138,7 @@ inline bool loadPCD(const std::string& filename, PointCloudSoA& cloud) {
         return false;
     }
 
-    cloud.n = header.points;
+    cloud.resize(header.points);
     file.seekg(data_pos);
 
     if (header.data_type == "binary_compressed") {
@@ -162,12 +162,12 @@ inline bool loadPCD(const std::string& filename, PointCloudSoA& cloud) {
             int size = (f < header.sizes.size()) ? header.sizes[f] : 4;
             std::size_t field_total_bytes = size * count * header.points;
 
-            if (static_cast<int>(f) == x_idx && cloud.x) {
-                std::memcpy(cloud.x, uncompressed_data.data() + field_offset_in_buf, header.points * sizeof(float));
-            } else if (static_cast<int>(f) == y_idx && cloud.y) {
-                std::memcpy(cloud.y, uncompressed_data.data() + field_offset_in_buf, header.points * sizeof(float));
-            } else if (static_cast<int>(f) == z_idx && cloud.z) {
-                std::memcpy(cloud.z, uncompressed_data.data() + field_offset_in_buf, header.points * sizeof(float));
+            if (static_cast<int>(f) == x_idx) {
+                std::memcpy(cloud.x.data(), uncompressed_data.data() + field_offset_in_buf, header.points * sizeof(float));
+            } else if (static_cast<int>(f) == y_idx) {
+                std::memcpy(cloud.y.data(), uncompressed_data.data() + field_offset_in_buf, header.points * sizeof(float));
+            } else if (static_cast<int>(f) == z_idx) {
+                std::memcpy(cloud.z.data(), uncompressed_data.data() + field_offset_in_buf, header.points * sizeof(float));
             }
             field_offset_in_buf += field_total_bytes;
         }
@@ -177,9 +177,9 @@ inline bool loadPCD(const std::string& filename, PointCloudSoA& cloud) {
         std::vector<char> point_buf(point_step);
         for (std::size_t i = 0; i < header.points; ++i) {
             file.read(point_buf.data(), point_step);
-            if (cloud.x) cloud.x[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[x_idx]);
-            if (cloud.y) cloud.y[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[y_idx]);
-            if (cloud.z) cloud.z[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[z_idx]);
+            cloud.x[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[x_idx]);
+            cloud.y[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[y_idx]);
+            cloud.z[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[z_idx]);
         }
         std::cout << "Loaded " << header.points << " points (Binary)." << std::endl;
         return true;
@@ -194,13 +194,13 @@ inline bool loadPCD(const std::string& filename, PointCloudSoA& cloud) {
             while (iss >> token) tokens.push_back(token);
 
             if (tokens.size() >= header.fields.size()) {
-                if (cloud.x) cloud.x[i] = std::stof(tokens[x_idx]);
-                if (cloud.y) cloud.y[i] = std::stof(tokens[y_idx]);
-                if (cloud.z) cloud.z[i] = std::stof(tokens[z_idx]);
+                cloud.x[i] = std::stof(tokens[x_idx]);
+                cloud.y[i] = std::stof(tokens[y_idx]);
+                cloud.z[i] = std::stof(tokens[z_idx]);
                 i++;
             }
         }
-        cloud.n = i;
+        cloud.resize(i);
         std::cout << "Loaded " << cloud.n << " points (ASCII)." << std::endl;
         return true;
     }
@@ -297,7 +297,7 @@ inline bool loadPCD(const std::string& filename, std::vector<PointXYZ>& points) 
     return false;
 }
 
-inline bool savePCD(const std::string& filename, const PointCloudSoA& cloud, bool binary = true) {
+inline bool savePCD(const std::string& filename, const PointCloudView& cloud, bool binary = true) {
     std::ofstream file(filename, binary ? (std::ios::binary | std::ios::out) : std::ios::out);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
@@ -366,7 +366,7 @@ inline bool savePCDRGB(const std::string& filename, const std::vector<PointXYZRG
         std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
         return false;
     }
-    
+
     file << "# .PCD v.7 - Point Cloud Data file format\n";
     file << "VERSION .7\n";
     file << "FIELDS x y z rgb\n";
@@ -403,6 +403,11 @@ inline bool savePCDRGB(const std::string& filename, const std::vector<PointXYZRG
         }
     }
     return true;
+}
+
+
+inline bool savePCD(const std::string& filename, const PointCloud& cloud, bool binary = true) {
+    return savePCD(filename, cloud.view(), binary);
 }
 
 } // namespace rvpoint

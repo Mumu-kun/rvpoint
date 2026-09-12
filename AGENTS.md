@@ -50,6 +50,7 @@ rvpoint/
 │   ├── filters/                # Voxel downsampling (v2) & Statistical Outlier Removal
 │   ├── search/                 # Octree, SpatialHash, PointerOctree, Caravan search
 │   ├── segmentation/           # RANSAC plane fitting & Euclidean clustering
+│   ├── pipeline/               # Slotted register file, DAG scheduler, PipelineManager (ADR-0012)
 │   ├── io/                     # Zero-dependency simple PCD file reader & writer
 │   └── include/                # Public umbrella header (rvpoint.h) & rvv_pcl forwarder
 │

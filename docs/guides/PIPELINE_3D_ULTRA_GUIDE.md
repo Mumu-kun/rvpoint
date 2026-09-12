@@ -1,6 +1,9 @@
 # Pipeline 3D Ultra — Parameters & CLI Command Guide
 
-Comprehensive reference guide for all command-line parameters, options, default values, and operational use-cases for [`pipeline_3d_ultra`](file:///workspace/src/tools/pipeline_3d_ultra.cpp).
+Comprehensive reference guide for all command-line parameters, options, default values, and operational use-cases for [`pipeline_3d_ultra`](../../eval/pipelines/pipeline_3d_ultra.cpp).
+
+> [!NOTE]
+> `pipeline_3d_ultra` serves as an end-to-end evaluation reference pipeline in `eval/pipelines/`. Its underlying algorithms (SPRT RANSAC, Cardano surface normals, symmetric spatial grid clustering, and voxel downsampling) have been standardized into pure, zero-vtable library classes in `src/` (`rvpoint::VoxelGrid`, `rvpoint::RadiusOutlierRemoval`, `rvpoint::StatisticalOutlierRemoval`, `rvpoint::NormalEstimation`, `rvpoint::RansacPlane`, `rvpoint::EuclideanClustering`, `rvpoint::Fast3DSpatialGrid`), composable through the `PipelineManager` (ADR-0012).
 
 ---
 

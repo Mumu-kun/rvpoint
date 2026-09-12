@@ -35,7 +35,7 @@ namespace rvpoint {
  * @param values  Array of uint32_t point indices (permuted to match sorted keys)
  * @param n       Number of elements
  */
-inline void radix_sort_pairs(int32_t* keys, uint32_t* values, size_t n) {
+inline void radix_sort_pairs(int32_t* keys, uint32_t* values, size_t n, uint32_t* tmp_k_buf = nullptr, uint32_t* tmp_v_buf = nullptr) {
     if (n <= 1) return;
 
     if (n <= 64) {
@@ -71,14 +71,20 @@ inline void radix_sort_pairs(int32_t* keys, uint32_t* values, size_t n) {
     constexpr int kBuckets   = 1 << kRadixBits; // 256
     constexpr uint32_t kMask = kBuckets - 1;    // 0xFF
 
-    // Only 2 temporary buffers (one pair of arrays)
-    std::vector<uint32_t> tmp_k(n);
-    std::vector<uint32_t> tmp_v(n);
+    // Temporary buffers (use caller-provided scratch or allocate local)
+    std::vector<uint32_t> local_tmp_k;
+    std::vector<uint32_t> local_tmp_v;
+    uint32_t* dst_k = tmp_k_buf;
+    uint32_t* dst_v = tmp_v_buf;
+    if (!dst_k || !dst_v) {
+        local_tmp_k.resize(n);
+        local_tmp_v.resize(n);
+        dst_k = local_tmp_k.data();
+        dst_v = local_tmp_v.data();
+    }
 
     uint32_t* src_k = k_arr;
-    uint32_t* dst_k = tmp_k.data();
     uint32_t* src_v = values;
-    uint32_t* dst_v = tmp_v.data();
 
     // 4 passes guaranteed so data returns to original k_arr (keys) and values:
     // Pass 0: k_arr -> tmp
@@ -130,11 +136,11 @@ inline void radix_sort_pairs(int32_t* keys, uint32_t* values, size_t n) {
  * assign disjoint scatter offsets per thread. Eliminates memory contention and
  * scales across all 8 cores on SpacemiT K1.
  */
-inline void radix_sort_pairs_parallel(int32_t* keys, uint32_t* values, size_t n, int num_threads = 8) {
+inline void radix_sort_pairs_parallel(int32_t* keys, uint32_t* values, size_t n, int num_threads = 8, uint32_t* tmp_k_buf = nullptr, uint32_t* tmp_v_buf = nullptr) {
     if (n <= 1) return;
 #if defined(_OPENMP)
     if (num_threads <= 1 || n < 4096) {
-        radix_sort_pairs(keys, values, n);
+        radix_sort_pairs(keys, values, n, tmp_k_buf, tmp_v_buf);
         return;
     }
     if (num_threads > 32) num_threads = 32;
@@ -157,11 +163,19 @@ inline void radix_sort_pairs_parallel(int32_t* keys, uint32_t* values, size_t n,
     constexpr int kBuckets   = 1 << kRadixBits; // 256
     constexpr uint32_t kMask = kBuckets - 1;
 
-    std::vector<uint32_t> tmp_k(n);
-    std::vector<uint32_t> tmp_v(n);
+    std::vector<uint32_t> local_tmp_k;
+    std::vector<uint32_t> local_tmp_v;
+    uint32_t* dst_k = tmp_k_buf;
+    uint32_t* dst_v = tmp_v_buf;
+    if (!dst_k || !dst_v) {
+        local_tmp_k.resize(n);
+        local_tmp_v.resize(n);
+        dst_k = local_tmp_k.data();
+        dst_v = local_tmp_v.data();
+    }
 
-    uint32_t* k_ptrs[2] = {k_arr, tmp_k.data()};
-    uint32_t* v_ptrs[2] = {values, tmp_v.data()};
+    uint32_t* k_ptrs[2] = {k_arr, dst_k};
+    uint32_t* v_ptrs[2] = {values, dst_v};
 
     alignas(64) uint32_t thread_hist[32][kBuckets];
     alignas(64) uint32_t thread_offset[32][kBuckets];
