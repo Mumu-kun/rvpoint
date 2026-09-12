@@ -195,23 +195,21 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RVPoint Live 3D Perception — Orange Pi RV2 (RVV 1.0)</title>
+  <title>RVV PCL LIVE — Orange Pi RV2 (RVV 1.0)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-color: #0b0e14;
-      --card-bg: rgba(18, 24, 38, 0.75);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --accent-cyan: #00d2ff;
-      --accent-green: #00e676;
-      --accent-purple: #7c4dff;
-      --accent-orange: #ff9100;
-      --text-main: #f0f4fc;
-      --text-muted: #8a99ad;
-      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', monospace;
+      --c-deep-blue: #003049;
+      --c-dark-red: #780000;
+      --c-vivid-red: #c1121f;
+      --c-cream: #fdf0d5;
+      --c-steel-blue: #669bbc;
+      --bg-dark: #001726;
+      --panel-bg: rgba(0, 48, 73, 0.92);
+      --panel-border: rgba(102, 155, 188, 0.35);
+      --font-family: 'Oswald', sans-serif;
     }
 
     * {
@@ -225,9 +223,10 @@ HTML_PAGE = """<!DOCTYPE html>
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: var(--bg-color);
-      font-family: var(--font-ui);
-      color: var(--text-main);
+      background-color: var(--bg-dark);
+      font-family: var(--font-family);
+      font-weight: 400;
+      color: var(--c-cream);
     }
 
     #viewport {
@@ -239,17 +238,17 @@ HTML_PAGE = """<!DOCTYPE html>
       z-index: 1;
     }
 
-    /* Glassmorphic Overlays */
+    /* Floating Panels */
     .glass-panel {
       position: absolute;
       z-index: 10;
-      background: var(--card-bg);
+      background: var(--panel-bg);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
-      padding: 16px 20px;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      padding: 14px 18px;
       pointer-events: auto;
     }
 
@@ -257,23 +256,22 @@ HTML_PAGE = """<!DOCTYPE html>
     #header-panel {
       top: 20px;
       left: 20px;
-      min-width: 320px;
+      min-width: 280px;
     }
 
     .brand-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .brand-title {
-      font-size: 16px;
+      font-size: 20px;
       font-weight: 700;
-      letter-spacing: 0.5px;
-      background: linear-gradient(135deg, #00d2ff 0%, #7c4dff 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      letter-spacing: 1.5px;
+      color: var(--c-cream);
+      text-transform: uppercase;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -284,59 +282,57 @@ HTML_PAGE = """<!DOCTYPE html>
       align-items: center;
       gap: 6px;
       padding: 4px 10px;
-      border-radius: 20px;
+      border-radius: 4px;
       font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.3px;
+      font-weight: 500;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     .status-badge.connected {
-      background: rgba(0, 230, 118, 0.15);
-      border-color: rgba(0, 230, 118, 0.4);
-      color: #00e676;
+      background: rgba(102, 155, 188, 0.18);
+      border: 1px solid var(--c-steel-blue);
+      color: var(--c-cream);
     }
 
     .status-badge.disconnected {
-      background: rgba(255, 61, 0, 0.15);
-      border-color: rgba(255, 61, 0, 0.4);
-      color: #ff3d00;
+      background: var(--c-dark-red);
+      border: 1px solid var(--c-vivid-red);
+      color: var(--c-cream);
     }
 
     .status-dot {
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background-color: currentColor;
+      background-color: var(--c-steel-blue);
     }
 
     .connected .status-dot {
-      box-shadow: 0 0 8px #00e676;
-      animation: pulse 2s infinite;
+      background-color: var(--c-steel-blue);
+      box-shadow: 0 0 8px var(--c-steel-blue);
     }
 
-    @keyframes pulse {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.2); opacity: 1; }
-      100% { transform: scale(0.95); opacity: 0.8; }
+    .disconnected .status-dot {
+      background-color: var(--c-vivid-red);
+      box-shadow: 0 0 8px var(--c-vivid-red);
     }
 
     .meta-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      font-size: 12px;
-      color: var(--text-muted);
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      padding-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--c-steel-blue);
+      border-top: 1px solid rgba(102, 155, 188, 0.2);
+      padding-top: 10px;
+      letter-spacing: 0.5px;
     }
 
     .meta-item b {
-      color: var(--text-main);
-      font-family: var(--font-mono);
-      font-size: 13px;
+      color: var(--c-cream);
+      font-weight: 600;
+      margin-left: 4px;
     }
 
     /* Metric Cards Grid (Top Right) */
@@ -344,123 +340,143 @@ HTML_PAGE = """<!DOCTYPE html>
       top: 20px;
       right: 20px;
       display: flex;
-      gap: 12px;
+      gap: 10px;
     }
 
     .metric-card {
-      min-width: 105px;
+      min-width: 96px;
       text-align: center;
-      padding: 10px 14px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 8px;
+      padding: 8px 12px;
+      background: rgba(0, 30, 48, 0.7);
+      border: 1px solid rgba(102, 155, 188, 0.25);
+      border-radius: 6px;
     }
 
     .metric-label {
-      font-size: 10px;
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      margin-bottom: 4px;
+      letter-spacing: 1px;
+      color: var(--c-steel-blue);
+      font-weight: 500;
+      margin-bottom: 2px;
     }
 
     .metric-value {
-      font-family: var(--font-mono);
-      font-size: 17px;
+      font-size: 20px;
       font-weight: 700;
-      color: var(--text-main);
+      color: var(--c-cream);
+      letter-spacing: 0.5px;
     }
 
-    .metric-value.cyan { color: var(--accent-cyan); }
-    .metric-value.green { color: var(--accent-green); }
-    .metric-value.purple { color: var(--accent-purple); }
-    .metric-value.orange { color: var(--accent-orange); }
+    .metric-value.blue { color: var(--c-steel-blue); }
+    .metric-value.red { color: var(--c-vivid-red); }
 
-    /* Bottom Control Bar */
+    /* Bottom Floating Controls */
     #controls-panel {
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       align-items: center;
-      gap: 20px;
-      padding: 12px 24px;
+      gap: 16px;
+      padding: 10px 20px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
     .control-group {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 500;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--c-cream);
     }
 
     .toggle-switch {
       position: relative;
       width: 38px;
       height: 20px;
-      background: rgba(255, 255, 255, 0.15);
+      background: #002235;
+      border: 1px solid var(--c-steel-blue);
       border-radius: 20px;
       cursor: pointer;
-      transition: background 0.25s;
+      transition: background 0.2s;
     }
 
     .toggle-switch.active {
-      background: var(--accent-cyan);
+      background: var(--c-vivid-red);
+      border-color: var(--c-dark-red);
     }
 
     .toggle-thumb {
       position: absolute;
       top: 2px;
       left: 2px;
-      width: 16px;
-      height: 16px;
-      background: #ffffff;
+      width: 14px;
+      height: 14px;
+      background: var(--c-cream);
       border-radius: 50%;
-      transition: transform 0.25s;
+      transition: transform 0.2s;
     }
 
     .toggle-switch.active .toggle-thumb {
       transform: translateX(18px);
     }
 
+    /* Buttons: STRICTLY SOLID, ZERO GRADIENTS */
     .btn {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: var(--text-main);
-      padding: 7px 14px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
+      background-color: var(--c-deep-blue);
+      border: 1px solid var(--c-steel-blue);
+      color: var(--c-cream);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-family: var(--font-family);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.2s;
+      transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+      outline: none;
     }
 
     .btn:hover {
-      background: rgba(255, 255, 255, 0.18);
-      border-color: rgba(255, 255, 255, 0.3);
+      background-color: var(--c-steel-blue);
+      color: var(--c-deep-blue);
+      border-color: var(--c-cream);
       transform: translateY(-1px);
     }
 
+    .btn:active {
+      transform: scale(0.97);
+    }
+
     .btn-primary {
-      background: linear-gradient(135deg, rgba(0, 210, 255, 0.2) 0%, rgba(124, 77, 255, 0.2) 100%);
-      border-color: rgba(0, 210, 255, 0.4);
-      color: #00d2ff;
+      background-color: var(--c-vivid-red);
+      border: 1px solid var(--c-dark-red);
+      color: var(--c-cream);
+      font-weight: 700;
     }
 
     .btn-primary:hover {
-      background: linear-gradient(135deg, rgba(0, 210, 255, 0.3) 0%, rgba(124, 77, 255, 0.3) 100%);
-      border-color: rgba(0, 210, 255, 0.8);
+      background-color: var(--c-dark-red);
+      border-color: var(--c-vivid-red);
+      color: var(--c-cream);
+      transform: translateY(-1px);
     }
 
     input[type="range"] {
       -webkit-appearance: none;
-      width: 90px;
+      width: 80px;
       height: 4px;
-      background: rgba(255, 255, 255, 0.2);
+      background: #002235;
+      border: 1px solid rgba(102, 155, 188, 0.4);
       border-radius: 2px;
       outline: none;
     }
@@ -470,20 +486,29 @@ HTML_PAGE = """<!DOCTYPE html>
       width: 14px;
       height: 14px;
       border-radius: 50%;
-      background: var(--accent-cyan);
+      background: var(--c-vivid-red);
+      border: 2px solid var(--c-cream);
       cursor: pointer;
     }
 
-    /* Crosshair & Grid Helpers */
+    #size-val {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--c-cream);
+      min-width: 44px;
+    }
+
+    /* Hint text */
     #hint {
       position: absolute;
       bottom: 24px;
       right: 24px;
       z-index: 5;
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.3);
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      color: rgba(102, 155, 188, 0.5);
       text-align: right;
-      line-height: 1.6;
+      line-height: 1.5;
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -496,8 +521,8 @@ HTML_PAGE = """<!DOCTYPE html>
   <div id="header-panel" class="glass-panel">
     <div class="brand-row">
       <div class="brand-title">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-        RVPoint 3D Live
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        RVV PCL LIVE
       </div>
       <div id="status-badge" class="status-badge disconnected">
         <span class="status-dot"></span>
@@ -507,8 +532,6 @@ HTML_PAGE = """<!DOCTYPE html>
     <div class="meta-row">
       <div class="meta-item">Hardware: <b>Orange Pi RV2</b></div>
       <div class="meta-item">Architecture: <b>RVV 1.0 (Vector)</b></div>
-      <div class="meta-item">Stream Host: <b id="host-label">--</b></div>
-      <div class="meta-item">Client FPS: <b id="fps-label">0</b></div>
     </div>
   </div>
 
@@ -520,11 +543,11 @@ HTML_PAGE = """<!DOCTYPE html>
     </div>
     <div class="metric-card">
       <div class="metric-label">Points</div>
-      <div id="metric-points" class="metric-value cyan">0</div>
+      <div id="metric-points" class="metric-value blue">0</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Clusters</div>
-      <div id="metric-clusters" class="metric-value purple">0</div>
+      <div id="metric-clusters" class="metric-value red">0</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Ground Pts</div>
@@ -532,7 +555,7 @@ HTML_PAGE = """<!DOCTYPE html>
     </div>
     <div class="metric-card">
       <div class="metric-label">RVV Compute</div>
-      <div id="metric-compute" class="metric-value green">0.0 ms</div>
+      <div id="metric-compute" class="metric-value blue">0.0 ms</div>
     </div>
   </div>
 
@@ -540,19 +563,19 @@ HTML_PAGE = """<!DOCTYPE html>
   <div id="controls-panel" class="glass-panel">
     <div class="control-group">
       <span>Ground Plane:</span>
-      <div id="toggle-ground" class="toggle-switch active">
+      <div id="toggle-ground" class="toggle-switch active" title="Toggle ground plane points on/off">
         <div class="toggle-thumb"></div>
       </div>
     </div>
 
     <div class="control-group">
       <span>Point Size:</span>
-      <input type="range" id="size-slider" min="1" max="10" step="0.5" value="3.5">
-      <span id="size-val" style="font-family: var(--font-mono); font-size: 11px;">3.5</span>
+      <input type="range" id="size-slider" min="1" max="10" step="0.5" value="3.0">
+      <span id="size-val">3.0 px</span>
     </div>
 
-    <button id="btn-reset" class="btn">Reset Camera</button>
-    <button id="btn-snapshot" class="btn btn-primary">Save PCD Snapshot</button>
+    <button id="btn-reset" class="btn" title="Center camera on point cloud">Reset Camera</button>
+    <button id="btn-snapshot" class="btn btn-primary" title="Download current frame as .PCD file">Save PCD Snapshot</button>
   </div>
 
   <div id="hint">
@@ -565,21 +588,23 @@ HTML_PAGE = """<!DOCTYPE html>
     // State management
     const state = {
       showGround: true,
-      pointSize: 3.5,
+      pointSize: 3.0,
       lastFrameIdx: -1,
       currentPoints: null,
       currentColors: null,
       groundCount: 0,
+      cameraInitialized: false,
     };
 
     // ── 1. THREE.JS INITIALIZATION ──────────────────────────────────────────
     const container = document.getElementById('viewport');
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b0e14);
+    scene.background = new THREE.Color(0x001726);
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.05, 50.0);
-    camera.position.set(0, -1.8, 1.4);
-    camera.up.set(0, 0, 1);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100.0);
+    // Standard 3D right-handed orientation: +Y is UP (matching ARKit and standard PCD viewers)
+    camera.up.set(0, 1, 0);
+    camera.position.set(0, 0.5, 3.0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -589,20 +614,49 @@ HTML_PAGE = """<!DOCTYPE html>
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0, 1.8, -0.2);
+    controls.target.set(0, 0, -2.5);
     controls.update();
 
-    // Subtle coordinate grid helper
-    const grid = new THREE.GridHelper(10, 20, 0x1f293d, 0x141a29);
-    grid.rotation.x = Math.PI / 2;
+    // Subtle horizontal coordinate ground grid in the X-Z plane (Y = floor)
+    const grid = new THREE.GridHelper(10, 20, 0x669bbc, 0x003049);
+    grid.position.set(0, -0.85, -2.5);
     scene.add(grid);
 
+    // Coordinate axes helper (RGB = XYZ, size = 0.5m)
+    const axesHelper = new THREE.AxesHelper(0.5);
+    scene.add(axesHelper);
+
+    // Generate circular antialiased point sprite texture
+    function createCircleTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+      grad.addColorStop(0.75, 'rgba(255, 255, 255, 0.95)');
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(32, 32, 30, 0, Math.PI * 2);
+      ctx.fill();
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    const circleTexture = createCircleTexture();
+
     // Dynamic PointCloud Geometry
+    // sizeAttenuation: false ensures points are rendered in SCREEN PIXELS (2-3px)
+    // exactly like VS Code's 3D Point Cloud Visualizer, CloudCompare, and MeshLab!
     const geometry = new THREE.BufferGeometry();
     const material = new THREE.PointsMaterial({
       size: state.pointSize,
       vertexColors: true,
-      sizeAttenuation: true,
+      sizeAttenuation: false,
+      map: circleTexture,
+      transparent: true,
+      alphaTest: 0.05,
+      depthWrite: true,
     });
     const pointCloud = new THREE.Points(geometry, material);
     scene.add(pointCloud);
@@ -627,13 +681,35 @@ HTML_PAGE = """<!DOCTYPE html>
       const v = parseFloat(e.target.value);
       state.pointSize = v;
       material.size = v;
-      sizeVal.textContent = v.toFixed(1);
+      sizeVal.textContent = v.toFixed(1) + ' px';
     });
 
-    document.getElementById('btn-reset').addEventListener('click', () => {
-      camera.position.set(0, -1.8, 1.4);
-      controls.target.set(0, 1.8, -0.2);
+    function fitCameraToCloud() {
+      if (!geometry.attributes.position || geometry.attributes.position.count === 0) return;
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox;
+      if (!box) return;
+
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z, 0.5);
+
+      controls.target.copy(center);
+
+      // Position camera in front of the object looking towards it
+      const dist = maxDim * 1.6;
+      camera.position.set(center.x, center.y + maxDim * 0.15, center.z + dist);
+      camera.lookAt(center);
       controls.update();
+
+      // Position ground grid right below the lowest point
+      grid.position.set(center.x, box.min.y - 0.005, center.z);
+    }
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      fitCameraToCloud();
     });
 
     document.getElementById('btn-snapshot').addEventListener('click', () => {
@@ -669,17 +745,12 @@ HTML_PAGE = """<!DOCTYPE html>
     // ── 3. REAL-TIME DATA STREAMING LOOP ────────────────────────────────────
     const statusBadge = document.getElementById('status-badge');
     const statusText = document.getElementById('status-text');
-    const hostLabel = document.getElementById('host-label');
-    const fpsLabel = document.getElementById('fps-label');
 
     const mFrame = document.getElementById('metric-frame');
     const mPoints = document.getElementById('metric-points');
     const mClusters = document.getElementById('metric-clusters');
     const mGround = document.getElementById('metric-ground');
     const mCompute = document.getElementById('metric-compute');
-
-    let fpsFrames = 0;
-    let fpsTimer = performance.now();
 
     function updateRenderedPoints() {
       if (!state.currentPoints) return;
@@ -688,6 +759,7 @@ HTML_PAGE = """<!DOCTYPE html>
       let cols = state.currentColors;
 
       if (!state.showGround && state.groundCount > 0) {
+        // Ground points are packed first; slice to show ONLY obstacle clusters
         const offset = state.groundCount * 3;
         pts = pts.subarray(offset);
         cols = cols.subarray(offset);
@@ -696,6 +768,7 @@ HTML_PAGE = """<!DOCTYPE html>
       geometry.setAttribute('position', new THREE.BufferAttribute(pts, 3));
       geometry.setAttribute('color', new THREE.BufferAttribute(cols, 3));
       geometry.computeBoundingSphere();
+      geometry.computeBoundingBox();
     }
 
     async function streamLoop() {
@@ -738,7 +811,8 @@ HTML_PAGE = """<!DOCTYPE html>
       state.lastFrameIdx = frameIdx;
       state.groundCount = groundCnt;
 
-      // Extract coordinates and packed colors
+      // Extract coordinates and packed colors directly
+      // Exact XYZ matching standard PCD format without distortion
       const f32 = new Float32Array(buf, 28, ptCnt * 4);
       const u32 = new Uint32Array(buf, 28, ptCnt * 4);
 
@@ -747,10 +821,9 @@ HTML_PAGE = """<!DOCTYPE html>
 
       for (let i = 0; i < ptCnt; i++) {
         // Point layout: [x, y, z, packed_rgb]
-        // Coordinate transform: map camera optical Y-down to world Z-up
         positions[i * 3 + 0] = f32[i * 4 + 0];
-        positions[i * 3 + 1] = f32[i * 4 + 2];
-        positions[i * 3 + 2] = -f32[i * 4 + 1];
+        positions[i * 3 + 1] = f32[i * 4 + 1];
+        positions[i * 3 + 2] = f32[i * 4 + 2];
 
         const packed = u32[i * 4 + 3];
         colors[i * 3 + 0] = ((packed >> 16) & 0xFF) / 255.0;
@@ -762,26 +835,18 @@ HTML_PAGE = """<!DOCTYPE html>
       state.currentColors = colors;
 
       updateRenderedPoints();
-    }
 
-    // Fetch initial host info
-    fetch('/status').then(r => r.json()).then(d => {
-      hostLabel.textContent = `${d.host}:${d.port}`;
-    }).catch(() => {});
+      if (!state.cameraInitialized) {
+        state.cameraInitialized = true;
+        fitCameraToCloud();
+      }
+    }
 
     // Render loop
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
-
-      fpsFrames++;
-      const now = performance.now();
-      if (now - fpsTimer >= 1000) {
-        fpsLabel.textContent = fpsFrames;
-        fpsFrames = 0;
-        fpsTimer = now;
-      }
     }
 
     animate();
@@ -823,6 +888,49 @@ class WebStreamHandler(http.server.BaseHTTPRequestHandler):
             else:
                 self.send_response(204)  # No content yet
                 self.end_headers()
+
+        elif self.path.startswith("/sample_frame"):
+            repo_root = Path(__file__).resolve().parent.parent
+            sample_candidates = [
+                repo_root / "demonstration" / "prcsd" / "processed_frame_000003_070422.pcd",
+                repo_root / "demonstration" / "prcsd" / "clusters_only_frame_000003_070422.pcd",
+            ]
+            sample_path = None
+            for cand in sample_candidates:
+                if cand.is_file():
+                    sample_path = cand
+                    break
+
+            if sample_path:
+                with open(sample_path, "rb") as f:
+                    while True:
+                        line = f.readline().decode("latin1", errors="ignore")
+                        if line.startswith("DATA"):
+                            break
+                    raw_pcd = f.read()
+
+                pt_cnt = len(raw_pcd) // 16
+                is_processed = "processed_" in sample_path.name
+                ground_cnt = 2555 if is_processed else 0
+                cl_cnt = 4
+                hdr = struct.pack(
+                    HEADER_FORMAT,
+                    POINTS_STREAM_MAGIC,
+                    3,
+                    pt_cnt,
+                    ground_cnt,
+                    cl_cnt,
+                    14.7,
+                    18.2,
+                )
+                pkt = hdr + raw_pcd
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(pkt)))
+                self.end_headers()
+                self.wfile.write(pkt)
+            else:
+                self.send_error(404, "Sample PCD not found")
 
         elif self.path.startswith("/status"):
             _, meta = self.bridge.get_latest_data()

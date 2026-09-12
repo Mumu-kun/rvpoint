@@ -18,9 +18,10 @@ python3 demonstration/server_main.py \
   --ground-angle-thresh 6.7 \
   --cluster-tolerance 0.10 \
   --min-cluster 15 \
-  --no-save-scans
+  --stream-only \
+  --continuous
 ```
-*(Alternative alias: `--stream-only`)*
+*(Passing `--continuous` or `--interval 0` disables the 500ms throttle so every frame from iPhone 15 Pro LiDAR is processed immediately in real time).*
 
 ### Mode B: Save to Disk + Live Stream
 Saves raw scans to `main_scans/` and clustered scans to `processed_scans/`, while simultaneously broadcasting to the live visualizer:

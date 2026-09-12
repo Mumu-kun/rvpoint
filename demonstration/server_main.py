@@ -519,14 +519,15 @@ class FrameProcessor:
             self.latest_frame = frame
 
     def process_live_loop(self):
-        """Main periodic processing loop running at the specified interval (default: 500ms)."""
+        """Processing loop running either continuously or at a throttled interval."""
         while self.running:
-            now = time.time()
-            elapsed = now - self.last_capture_time
-            sleep_needed = self.args.interval - elapsed
-            if sleep_needed > 0:
-                time.sleep(min(sleep_needed, 0.02))
-                continue
+            if self.args.interval > 0:
+                now = time.time()
+                elapsed = now - self.last_capture_time
+                sleep_needed = self.args.interval - elapsed
+                if sleep_needed > 0:
+                    time.sleep(min(sleep_needed, 0.01))
+                    continue
 
             frame_to_process = None
             with self.frame_lock:
@@ -535,7 +536,7 @@ class FrameProcessor:
                     self.latest_frame = None  # Consume frame
 
             if frame_to_process is None:
-                time.sleep(0.01)
+                time.sleep(0.005)
                 continue
 
             self.last_capture_time = time.time()
@@ -803,7 +804,14 @@ def main():
         "--interval",
         type=float,
         default=0.5,
-        help="Periodic capture interval in seconds (default: 500ms / 0.5s)",
+        help="Periodic capture interval in seconds (default: 0.5s / 500ms; set 0 for continuous processing)",
+    )
+    ap.add_argument(
+        "--continuous",
+        dest="interval",
+        action="store_const",
+        const=0.0,
+        help="Process every incoming iPhone LiDAR frame continuously (0ms throttle)",
     )
     ap.add_argument(
         "--raw-dir",
@@ -936,7 +944,10 @@ def main():
     print("  RVPoint Real-Time LiDAR Stream Server (Hardware RVV 1.0)")
     print("=" * 76)
     print(f"Pipeline Binary      : {pipeline_bin} [{pipeline_type}]")
-    print(f"Periodic Capture     : Every {args.interval * 1000.0:.0f} ms ({1.0 / args.interval:.1f} Hz)")
+    if args.interval > 0:
+        print(f"Periodic Capture     : Every {args.interval * 1000.0:.0f} ms ({1.0 / args.interval:.1f} Hz)")
+    else:
+        print("Periodic Capture     : Continuous (Every incoming iPhone LiDAR frame processed immediately)")
     storage_mode = f"Enabled ({args.raw_dir}/ & {args.processed_dir}/)" if args.save_scans else "Disabled (Stream-Only / 0 disk writes)"
     print(f"Disk PCD Storage     : {storage_mode}")
     if not args.no_sync:
