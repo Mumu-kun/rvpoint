@@ -1,23 +1,27 @@
 cmake_minimum_required(VERSION 3.16)
 project(RVPoint LANGUAGES C CXX)
 
-# Set C++ Standard
+# ==============================================================================
+# 1. Project Configuration & Compiler Flags
+# ==============================================================================
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Static linking for QEMU compatibility
-set(CMAKE_EXE_LINKER_FLAGS "-static")
-option(RVV_PCL_USE_RVV "Enable RVV helper backend" ON)
+# Target-specific linking options (static for internal targets, dynamic allowed for official PCL)
+# ==============================================================================
+
+option(RVPOINT_USE_RVV "Enable RVV helper backend" ON)
+option(RVV_PCL_USE_RVV "Backward compatibility alias for RVPOINT_USE_RVV" ON)
 option(ENABLE_PROFILING "Enable diagnostic profiling instrumentation" OFF)
+option(GEM5_BUILD "Enable gem5 simulation compatibility fallbacks" OFF)
+
 set(RISCV_ARCH "rv64gcv" CACHE STRING "RISC-V ISA string, e.g. rv64gc or rv64gcv")
 set(RISCV_ABI "lp64d" CACHE STRING "RISC-V ABI")
 
-# RISC-V Specific Flags
-set(RISCV_FLAGS "-march=${RISCV_ARCH} -mabi=${RISCV_ABI}")
-set(RVV_PCL_ENABLE_RVV OFF)
-if(RVV_PCL_USE_RVV AND RISCV_ARCH MATCHES ".*v.*")
-    set(RVV_PCL_ENABLE_RVV ON)
+set(RVPOINT_ENABLE_RVV OFF)
+if(RVPOINT_USE_RVV AND RVV_PCL_USE_RVV AND (RISCV_ARCH MATCHES "gcv" OR RISCV_ARCH MATCHES "_v" OR RISCV_ARCH MATCHES "v[0-9]"))
+    set(RVPOINT_ENABLE_RVV ON)
     set(BACKEND_SUBDIR "rvv")
 else()
     set(BACKEND_SUBDIR "scalar")
@@ -27,139 +31,210 @@ if(ENABLE_PROFILING)
     add_compile_definitions(RVPOINT_ENABLE_PROFILING=1)
 endif()
 
+# Static linking is required for QEMU/cross-compilation; native hardware uses standard dynamic runtime linking
+if(CMAKE_CROSSCOMPILING OR GEM5_BUILD)
+    set(DEFAULT_BUILD_STATIC ON)
+else()
+    set(DEFAULT_BUILD_STATIC OFF)
+endif()
+option(BUILD_STATIC "Link executables statically" ${DEFAULT_BUILD_STATIC})
+
+set(RVPOINT_LINK_FLAGS "")
+if(BUILD_STATIC)
+    list(APPEND RVPOINT_LINK_FLAGS "-static")
+endif()
+if(NOT GEM5_BUILD)
+    list(APPEND RVPOINT_LINK_FLAGS "-fopenmp" "-pthread")
+endif()
+
 # Set output directory for executables (e.g. build/bin/rvv or build/bin/scalar)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/${BACKEND_SUBDIR}")
 
 message(STATUS "Compiler Flags: ${CMAKE_CXX_FLAGS}")
 message(STATUS "RISC-V ISA: ${RISCV_ARCH}")
 message(STATUS "RISC-V ABI: ${RISCV_ABI}")
-message(STATUS "RVV backend enabled: ${RVV_PCL_ENABLE_RVV}")
+message(STATUS "RVV backend enabled: ${RVPOINT_ENABLE_RVV}")
+message(STATUS "GEM5_BUILD enabled: ${GEM5_BUILD}")
+message(STATUS "Static binary build: ${BUILD_STATIC}")
 message(STATUS "Binary output dir: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
-# 1. The Library (rvpoint)
-list(APPEND SOURCES
-    "src/core/rvv_common.cpp"
-    "src/filters/voxel_grid_downsamp.cpp"
-    "src/filters/statistical_outlier_removal.cpp"
-    "src/features/normal_estimation.cpp"
-    "src/segmentation/ransac_plane.cpp"
-    "src/segmentation/euclidean_clustering.cpp"
-    "src/search/octree.cpp"
-    "src/search/spatial_hashing.cpp"
-    "src/search/radius_search.cpp"
-    "src/search/caravan_radius_search.cpp"
-    "src/search/pointer_octree.cpp"
-    "src/search/caravan_pointer_octree.cpp"
-    "src/tools/benchmark_kernels.cpp"
+# ==============================================================================
+# 2. RVPoint Core Library Target (src/)
+# ==============================================================================
+file(GLOB_RECURSE LIB_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/*.c"
 )
-add_library(rvpoint ${SOURCES})
+list(APPEND LIB_SOURCES "${CMAKE_SOURCE_DIR}/eval/benchmarks/benchmark_kernels.cpp")
+
+add_library(rvpoint ${LIB_SOURCES})
 add_library(rvvpcl ALIAS rvpoint)
-target_include_directories(rvpoint PUBLIC "${CMAKE_SOURCE_DIR}/src")
-target_compile_options(rvpoint PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
-if(RVV_PCL_ENABLE_RVV)
-    target_compile_definitions(rvpoint PUBLIC RVV_PCL_USE_RVV=1)
+add_library(rvv_pcl ALIAS rvpoint)
+
+# Automatically discover all subdirectories containing headers/sources under src/
+file(GLOB_RECURSE ALL_SRC_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/*.h"
+    "${CMAKE_SOURCE_DIR}/src/*.hpp"
+)
+set(RVPOINT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/src")
+foreach(hdr_file ${ALL_SRC_HEADERS})
+    get_filename_component(dir_path "${hdr_file}" DIRECTORY)
+    list(APPEND RVPOINT_INCLUDE_DIRS "${dir_path}")
+endforeach()
+list(APPEND RVPOINT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/eval/benchmarks")
+list(REMOVE_DUPLICATES RVPOINT_INCLUDE_DIRS)
+
+target_include_directories(rvpoint PUBLIC ${RVPOINT_INCLUDE_DIRS})
+if(NOT GEM5_BUILD)
+    target_compile_options(rvpoint PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}" "-fopenmp" "-pthread")
+    target_link_options(rvpoint PUBLIC "-fopenmp" "-pthread")
+else()
+    target_compile_options(rvpoint PUBLIC "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
 endif()
 
-# Helper: add a test target from a source file
-function(add_rvv_test src)
+if(RVPOINT_ENABLE_RVV)
+    target_compile_definitions(rvpoint PUBLIC RVPOINT_USE_RVV=1 RVV_PCL_USE_RVV=1)
+endif()
+if(GEM5_BUILD)
+    target_compile_definitions(rvpoint PUBLIC GEM5_BUILD=1)
+endif()
+
+# ==============================================================================
+# 3. PCL Dependency Discovery (Dynamic System or Static env/deps/pcl)
+# ==============================================================================
+set(PCL_DEPS_DIR "${CMAKE_SOURCE_DIR}/env/deps")
+set(PCL_AVAILABLE OFF)
+set(PCL_INC_DIRS "")
+set(PCL_LIB_DIRS "")
+set(PCL_LIBS "")
+set(PCL_LINK_DIR "")
+
+if(EXISTS "${PCL_DEPS_DIR}/pcl/usr/include/pcl-1.14" AND EXISTS "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu/libpcl_common.so")
+    set(PCL_AVAILABLE ON)
+    set(PCL_LINK_DIR "${PCL_DEPS_DIR}/pcl/usr/lib/riscv64-linux-gnu")
+    list(APPEND PCL_INC_DIRS
+        "${PCL_DEPS_DIR}/pcl/usr/include/pcl-1.14"
+        "${PCL_DEPS_DIR}/pcl/include/pcl-1.14"
+        "${PCL_DEPS_DIR}/pcl/usr/include"
+        "${PCL_DEPS_DIR}/pcl/include"
+        "${PCL_DEPS_DIR}/eigen/include/eigen3"
+        "${PCL_DEPS_DIR}/eigen"
+        "${PCL_DEPS_DIR}/flann/include"
+    )
+    list(APPEND PCL_LIB_DIRS "${PCL_LINK_DIR}" "${PCL_DEPS_DIR}/flann/lib")
+    list(APPEND PCL_LIBS
+        "${PCL_LINK_DIR}/libpcl_segmentation.so"
+        "${PCL_LINK_DIR}/libpcl_features.so"
+        "${PCL_LINK_DIR}/libpcl_filters.so"
+        "${PCL_LINK_DIR}/libpcl_sample_consensus.so"
+        "${PCL_LINK_DIR}/libpcl_search.so"
+        "${PCL_LINK_DIR}/libpcl_kdtree.so"
+        "${PCL_LINK_DIR}/libpcl_octree.so"
+        "${PCL_LINK_DIR}/libpcl_io.so"
+        "${PCL_LINK_DIR}/libpcl_common.so"
+        "${PCL_LINK_DIR}/libflann_cpp_s.a"
+        "${PCL_LINK_DIR}/libboost_system.a"
+    )
+    message(STATUS "Found PCL 1.14 RISC-V dependencies in: ${PCL_DEPS_DIR}/pcl")
+elseif(EXISTS "/usr/lib/riscv64-linux-gnu/libpcl_common.so" AND EXISTS "/usr/include/pcl-1.14")
+    set(PCL_AVAILABLE ON)
+    set(PCL_LINK_DIR "/usr/lib/riscv64-linux-gnu")
+    list(APPEND PCL_INC_DIRS "/usr/include/pcl-1.14" "/usr/include/eigen3" "/usr/include")
+    list(APPEND PCL_LIB_DIRS "${PCL_LINK_DIR}")
+    list(APPEND PCL_LIBS
+        "${PCL_LINK_DIR}/libpcl_segmentation.so"
+        "${PCL_LINK_DIR}/libpcl_features.so"
+        "${PCL_LINK_DIR}/libpcl_filters.so"
+        "${PCL_LINK_DIR}/libpcl_sample_consensus.so"
+        "${PCL_LINK_DIR}/libpcl_search.so"
+        "${PCL_LINK_DIR}/libpcl_kdtree.so"
+        "${PCL_LINK_DIR}/libpcl_octree.so"
+        "${PCL_LINK_DIR}/libpcl_io.so"
+        "${PCL_LINK_DIR}/libpcl_common.so"
+    )
+    message(STATUS "Found system dynamic PCL 1.14 at ${PCL_LINK_DIR}")
+else()
+    message(STATUS "No PCL installation found; official_pcl pipelines will be skipped")
+endif()
+
+# ==============================================================================
+# 4. Perception Pipelines (eval/pipelines/)
+# ==============================================================================
+file(GLOB PIPELINE_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/eval/pipelines/*.cpp")
+# Exclude unrefactored legacy pipelines pending rebuild with PipelineManager
+list(FILTER PIPELINE_SOURCES EXCLUDE REGEX "pipeline_3d_intra|pipeline_3d_rvv_clust|pipeline_3d_stream|pipeline_export")
+foreach(pipe_src ${PIPELINE_SOURCES})
+    get_filename_component(pipe_name "${pipe_src}" NAME_WE)
+    if(pipe_name MATCHES "^official_pcl_")
+        if(PCL_AVAILABLE)
+            add_executable(${pipe_name} "${pipe_src}")
+            target_link_libraries(${pipe_name} PRIVATE rvpoint)
+            target_include_directories(${pipe_name} SYSTEM PRIVATE ${PCL_INC_DIRS})
+            if(NOT GEM5_BUILD)
+                target_compile_options(${pipe_name} PRIVATE "-fopenmp" "-pthread")
+                target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,${PCL_LINK_DIR}" "-fopenmp" "-pthread")
+            else()
+                target_link_options(${pipe_name} PRIVATE "-Wl,-rpath-link,${PCL_LINK_DIR}")
+            endif()
+            target_link_libraries(${pipe_name} PRIVATE ${PCL_LIBS} pthread)
+        else()
+            message(STATUS "Skipping '${pipe_name}' (PCL shared or static library not found)")
+            continue()
+        endif()
+    else()
+        add_executable(${pipe_name} "${pipe_src}")
+        target_link_libraries(${pipe_name} PRIVATE rvpoint)
+        if(NOT GEM5_BUILD)
+            target_compile_options(${pipe_name} PRIVATE "-fopenmp" "-pthread")
+        endif()
+        if(RVPOINT_LINK_FLAGS)
+            target_link_options(${pipe_name} PRIVATE ${RVPOINT_LINK_FLAGS})
+        endif()
+    endif()
+endforeach()
+
+# ==============================================================================
+# 5. Standalone Benchmarks (eval/benchmarks/)
+# ==============================================================================
+file(GLOB BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/eval/benchmarks/*.cpp")
+# Legacy benchmarks pending modernization with PipelineManager are excluded during transition; benchmark_multicore is enabled
+list(FILTER BENCHMARK_SOURCES INCLUDE REGEX "benchmark_multicore")
+
+foreach(bench_src ${BENCHMARK_SOURCES})
+    get_filename_component(bench_name "${bench_src}" NAME_WE)
+    add_executable(${bench_name} "${bench_src}")
+    target_link_libraries(${bench_name} PRIVATE rvpoint)
+    if(NOT GEM5_BUILD)
+        target_compile_options(${bench_name} PRIVATE "-fopenmp" "-pthread")
+    endif()
+    if(RVPOINT_LINK_FLAGS)
+        target_link_options(${bench_name} PRIVATE ${RVPOINT_LINK_FLAGS})
+    endif()
+endforeach()
+
+# ==============================================================================
+# 6. Fast Essential Tests (eval/tests/fast/)
+# ==============================================================================
+function(add_rvpoint_test src)
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} "${src}")
     target_link_libraries(${name} PRIVATE rvpoint)
-    target_compile_options(${name} PRIVATE "-fopenmp")
-    target_link_options(${name} PRIVATE "-fopenmp")
-    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    if(NOT GEM5_BUILD)
+        target_compile_options(${name} PRIVATE "-fopenmp" "-pthread")
+    endif()
+    if(RVPOINT_LINK_FLAGS)
+        target_link_options(${name} PRIVATE ${RVPOINT_LINK_FLAGS})
+    endif()
 endfunction()
 
-# 2. Test Executables
-
-# --- Always-built tests (no RVV dependency) ---
-file(GLOB ALWAYS_TEST_SOURCES "tests/always/*.c" "tests/always/*.cpp")
-foreach(src ${ALWAYS_TEST_SOURCES})
-    add_rvv_test("${src}")
-endforeach()
-
-# --- Unit tests (algorithm layer) ---
-file(GLOB UNIT_TEST_SOURCES "tests/unit/*.cpp")
-foreach(src ${UNIT_TEST_SOURCES})
-    add_rvv_test("${src}")
-endforeach()
-
-# --- Integration tests ---
-file(GLOB INTEGRATION_TEST_SOURCES "tests/integration/*.cpp")
-foreach(src ${INTEGRATION_TEST_SOURCES})
-    add_rvv_test("${src}")
-endforeach()
-
-# --- RVV hardware verification (conditional on vector extension) ---
-if(RVV_PCL_ENABLE_RVV)
-    file(GLOB RVV_TEST_SOURCES "tests/rvv/*.c")
-    foreach(src ${RVV_TEST_SOURCES})
-        add_rvv_test("${src}")
-    endforeach()
+file(GLOB FAST_TEST_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/eval/tests/fast/*.cpp"
+    "${CMAKE_SOURCE_DIR}/eval/tests/fast/*.c"
+)
+if(NOT RVPOINT_ENABLE_RVV)
+    list(FILTER FAST_TEST_SOURCES EXCLUDE REGEX "test_rvv_features")
 endif()
-
-# --- Support tests (I/O, data loading) ---
-file(GLOB SUPPORT_TEST_SOURCES "tests/support/*.cpp")
-foreach(src ${SUPPORT_TEST_SOURCES})
-    add_rvv_test("${src}")
+foreach(src ${FAST_TEST_SOURCES})
+    add_rvpoint_test("${src}")
 endforeach()
 
-# --- Benchmark ---
-file(GLOB BENCHMARK_SOURCES "tests/benchmark_*.cpp")
-foreach(src ${BENCHMARK_SOURCES})
-    get_filename_component(name "${src}" NAME_WE)
-    add_executable(${name} "${src}")
-    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_compile_options(${name} PRIVATE "-O3" "-march=${RISCV_ARCH}" "-mabi=${RISCV_ABI}")
-    target_link_libraries(${name} PRIVATE rvpoint)
-endforeach()
-
-# Pipeline Export Utility
-add_executable(pipeline_export src/tools/pipeline_export.cpp)
-target_include_directories(pipeline_export PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pipeline_export PRIVATE rvpoint)
-
-# Ablation Benchmark Utility
-add_executable(ablation_bench src/tools/ablation_bench.cpp)
-target_include_directories(ablation_bench PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(ablation_bench PRIVATE rvpoint)
-
-# Neighbor Search & 4 Caravan Strategies Benchmark Tool
-add_executable(neighbor_search_sor_bench src/tools/neighbor_search_sor_bench.cpp)
-target_include_directories(neighbor_search_sor_bench PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(neighbor_search_sor_bench PRIVATE rvpoint)
-
-# Stage-by-Stage Scalar vs RVV Verification Benchmark
-add_executable(pipeline_compare_bench src/tools/pipeline_compare_bench.cpp)
-target_include_directories(pipeline_compare_bench PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pipeline_compare_bench PRIVATE rvpoint)
-
-# Standalone Pure-Scalar PCL Pipeline for RISC-V QEMU Simulation
-add_executable(pcl_standalone_pipeline src/tools/pcl_standalone_pipeline.cpp)
-target_include_directories(pcl_standalone_pipeline PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pcl_standalone_pipeline PRIVATE rvpoint)
-
-# Ultra-Fast Flat 2.5D Real-Time Perception Pipeline Export Utility
-add_executable(pipeline_fast_export src/tools/pipeline_fast_export.cpp)
-target_include_directories(pipeline_fast_export PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pipeline_fast_export PRIVATE rvpoint)
-
-# Hardware-Accelerated RVV 1.0 Ultra Fast Pipeline
-add_executable(pipeline_rvv_ultra_fast src/tools/pipeline_rvv_ultra_fast.cpp)
-target_include_directories(pipeline_rvv_ultra_fast PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pipeline_rvv_ultra_fast PRIVATE rvpoint)
-
-# Pure SoA Turbo Hardware RVV 1.0 Pipeline
-add_executable(pipeline_rvv_turbo src/tools/pipeline_rvv_turbo.cpp)
-target_include_directories(pipeline_rvv_turbo PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pipeline_rvv_turbo PRIVATE rvpoint)
-
-# Official Reference Open-Source Scalar 2.5D Baseline (No RVV)
-add_executable(scalar_25d_baseline src/tools/scalar_25d_baseline.cpp)
-target_include_directories(scalar_25d_baseline PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(scalar_25d_baseline PRIVATE rvpoint)
-
-# Accelerated True 3D RVPoint Turbo 10-Stage Pipeline
-add_executable(pipeline_3d_turbo src/tools/pipeline_3d_turbo.cpp)
-target_include_directories(pipeline_3d_turbo PRIVATE "${CMAKE_SOURCE_DIR}/src")
-target_link_libraries(pipeline_3d_turbo PRIVATE rvpoint)

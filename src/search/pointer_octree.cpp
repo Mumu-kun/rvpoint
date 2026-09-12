@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <limits>
 #include <cmath>
+#include <queue>
 
 #if defined(__riscv_vector)
 #include <riscv_vector.h>
@@ -72,7 +73,7 @@ void PointerOctree::buildParams(PointerOctreeNode* node, const std::vector<int>&
     if (indices.size() <= (size_t)max_points_per_leaf_ || depth >= max_depth_) {
         node->is_leaf = true;
         node->indices = indices;
-        
+
         node->leaf_x.resize(indices.size());
         node->leaf_y.resize(indices.size());
         node->leaf_z.resize(indices.size());
@@ -170,7 +171,7 @@ static inline void get_inds_in_radius_contiguous_rvv(
 
         if (count > 0) {
             vint32m8_t v_indices = __riscv_vle32_v_i32m8(indices + i, vl);
-            
+
             size_t old_size = out_indices.size();
             out_indices.resize(old_size + count);
             out_dists.resize(old_size + count);
@@ -203,16 +204,16 @@ std::size_t PointerOctree::radiusSearch(const PointXYZ& query, float radius,
     indices.clear();
     dists.clear();
     if (!root_) return 0;
-    
+
     const PointerOctreeNode* stack[64];
     int stack_ptr = 0;
     stack[stack_ptr++] = root_;
-    
+
     float radius_sq = radius * radius;
 
     while (stack_ptr > 0) {
         const PointerOctreeNode* curr = stack[--stack_ptr];
-        
+
         if (!boxOverlapsSphere(curr, query, radius_sq)) {
             continue;
         }
@@ -235,7 +236,7 @@ std::size_t PointerOctree::radiusSearch(const PointXYZ& query, float radius,
             }
         }
     }
-    
+
     return indices.size();
 }
 
@@ -289,6 +290,110 @@ void PointerOctree::recursiveSearchRVV(PointerOctreeNode* node, const PointXYZ& 
 void PointerOctree::recursiveSearchScalar(PointerOctreeNode* node, const PointXYZ& query, float radius_sq,
                                          std::vector<int>& indices, std::vector<float>& dists) const {
     (void)node; (void)query; (void)radius_sq; (void)indices; (void)dists;
+}
+
+void PointerOctree::radius_search(float qx, float qy, float qz, float radius,
+                                  NeighborQueryResult& result) const {
+    result.clear();
+    result.offsets.push_back(0);
+    if (!root_) {
+        result.offsets.push_back(0);
+        return;
+    }
+    std::vector<int> idx;
+    std::vector<float> dists;
+    radiusSearch(PointXYZ{qx, qy, qz}, radius, idx, dists);
+    result.indices.reserve(idx.size());
+    for (int i : idx) {
+        result.indices.push_back(static_cast<int32_t>(i));
+    }
+    result.offsets.push_back(static_cast<uint32_t>(result.indices.size()));
+}
+
+struct OctreeKNNNodeCandidate {
+    const PointerOctreeNode* node;
+    float min_dist_sq;
+
+    bool operator>(const OctreeKNNNodeCandidate& other) const noexcept {
+        return min_dist_sq > other.min_dist_sq;
+    }
+};
+
+static inline float boxDistSq(const PointerOctreeNode* node, float qx, float qy, float qz) {
+    float closest_x = std::max(node->min_x, std::min(qx, node->max_x));
+    float closest_y = std::max(node->min_y, std::min(qy, node->max_y));
+    float closest_z = std::max(node->min_z, std::min(qz, node->max_z));
+    float dx = qx - closest_x;
+    float dy = qy - closest_y;
+    float dz = qz - closest_z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+void PointerOctree::nearest_k_search(float qx, float qy, float qz, int k,
+                                     NeighborQueryResult& result) const {
+    result.clear();
+    result.offsets.push_back(0);
+    if (!root_ || k <= 0 || cloud_.n == 0) {
+        result.offsets.push_back(0);
+        return;
+    }
+
+    std::priority_queue<std::pair<float, int32_t>> knn_heap;
+    float worst_dist_sq = std::numeric_limits<float>::max();
+
+    std::priority_queue<OctreeKNNNodeCandidate,
+                        std::vector<OctreeKNNNodeCandidate>,
+                        std::greater<OctreeKNNNodeCandidate>> node_queue;
+
+    node_queue.push({root_, boxDistSq(root_, qx, qy, qz)});
+
+    while (!node_queue.empty()) {
+        auto top = node_queue.top();
+        node_queue.pop();
+
+        if (static_cast<int>(knn_heap.size()) >= k && top.min_dist_sq >= worst_dist_sq) {
+            break;
+        }
+
+        const PointerOctreeNode* curr = top.node;
+        if (curr->is_leaf) {
+            const size_t n = curr->indices.size();
+            for (size_t i = 0; i < n; ++i) {
+                float dx = curr->leaf_x[i] - qx;
+                float dy = curr->leaf_y[i] - qy;
+                float dz = curr->leaf_z[i] - qz;
+                float d2 = dx * dx + dy * dy + dz * dz;
+
+                if (static_cast<int>(knn_heap.size()) < k) {
+                    knn_heap.push({d2, static_cast<int32_t>(curr->indices[i])});
+                    if (static_cast<int>(knn_heap.size()) == k) {
+                        worst_dist_sq = knn_heap.top().first;
+                    }
+                } else if (d2 < worst_dist_sq) {
+                    knn_heap.pop();
+                    knn_heap.push({d2, static_cast<int32_t>(curr->indices[i])});
+                    worst_dist_sq = knn_heap.top().first;
+                }
+            }
+        } else {
+            for (int i = 0; i < 8; ++i) {
+                if (curr->children[i]) {
+                    float cdist2 = boxDistSq(curr->children[i], qx, qy, qz);
+                    if (static_cast<int>(knn_heap.size()) < k || cdist2 < worst_dist_sq) {
+                        node_queue.push({curr->children[i], cdist2});
+                    }
+                }
+            }
+        }
+    }
+
+    size_t count = knn_heap.size();
+    result.indices.resize(count);
+    for (int i = static_cast<int>(count) - 1; i >= 0; --i) {
+        result.indices[i] = knn_heap.top().second;
+        knn_heap.pop();
+    }
+    result.offsets.push_back(static_cast<uint32_t>(count));
 }
 
 } // namespace rvpoint

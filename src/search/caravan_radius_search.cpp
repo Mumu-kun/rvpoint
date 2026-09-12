@@ -1,5 +1,4 @@
 #include "search/caravan_radius_search.h"
-#include "search/spatial_hashing.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -160,62 +159,25 @@ std::size_t CaravanRadiusSearch::radiusSearch(
     return indices.size();
 }
 
-static std::size_t filter_by_mean_dists(const PointCloudSoA &in,
-                                        const std::vector<float> &mean_dists,
-                                        PointXYZ *out, float alpha) {
-  if (in.n == 0) return 0;
-  float global_sum = 0.0f;
-  for (float d : mean_dists) global_sum += d;
-  float global_mean = global_sum / in.n;
+void CaravanRadiusSearch::batchRadiusSearch(
+    const PointCloudView &queries,
+    float radius,
+    NeighborQueryResult &results
+) const {
+    results.clear();
+    if (cloud_.n == 0 || queries.n == 0) return;
 
-  float variance_sum = 0.0f;
-  for (float d : mean_dists) {
-    float diff = d - global_mean;
-    variance_sum += diff * diff;
-  }
-  float global_std = std::sqrt(variance_sum / in.n);
-  float thresh = global_mean + alpha * global_std;
+    results.offsets.resize(queries.n + 1, 0);
+    results.indices.reserve(queries.n * 16);
 
-  std::size_t count = 0;
-  for (size_t i = 0; i < in.n; ++i) {
-    if (mean_dists[i] <= thresh) {
-      out[count].x = in.x[i];
-      out[count].y = in.y[i];
-      out[count].z = in.z[i];
-      count++;
+    std::vector<int32_t> nbs;
+    for (std::size_t q = 0; q < queries.n; ++q) {
+        PointXYZ q_pt = queries[q];
+        radiusSearch(q_pt, radius, nbs);
+        results.indices.insert(results.indices.end(), nbs.begin(), nbs.end());
+        results.offsets[q + 1] = static_cast<uint32_t>(results.indices.size());
     }
-  }
-  return count;
-}
-
-std::size_t sor_grid_caravan(const PointCloudSoA &in, PointXYZ *out, int k,
-                             float alpha, float search_radius) {
-  if (in.n == 0) return 0;
-  std::vector<float> mean_dists(in.n, 0.0f);
-
-  SpatialHash hash;
-  hash.setInputCloud(in, search_radius);
-  hash.build();
-
-  for (size_t i = 0; i < in.n; ++i) {
-    PointXYZ query = {in.x[i], in.y[i], in.z[i]};
-    std::vector<int> nbr_indices;
-    std::vector<float> nbr_dists;
-    hash.radiusSearch(query, search_radius, nbr_indices, nbr_dists, k + 1);
-
-    if (nbr_dists.size() > 1) {
-      std::sort(nbr_dists.begin(), nbr_dists.end());
-      float sum = 0.0f;
-      int valid_k = std::min(k, static_cast<int>(nbr_dists.size()) - 1);
-      for (int j = 1; j <= valid_k; ++j) {
-        sum += std::sqrt(nbr_dists[j]);
-      }
-      mean_dists[i] = sum / valid_k;
-    } else {
-      mean_dists[i] = search_radius;
-    }
-  }
-  return filter_by_mean_dists(in, mean_dists, out, alpha);
 }
 
 } // namespace rvpoint
+
