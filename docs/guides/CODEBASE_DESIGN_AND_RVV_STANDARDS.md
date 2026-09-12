@@ -117,6 +117,38 @@ Pipelines are constructed as Directed Acyclic Graphs (DAGs) over an extendible, 
 
 ---
 
+### 2.5 Header & Implementation Colocation in Dedicated Subdirectories
+
+To ensure strict physical modularity, maintainability, and clean AI-assisted navigation, RVPoint enforces these structural layout standards across `src/`:
+
+1. **Colocated `.h` and `.cpp` Pairs**:
+   Every library component that possesses an implementation `.cpp` MUST place its `.h` header and `.cpp` file together within its own dedicated component subdirectory. The basenames of the pair must match identically:
+   ```text
+   src/filters/
+   ├── filter_concept.h                # Lone header (concept) remains at domain root
+   ├── radix_sort.h                    # Lone header (utility) remains at domain root
+   ├── voxel_grid/                     # Dedicated component subdirectory
+   │   ├── voxel_grid.h
+   │   └── voxel_grid.cpp
+   ├── statistical_outlier_removal/    # Dedicated component subdirectory
+   │   ├── statistical_outlier_removal.h
+   │   └── statistical_outlier_removal.cpp
+   └── radius_outlier_removal/         # Dedicated component subdirectory
+       ├── radius_outlier_removal.h
+       └── radius_outlier_removal.cpp
+   ```
+
+2. **Lone `.h` Files Do Not Require Subdirectories**:
+   Header-only files that have no matching `.cpp` implementation (such as C++ concepts, POD structs, inline templated utilities, e.g. `src/core/point_types.h`, `src/filters/filter_concept.h`, `src/search/search_concepts.h`, `src/io/simple_pcd_loader.h`) stay directly at their domain root. Do not create single-file subdirectories for lone headers.
+
+3. **Direct Path Imports (No Forwarders)**:
+   Do not create intermediary forwarder headers. Callers, benchmarks, unit tests, and the public umbrella header (`src/include/rvpoint.h`) import headers directly via their explicit path (e.g. `#include "filters/voxel_grid/voxel_grid.h"`).
+
+4. **Zero CMake Overhead**:
+   The root `CMakeLists.txt` automatically discovers and links all subdirectories via recursive globbing (`src/**/*.cpp` and `src/**/*.h`), requiring no manual build script edits when adding new component folders.
+
+---
+
 ## 3. RVV 1.0 Vector Optimization Standards
 
 ### 3.1 The 5 Hardware Vector Invariants

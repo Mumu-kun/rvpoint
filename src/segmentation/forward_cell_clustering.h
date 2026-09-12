@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/point_types.h"
-#include "search/fast_3d_spatial_grid.h"
+#include "search/fast_3d_spatial_grid/fast_3d_spatial_grid.h"
 #include "segmentation/spatial_slab_engine.h" // For SlabUnionFind
 #include <vector>
 #include <cmath>

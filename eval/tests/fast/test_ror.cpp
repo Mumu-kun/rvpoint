@@ -1,5 +1,5 @@
 #include "core/point_types.h"
-#include "filters/radius_outlier_removal.h"
+#include "filters/radius_outlier_removal/radius_outlier_removal.h"
 #include <iostream>
 #include <random>
 #include <vector>

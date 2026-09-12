@@ -40,7 +40,7 @@ rvpoint/
 │   ├── search/                 # Octree, SpatialHash, PointerOctree, Caravan, Fast3DSpatialGrid
 │   ├── segmentation/           # RANSAC plane fitting & Euclidean clustering (BFS & Union-Find)
 │   ├── pipeline/               # Slotted RegisterFile, PipelineManager, TaggedBinding
-│   ├── io/                     # Zero-dependency simple PCD file reader & writer
+│   ├── io/                     # PCD file I/O & streaming ingestion (streams/ dedicated subdirectory)
 │   └── include/                # Public umbrella header (rvpoint.h)
 │
 ├── eval/                       # [2] ALL EXECUTABLES & EVALUATION SUITE
@@ -112,18 +112,25 @@ wsl -d rvpoint bash -c "source env/activate.sh && ./scripts/run.sh pipeline_prot
 | Feature / Algorithm | Header Path | Implementation Path | Fast Test Target |
 | :--- | :--- | :--- | :--- |
 | **Point Types & Views** | [`src/core/point_types.h`](../src/core/point_types.h) | Header-only | [`test_concepts`](../eval/tests/fast/test_concepts.cpp) |
-| **Voxel Grid Filter** | [`src/filters/voxel_grid.h`](../src/filters/voxel_grid.h) | [`src/filters/voxel_grid_downsamp.cpp`](../src/filters/voxel_grid_downsamp.cpp) | [`test_voxel_grid`](../eval/tests/fast/test_voxel_grid.cpp) |
-| **SOR Filter** | [`src/filters/statistical_outlier_removal.h`](../src/filters/statistical_outlier_removal.h) | [`src/filters/statistical_outlier_removal.cpp`](../src/filters/statistical_outlier_removal.cpp) | [`test_sor`](../eval/tests/fast/test_sor.cpp) |
-| **ROR Filter** | [`src/filters/radius_outlier_removal.h`](../src/filters/radius_outlier_removal.h) | [`src/filters/radius_outlier_removal.cpp`](../src/filters/radius_outlier_removal.cpp) | [`test_ror`](../eval/tests/fast/test_ror.cpp) |
-| **Normal Estimation** | [`src/features/normal_estimation.h`](../src/features/normal_estimation.h) | [`src/features/normal_estimation.cpp`](../src/features/normal_estimation.cpp) | [`test_normal`](../eval/tests/fast/test_normal.cpp) |
-| **Fused Filter & Normals** | [`src/features/fused_filter_normals.h`](../src/features/fused_filter_normals.h) | [`src/features/fused_filter_normals.cpp`](../src/features/fused_filter_normals.cpp) | [`test_fused_filter_normals`](../eval/tests/fast/test_fused_filter_normals.cpp) |
-| **Fast 3D Spatial Grid** | [`src/search/fast_3d_spatial_grid.h`](../src/search/fast_3d_spatial_grid.h) | [`src/search/fast_3d_spatial_grid.cpp`](../src/search/fast_3d_spatial_grid.cpp) | [`test_radius`](../eval/tests/fast/test_radius.cpp) |
-| **Pointer Octree** | [`src/search/pointer_octree.h`](../src/search/pointer_octree.h) | [`src/search/pointer_octree.cpp`](../src/search/pointer_octree.cpp) | [`test_concepts`](../eval/tests/fast/test_concepts.cpp) |
-| **Plane RANSAC** | [`src/segmentation/ransac_plane.h`](../src/segmentation/ransac_plane.h) | [`src/segmentation/ransac_plane.cpp`](../src/segmentation/ransac_plane.cpp) | [`test_ransac`](../eval/tests/fast/test_ransac.cpp) |
-| **Euclidean Clustering** | [`src/segmentation/euclidean_clustering.h`](../src/segmentation/euclidean_clustering.h) | [`src/segmentation/euclidean_clustering.cpp`](../src/segmentation/euclidean_clustering.cpp) | [`test_euclidean_clustering`](../eval/tests/fast/test_euclidean_clustering.cpp) |
-| **Pipeline Engine** | [`src/pipeline/pipeline_manager.h`](../src/pipeline/pipeline_manager.h) | [`src/pipeline/pipeline_manager.cpp`](../src/pipeline/pipeline_manager.cpp) | [`test_pipeline`](../eval/tests/fast/test_pipeline.cpp) |
+| **RVV Common Kernels** | [`src/core/rvv_common/rvv_common.h`](../src/core/rvv_common/rvv_common.h) | [`src/core/rvv_common/rvv_common.cpp`](../src/core/rvv_common/rvv_common.cpp) | [`test_concepts`](../eval/tests/fast/test_concepts.cpp) |
+| **Voxel Grid Filter** | [`src/filters/voxel_grid/voxel_grid.h`](../src/filters/voxel_grid/voxel_grid.h) | [`src/filters/voxel_grid/voxel_grid.cpp`](../src/filters/voxel_grid/voxel_grid.cpp) | [`test_voxel_grid`](../eval/tests/fast/test_voxel_grid.cpp) |
+| **SOR Filter** | [`src/filters/statistical_outlier_removal/statistical_outlier_removal.h`](../src/filters/statistical_outlier_removal/statistical_outlier_removal.h) | [`src/filters/statistical_outlier_removal/statistical_outlier_removal.cpp`](../src/filters/statistical_outlier_removal/statistical_outlier_removal.cpp) | [`test_sor`](../eval/tests/fast/test_sor.cpp) |
+| **ROR Filter** | [`src/filters/radius_outlier_removal/radius_outlier_removal.h`](../src/filters/radius_outlier_removal/radius_outlier_removal.h) | [`src/filters/radius_outlier_removal/radius_outlier_removal.cpp`](../src/filters/radius_outlier_removal/radius_outlier_removal.cpp) | [`test_ror`](../eval/tests/fast/test_ror.cpp) |
+| **Normal Estimation** | [`src/features/normal_estimation/normal_estimation.h`](../src/features/normal_estimation/normal_estimation.h) | [`src/features/normal_estimation/normal_estimation.cpp`](../src/features/normal_estimation/normal_estimation.cpp) | [`test_normal`](../eval/tests/fast/test_normal.cpp) |
+| **Fused Filter & Normals** | [`src/features/fused_filter_normals/fused_filter_normals.h`](../src/features/fused_filter_normals/fused_filter_normals.h) | [`src/features/fused_filter_normals/fused_filter_normals.cpp`](../src/features/fused_filter_normals/fused_filter_normals.cpp) | [`test_fused_filter_normals`](../eval/tests/fast/test_fused_filter_normals.cpp) |
+| **Fast 3D Spatial Grid** | [`src/search/fast_3d_spatial_grid/fast_3d_spatial_grid.h`](../src/search/fast_3d_spatial_grid/fast_3d_spatial_grid.h) | [`src/search/fast_3d_spatial_grid/fast_3d_spatial_grid.cpp`](../src/search/fast_3d_spatial_grid/fast_3d_spatial_grid.cpp) | [`test_radius`](../eval/tests/fast/test_radius.cpp) |
+| **Pointer Octree** | [`src/search/pointer_octree/pointer_octree.h`](../src/search/pointer_octree/pointer_octree.h) | [`src/search/pointer_octree/pointer_octree.cpp`](../src/search/pointer_octree/pointer_octree.cpp) | [`test_concepts`](../eval/tests/fast/test_concepts.cpp) |
+| **Octree** | [`src/search/octree/octree.h`](../src/search/octree/octree.h) | [`src/search/octree/octree.cpp`](../src/search/octree/octree.cpp) | [`test_concepts`](../eval/tests/fast/test_concepts.cpp) |
+| **Spatial Hashing** | [`src/search/spatial_hashing/spatial_hashing.h`](../src/search/spatial_hashing/spatial_hashing.h) | [`src/search/spatial_hashing/spatial_hashing.cpp`](../src/search/spatial_hashing/spatial_hashing.cpp) | [`test_concepts`](../eval/tests/fast/test_concepts.cpp) |
+| **Radius Search** | [`src/search/radius_search/radius_search.h`](../src/search/radius_search/radius_search.h) | [`src/search/radius_search/radius_search.cpp`](../src/search/radius_search/radius_search.cpp) | [`test_radius`](../eval/tests/fast/test_radius.cpp) |
+| **Plane RANSAC** | [`src/segmentation/ransac_plane/ransac_plane.h`](../src/segmentation/ransac_plane/ransac_plane.h) | [`src/segmentation/ransac_plane/ransac_plane.cpp`](../src/segmentation/ransac_plane/ransac_plane.cpp) | [`test_ransac`](../eval/tests/fast/test_ransac.cpp) |
+| **Euclidean Clustering** | [`src/segmentation/euclidean_clustering/euclidean_clustering.h`](../src/segmentation/euclidean_clustering/euclidean_clustering.h) | [`src/segmentation/euclidean_clustering/euclidean_clustering.cpp`](../src/segmentation/euclidean_clustering/euclidean_clustering.cpp) | [`test_euclidean_clustering`](../eval/tests/fast/test_euclidean_clustering.cpp) |
+| **Pipeline Engine** | [`src/pipeline/pipeline_manager/pipeline_manager.h`](../src/pipeline/pipeline_manager/pipeline_manager.h) | [`src/pipeline/pipeline_manager/pipeline_manager.cpp`](../src/pipeline/pipeline_manager/pipeline_manager.cpp) | [`test_pipeline`](../eval/tests/fast/test_pipeline.cpp) |
+| **Stream Ingestion (UDP/TCP/Mock)** | [`src/io/streams/stream_source.h`](../src/io/streams/stream_source.h) | [`src/io/streams/`](../src/io/streams/) | [`test_stream_source`](../eval/tests/fast/test_stream_source.cpp) |
 | **PCD File I/O** | [`src/io/simple_pcd_loader.h`](../src/io/simple_pcd_loader.h) | Header-only | [`test_loader`](../eval/tests/fast/test_loader.cpp) |
 | **Umbrella Header** | [`src/include/rvpoint.h`](../src/include/rvpoint.h) | Header-only | [`test_pipeline_walkthrough`](../eval/tests/fast/test_pipeline_walkthrough.cpp) |
+
+> **Header & Source Colocation Standard**: Every `.h` and `.cpp` implementation pair MUST be colocated together within its own dedicated component subdirectory (e.g., `src/filters/voxel_grid/`, `src/features/normal_estimation/`, `src/io/streams/`). Basenames must match identically. Lone `.h` files without an implementation `.cpp` stay at domain roots. No forwarder headers: callers import directly via full repository path.
 
 ---
 

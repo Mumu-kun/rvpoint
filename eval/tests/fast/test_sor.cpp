@@ -1,5 +1,5 @@
 #include "core/point_types.h"
-#include "filters/statistical_outlier_removal.h"
+#include "filters/statistical_outlier_removal/statistical_outlier_removal.h"
 #include <vector>
 #include <random>
 #include <iostream>

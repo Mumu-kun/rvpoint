@@ -1,5 +1,5 @@
 #include "core/point_types.h"
-#include "features/normal_estimation.h"
+#include "features/normal_estimation/normal_estimation.h"
 #include <vector>
 #include <random>
 #include <iostream>

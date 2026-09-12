@@ -1,5 +1,5 @@
 #include "core/point_types.h"
-#include "segmentation/ransac_plane.h"
+#include "segmentation/ransac_plane/ransac_plane.h"
 #include <vector>
 #include <random>
 #include <iostream>

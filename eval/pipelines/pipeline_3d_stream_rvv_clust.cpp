@@ -3,9 +3,9 @@
 // Hardware RVV 1.0 Vectorized Euclidean Clustering Standalone Test Target
 
 #include "include/rvpoint.h"
-#include "search/fast_3d_spatial_grid.h"
+#include "search/fast_3d_spatial_grid/fast_3d_spatial_grid.h"
 #include "io/simple_pcd_loader.h"
-#include "filters/voxel_grid.h"
+#include "filters/voxel_grid/voxel_grid.h"
 
 #include <algorithm>
 #include <chrono>

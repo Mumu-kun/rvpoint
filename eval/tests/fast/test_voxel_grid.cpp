@@ -1,5 +1,5 @@
 #include "core/point_types.h"
-#include "filters/voxel_grid.h"
+#include "filters/voxel_grid/voxel_grid.h"
 #include <vector>
 #include <random>
 #include <iostream>

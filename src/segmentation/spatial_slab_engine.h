@@ -2,9 +2,9 @@
 
 #include "core/point_types.h"
 #include "core/radix_sort.h"
-#include "search/fast_3d_spatial_grid.h"
-#include "filters/radius_outlier_removal.h"
-#include "segmentation/euclidean_clustering.h"
+#include "search/fast_3d_spatial_grid/fast_3d_spatial_grid.h"
+#include "filters/radius_outlier_removal/radius_outlier_removal.h"
+#include "segmentation/euclidean_clustering/euclidean_clustering.h"
 #include <vector>
 #include <memory>
 #include <cmath>

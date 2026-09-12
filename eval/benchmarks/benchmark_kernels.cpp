@@ -1,5 +1,5 @@
 #include "benchmark_kernels.h"
-#include "search/caravan_radius_search.h"
+#include "search/caravan_radius_search/caravan_radius_search.h"
 
 #include <cmath>
 #include <cstdint>

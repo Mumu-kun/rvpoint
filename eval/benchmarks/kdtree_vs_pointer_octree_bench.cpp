@@ -1,5 +1,5 @@
 #include "core/point_types.h"
-#include "search/pointer_octree.h"
+#include "search/pointer_octree/pointer_octree.h"
 #include "io/simple_pcd_loader.h"
 
 #include <chrono>

@@ -1,4 +1,4 @@
-#include "features/fused_filter_normals.h"
+#include "features/fused_filter_normals/fused_filter_normals.h"
 #include <iostream>
 #include <vector>
 #include <cmath>

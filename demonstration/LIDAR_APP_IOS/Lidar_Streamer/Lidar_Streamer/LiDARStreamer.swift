@@ -4,6 +4,7 @@ import ARKit
 import SceneKit
 import Network
 import UIKit
+import CoreMotion
 
 final class LiDARStreamer: NSObject, ObservableObject, ARSessionDelegate {
 
@@ -22,6 +23,7 @@ final class LiDARStreamer: NSObject, ObservableObject, ARSessionDelegate {
     private var lastSend: TimeInterval = 0
     private var busy = false
     private let lock = NSLock()
+    private let motionManager = CMMotionManager()
 
     // MARK: AR session
 
@@ -36,6 +38,10 @@ final class LiDARStreamer: NSObject, ObservableObject, ARSessionDelegate {
         let config = ARWorldTrackingConfiguration()
         config.frameSemantics = [.sceneDepth, .smoothedSceneDepth]
         view.session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        if motionManager.isDeviceMotionAvailable {
+            motionManager.deviceMotionUpdateInterval = 0.02
+            motionManager.startDeviceMotionUpdates()
+        }
         setStatus("LiDAR running — enter Mac IP, then Start streaming")
     }
 
@@ -72,6 +78,7 @@ final class LiDARStreamer: NSObject, ObservableObject, ARSessionDelegate {
     private func stopStreaming() {
         connection?.cancel()
         connection = nil
+        motionManager.stopDeviceMotionUpdates()
         setStreaming(false)
         setStatus("Stopped")
     }
@@ -87,7 +94,7 @@ final class LiDARStreamer: NSObject, ObservableObject, ARSessionDelegate {
         guard frame.sceneDepth != nil || frame.smoothedSceneDepth != nil else { return }
         lastSend = now
 
-        let packet = Self.buildPacket(frame: frame, index: frameIndex)
+        let packet = buildPacket(frame: frame, index: frameIndex)
         frameIndex &+= 1
         send(packet)
     }
@@ -104,7 +111,7 @@ final class LiDARStreamer: NSObject, ObservableObject, ARSessionDelegate {
 
     // MARK: Packet: magic + header + depth(f32, m) + confidence(u8)
 
-    private static func buildPacket(frame: ARFrame, index: UInt32) -> Data {
+    private func buildPacket(frame: ARFrame, index: UInt32) -> Data {
         // The depth type is deliberately never named — avoids ARKit type-name mismatches
         guard let sceneDepth = frame.smoothedSceneDepth ?? frame.sceneDepth else { return Data() }
         let depthMap = sceneDepth.depthMap
@@ -155,13 +162,38 @@ final class LiDARStreamer: NSObject, ObservableObject, ARSessionDelegate {
         ]
         for i in [1, 2, 5, 6, 9, 10, 13, 14] { pose[i] = -pose[i] }
 
-        var data = Data(capacity: 4 + 92 + w * h * 5)
-        data.append(Data("LDP1".utf8))
+        // Tracking state (0: notAvailable, 1: limited, 2: normal)
+        let trackState: UInt32
+        switch frame.camera.trackingState {
+        case .notAvailable: trackState = 0
+        case .limited: trackState = 1
+        case .normal: trackState = 2
+        @unknown default: trackState = 0
+        }
+
+        // CoreMotion readings (gyro, user accel, gravity)
+        let motion = motionManager.deviceMotion
+        let wx = Float(motion?.rotationRate.x ?? 0.0)
+        let wy = Float(motion?.rotationRate.y ?? 0.0)
+        let wz = Float(motion?.rotationRate.z ?? 0.0)
+        let ax = Float(motion?.userAcceleration.x ?? 0.0)
+        let ay = Float(motion?.userAcceleration.y ?? 0.0)
+        let az = Float(motion?.userAcceleration.z ?? 0.0)
+        let gx = Float((motion?.gravity.x ?? 0.0) * 9.80665)
+        let gy = Float((motion?.gravity.y ?? 0.0) * 9.80665)
+        let gz = Float((motion?.gravity.z ?? -1.0) * 9.80665)
+
+        var data = Data(capacity: 136 + w * h * 5)
+        data.append(Data("LDP2".utf8))
         data.appendUInt32(index)
         data.appendUInt32(UInt32(w))
         data.appendUInt32(UInt32(h))
         data.appendFloat(fx); data.appendFloat(fy); data.appendFloat(cx); data.appendFloat(cy)
         pose.forEach { data.appendFloat($0) }
+        data.appendUInt32(trackState)
+        data.appendFloat(wx); data.appendFloat(wy); data.appendFloat(wz)
+        data.appendFloat(ax); data.appendFloat(ay); data.appendFloat(az)
+        data.appendFloat(gx); data.appendFloat(gy); data.appendFloat(gz)
         depthArr.withUnsafeBytes { data.append(contentsOf: $0) }
         conf.withUnsafeBytes { data.append(contentsOf: $0) }
         return data

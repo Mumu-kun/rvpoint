@@ -1,13 +1,13 @@
 #include "core/point_types.h"
 #include "core/profiler.h"
-#include "features/normal_estimation.h"
-#include "filters/statistical_outlier_removal.h"
-#include "filters/voxel_grid.h"
+#include "features/normal_estimation/normal_estimation.h"
+#include "filters/statistical_outlier_removal/statistical_outlier_removal.h"
+#include "filters/voxel_grid/voxel_grid.h"
 #include "io/simple_pcd_loader.h"
-#include "search/octree.h"
-#include "search/pointer_octree.h"
-#include "segmentation/euclidean_clustering.h"
-#include "segmentation/ransac_plane.h"
+#include "search/octree/octree.h"
+#include "search/pointer_octree/pointer_octree.h"
+#include "segmentation/euclidean_clustering/euclidean_clustering.h"
+#include "segmentation/ransac_plane/ransac_plane.h"
 
 #include <array>
 #include <chrono>

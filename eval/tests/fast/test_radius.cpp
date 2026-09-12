@@ -1,7 +1,7 @@
 #include "core/point_types.h"
-#include "search/radius_search.h"
-#include "search/fast_3d_spatial_grid.h"
-#include "search/caravan_radius_search.h"
+#include "search/radius_search/radius_search.h"
+#include "search/fast_3d_spatial_grid/fast_3d_spatial_grid.h"
+#include "search/caravan_radius_search/caravan_radius_search.h"
 #include <vector>
 #include <random>
 #include <iostream>

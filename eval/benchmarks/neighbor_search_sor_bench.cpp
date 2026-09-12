@@ -3,14 +3,14 @@
 
 #include "core/point_types.h"
 #include "core/profiler.h"
-#include "filters/voxel_grid.h"
-#include "filters/statistical_outlier_removal.h"
-#include "search/octree.h"
-#include "search/spatial_hashing.h"
-#include "search/pointer_octree.h"
-#include "search/radius_search.h"
-#include "search/caravan_radius_search.h"
-#include "search/caravan_pointer_octree.h"
+#include "filters/voxel_grid/voxel_grid.h"
+#include "filters/statistical_outlier_removal/statistical_outlier_removal.h"
+#include "search/octree/octree.h"
+#include "search/spatial_hashing/spatial_hashing.h"
+#include "search/pointer_octree/pointer_octree.h"
+#include "search/radius_search/radius_search.h"
+#include "search/caravan_radius_search/caravan_radius_search.h"
+#include "search/caravan_pointer_octree/caravan_pointer_octree.h"
 #include "io/simple_pcd_loader.h"
 
 #include <chrono>

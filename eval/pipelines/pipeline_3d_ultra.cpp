@@ -11,14 +11,14 @@
 
 #include "include/rvpoint.h"
 #include "io/simple_pcd_loader.h"
-#include "filters/voxel_grid.h"
-#include "filters/radius_outlier_removal.h"
-#include "filters/statistical_outlier_removal.h"
-#include "features/normal_estimation.h"
-#include "search/fast_3d_spatial_grid.h"
-#include "segmentation/ransac_plane.h"
-#include "segmentation/euclidean_clustering.h"
-#include "pipeline/pipeline_manager.h"
+#include "filters/voxel_grid/voxel_grid.h"
+#include "filters/radius_outlier_removal/radius_outlier_removal.h"
+#include "filters/statistical_outlier_removal/statistical_outlier_removal.h"
+#include "features/normal_estimation/normal_estimation.h"
+#include "search/fast_3d_spatial_grid/fast_3d_spatial_grid.h"
+#include "segmentation/ransac_plane/ransac_plane.h"
+#include "segmentation/euclidean_clustering/euclidean_clustering.h"
+#include "pipeline/pipeline_manager/pipeline_manager.h"
 
 #include <algorithm>
 #include <chrono>

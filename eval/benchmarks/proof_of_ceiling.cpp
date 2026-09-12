@@ -5,8 +5,8 @@
 
 #include "include/rvpoint.h"
 #include "io/simple_pcd_loader.h"
-#include "filters/voxel_grid.h"
-#include "search/fast_3d_spatial_grid.h"
+#include "filters/voxel_grid/voxel_grid.h"
+#include "search/fast_3d_spatial_grid/fast_3d_spatial_grid.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>

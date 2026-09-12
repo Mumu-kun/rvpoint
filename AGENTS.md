@@ -101,6 +101,7 @@ rvpoint/
 - **Canonical Namespace**: Always write new classes and algorithms inside `namespace rvpoint { ... }`.
 - **Public API Exposure**: When creating new modules, expose their public header inside `src/include/rvpoint.h`.
 - **Data Representation**: Prefer `PointCloudSoA` (`in.x`, `in.y`, `in.z` contiguous buffers) over AoS `std::vector<PointXYZ>` for vector-accelerated algorithms to enable sequential `__riscv_vle32_v_f32m8` loads.
+- **Colocated Header & Implementation Pairs (`.h` / `.cpp`) in Dedicated Subdirectories**: Every `.h` and `.cpp` implementation pair MUST be colocated together within its own dedicated component subdirectory (e.g., `src/filters/voxel_grid/voxel_grid.h` & `voxel_grid.cpp`, `src/features/normal_estimation/normal_estimation.h` & `normal_estimation.cpp`, `src/io/streams/...`). Never create loose `.cpp` files in parent domain roots. Paired file basenames must match exactly. Lone `.h` files without an implementation `.cpp` (header-only concepts, structs, traits, e.g. `point_types.h`, `filter_concept.h`) remain directly at the domain root and do NOT need subdirectories. Do NOT create forwarder headers—callers import directly via full repository path.
 - **Design & Vector Standards**: Consult [`docs/guides/CODEBASE_DESIGN_AND_RVV_STANDARDS.md`](docs/guides/CODEBASE_DESIGN_AND_RVV_STANDARDS.md) for deep module interface guidelines, seam placement, and RVV 1.0 intrinsics invariants (unit-stride, LMUL allocation, zero-heap loops).
 
 ### B. Executables & Perception Pipelines (`eval/`)
