@@ -33,7 +33,11 @@ wsl_bootstrap "scripts/build.sh" "$@"
 
 BUILD_DIR="$(get_build_dir)"
 source "${PROJECT_ROOT}/env/activate.sh"
-export RISCV_PATH="${RISCV:-${RISCV_ROOT:-/opt/riscv}}"
+if [ "$(uname -m)" != "riscv64" ]; then
+    export RISCV_PATH="${RISCV:-${RISCV_ROOT:-/opt/riscv}}"
+elif [ -d "/opt/riscv" ]; then
+    export RISCV_PATH="${RISCV:-${RISCV_ROOT:-/opt/riscv}}"
+fi
 
 # Defaults (can be overridden by command line)
 TOOLCHAIN="linux"
@@ -188,7 +192,10 @@ build_backend() {
         if [ -n "$cache_toolchain" ] && ([ "$cache_toolchain" != "$toolchain_file" ] || [ ! -f "$cache_toolchain" ]); then
             echo "==> Detected stale or invalid toolchain file in CMake cache ($cache_toolchain -> $toolchain_file), reconfiguring $b_name..."
             rm -rf "$b_dir"
-        elif [ -n "$cxx_compiler" ] && [[ "$cxx_compiler" != *riscv64* ]]; then
+        elif [ -n "$cxx_compiler" ] && [ ! -f "$cxx_compiler" ]; then
+            echo "==> Detected missing compiler in CMake cache ($cxx_compiler), reconfiguring $b_name..."
+            rm -rf "$b_dir"
+        elif [ -n "$cxx_compiler" ] && [ "$(uname -m)" != "riscv64" ] && [[ "$cxx_compiler" != *riscv64* ]]; then
             echo "==> Detected stale host compiler in CMake cache ($cxx_compiler), reconfiguring $b_name..."
             rm -rf "$b_dir"
         elif [ -n "$cache_arch" ] && [ "$cache_arch" != "$riscv_arch" ]; then
@@ -207,27 +214,32 @@ build_backend() {
     fi
 
     # Configure if needed
-    if [ ! -f "$b_dir/CMakeCache.txt" ]; then
+    if [ ! -f "$b_dir/CMakeCache.txt" ] || [ ! -f "$b_dir/Makefile" -a ! -f "$b_dir/build.ninja" ]; then
         local rvv_gem5_arg="$([ "$GEM5_BUILD" = true ] && echo ON || echo OFF)"
         echo "==> Configuring CMake (toolchain: $TOOLCHAIN, backend: $b_name, gem5: $rvv_gem5_arg)..."
-        cmake -S "$PROJECT_ROOT" -B "$b_dir" \
+        if ! cmake -S "$PROJECT_ROOT" -B "$b_dir" \
             -DCMAKE_TOOLCHAIN_FILE="$toolchain_file" \
             -DCMAKE_BUILD_TYPE=Release \
             -DRISCV_ARCH="$riscv_arch" \
             -DRISCV_ABI="lp64d" \
             -DRVPOINT_USE_RVV="$rvv_cmake" \
             -DRVV_PCL_USE_RVV="$rvv_cmake" \
-            -DGEM5_BUILD="$rvv_gem5_arg"
+            -DGEM5_BUILD="$rvv_gem5_arg"; then
+            echo "Error: CMake configuration failed." >&2
+            rm -f "$b_dir/CMakeCache.txt"
+            exit 1
+        fi
         echo "$TOOLCHAIN" > "$marker"
     fi
 
+    local num_jobs="${NPROC:-$(nproc 2>/dev/null || echo 2)}"
     # Build
     if [ -n "$TARGET" ]; then
         echo "==> Building target '$TARGET' [$b_name]..."
-        cmake --build "$b_dir" --target "$TARGET" -j"${NPROC:-2}"
+        cmake --build "$b_dir" --target "$TARGET" -j"${num_jobs}"
     else
         echo "==> Building full target suite [$b_name]..."
-        cmake --build "$b_dir" -j"${NPROC:-2}"
+        cmake --build "$b_dir" -j"${num_jobs}"
     fi
 
     echo "==> Build complete for ${build_profile} backend. Binaries located in: ${b_dir}/bin/${b_name}/"

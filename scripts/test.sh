@@ -43,12 +43,17 @@ echo "============================================================"
 # Ensure build is up-to-date
 "$SCRIPT_DIR/build.sh" --toolchain "$TOOLCHAIN" --backend "$BACKEND"
 
-QEMU_BIN="$(find_qemu)"
-QEMU_FLAGS=(${QEMU_SYSROOT_FLAGS:-})
-if [ "$BACKEND" = "rvv" ]; then
-    QEMU_FLAGS+=("-cpu" "rv64,v=true,vlen=128")
+IS_NATIVE_RISCV=false
+if [ "$(uname -m)" = "riscv64" ]; then
+    IS_NATIVE_RISCV=true
 else
-    QEMU_FLAGS+=("-cpu" "rv64")
+    QEMU_BIN="$(find_qemu)"
+    QEMU_FLAGS=(${QEMU_SYSROOT_FLAGS:-})
+    if [ "$BACKEND" = "rvv" ]; then
+        QEMU_FLAGS+=("-cpu" "rv64,v=true,vlen=128")
+    else
+        QEMU_FLAGS+=("-cpu" "rv64")
+    fi
 fi
 
 BIN_DIR="${BUILD_DIR}/${BACKEND}/bin/${BACKEND}"
@@ -67,6 +72,7 @@ FAST_TESTS=(
     "test_loader"
     "test_concepts"
     "test_fused_filter_normals"
+    "test_spatial_slab"
 )
 if [ "$BACKEND" = "rvv" ]; then
     FAST_TESTS+=("test_rvv_features")
@@ -96,12 +102,22 @@ for test_name in "${TESTS_TO_RUN[@]}"; do
 
     TOTAL=$((TOTAL + 1))
     echo -n "[$TOTAL] Running $test_name... "
-    if "$QEMU_BIN" "${QEMU_FLAGS[@]}" "$test_bin" > /dev/null 2>&1; then
-        echo "PASS"
-        PASSED=$((PASSED + 1))
+    if [ "$IS_NATIVE_RISCV" = true ]; then
+        if "$test_bin" > /dev/null 2>&1; then
+            echo "PASS"
+            PASSED=$((PASSED + 1))
+        else
+            echo "FAIL"
+            FAILED=$((FAILED + 1))
+        fi
     else
-        echo "FAIL"
-        FAILED=$((FAILED + 1))
+        if "$QEMU_BIN" "${QEMU_FLAGS[@]}" "$test_bin" > /dev/null 2>&1; then
+            echo "PASS"
+            PASSED=$((PASSED + 1))
+        else
+            echo "FAIL"
+            FAILED=$((FAILED + 1))
+        fi
     fi
 done
 

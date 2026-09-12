@@ -54,6 +54,9 @@ public:
     void set_method(ClusteringMethod method) noexcept { method_ = method; }
     ClusteringMethod method() const noexcept { return method_; }
 
+    void threads(int t) noexcept { num_threads_ = t; }
+    int threads() const noexcept { return num_threads_; }
+
     void set_backend(Backend b) noexcept { backend_ = b; }
     Backend backend() const noexcept { return backend_; }
 
@@ -99,7 +102,7 @@ public:
         (*this)(in.view(), out, tolerance, min_size, max_size);
     }
     void apply(const PointCloud& in, ClusterResult& out) {
-        (*this)(in.view(), out, clusterTolerance_, minClusterSize_, maxClusterSize_);
+        (*this)(in, out, clusterTolerance_, minClusterSize_, maxClusterSize_);
     }
 
     /**
@@ -122,7 +125,8 @@ private:
     int                  minClusterSize_   = 1;
     int                  maxClusterSize_   = std::numeric_limits<int>::max();
     bool                 use_spatial_grid_ = true;
-    ClusteringMethod     method_           = ClusteringMethod::BFS;
+    ClusteringMethod     method_           = ClusteringMethod::SymmetricUnionFind;
+    int                  num_threads_      = 0;
     Backend              backend_          = Backend::Auto;
 
     void extract_bfs(const PointCloudView& in, ClusterResult& out, float tolerance, int min_size, int max_size);
@@ -139,13 +143,18 @@ private:
     // Symmetric Union-Find scratch workspaces
     std::vector<int>     uf_parent_;
     std::vector<int>     uf_rank_;
-    std::vector<int>     self_pts_;
-    std::vector<int>     cand_idx_;
-    std::vector<float>   cand_x_;
-    std::vector<float>   cand_y_;
-    std::vector<float>   cand_z_;
     std::vector<int>     root_counts_;
     std::vector<int>     root_to_cid_;
+
+    struct UfThreadScratch {
+        std::vector<int> self_pts;
+        std::vector<int> cand_idx;
+        std::vector<float> cand_x;
+        std::vector<float> cand_y;
+        std::vector<float> cand_z;
+        std::vector<std::pair<int, int>> edges;
+    };
+    std::vector<UfThreadScratch> thread_scratch_;
 };
 
 } // namespace rvpoint

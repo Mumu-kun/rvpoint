@@ -13,6 +13,10 @@
 #include <riscv_vector.h>
 #endif
 
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
+
 namespace rvpoint {
 
 EuclideanClustering::EuclideanClustering(float tolerance, int min_size, int max_size, Backend backend)
@@ -38,13 +42,26 @@ void EuclideanClustering::reserve(std::size_t max_points) {
 
     uf_parent_.resize(max_points);
     uf_rank_.resize(max_points, 0);
-    self_pts_.reserve(256);
-    cand_idx_.reserve(2048);
-    cand_x_.reserve(2048);
-    cand_y_.reserve(2048);
-    cand_z_.reserve(2048);
     root_counts_.resize(max_points, 0);
     root_to_cid_.resize(max_points, -1);
+
+    int n_threads = num_threads_ > 0 ? num_threads_ :
+#if defined(_OPENMP)
+        omp_get_max_threads();
+#else
+        1;
+#endif
+    if (n_threads < 1) n_threads = 1;
+
+    thread_scratch_.resize(n_threads);
+    for (int t = 0; t < n_threads; ++t) {
+        thread_scratch_[t].self_pts.reserve(256);
+        thread_scratch_[t].cand_idx.reserve(2048);
+        thread_scratch_[t].cand_x.reserve(2048);
+        thread_scratch_[t].cand_y.reserve(2048);
+        thread_scratch_[t].cand_z.reserve(2048);
+        thread_scratch_[t].edges.reserve(max_points * 2 / n_threads);
+    }
 }
 
 void EuclideanClustering::radiusQueryUnvisited(
@@ -278,111 +295,162 @@ void EuclideanClustering::extract_symmetric_union_find(
     const auto& touched = grid_.touched_slots_;
     const size_t num_cells = touched.size();
 
-    for (size_t s_idx = 0; s_idx < num_cells; ++s_idx) {
-        uint32_t slot = touched[s_idx];
-        const auto& cell = grid_.cells_[slot];
-        if (cell.head == -1) continue;
+    int n_threads = num_threads_ > 0 ? num_threads_ :
+#if defined(_OPENMP)
+        omp_get_max_threads();
+#else
+        1;
+#endif
+    if (n_threads < 1) n_threads = 1;
 
-        self_pts_.clear();
-        int curr = cell.head;
-        while (curr != -1) {
-            self_pts_.push_back(curr);
-            curr = grid_.next_[curr];
+    if (static_cast<int>(thread_scratch_.size()) < n_threads) {
+        thread_scratch_.resize(n_threads);
+        for (int t = 0; t < n_threads; ++t) {
+            thread_scratch_[t].self_pts.reserve(256);
+            thread_scratch_[t].cand_idx.reserve(2048);
+            thread_scratch_[t].cand_x.reserve(2048);
+            thread_scratch_[t].cand_y.reserve(2048);
+            thread_scratch_[t].cand_z.reserve(2048);
+            thread_scratch_[t].edges.reserve(n * 2 / n_threads);
         }
-        size_t n_self = self_pts_.size();
+    }
 
-        // 1. Intra-cell pairwise checks
-        for (size_t u = 0; u < n_self; ++u) {
-            int p_u = self_pts_[u];
-            float ux = in.x[p_u], uy = in.y[p_u], uz = in.z[p_u];
-            for (size_t v = u + 1; v < n_self; ++v) {
-                int p_v = self_pts_[v];
-                float ddx = in.x[p_v] - ux, ddy = in.y[p_v] - uy, ddz = in.z[p_v] - uz;
-                if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
-                    uf_unite(p_u, p_v);
-                }
+    for (int t = 0; t < n_threads; ++t) {
+        thread_scratch_[t].edges.clear();
+    }
+
+#if defined(_OPENMP)
+    #pragma omp parallel num_threads(n_threads)
+#endif
+    {
+        int tid = 0;
+#if defined(_OPENMP)
+        tid = omp_get_thread_num();
+#endif
+        auto& scratch = thread_scratch_[tid];
+        auto& local_edges = scratch.edges;
+        auto& self_pts = scratch.self_pts;
+        auto& cand_idx = scratch.cand_idx;
+        auto& cand_x = scratch.cand_x;
+        auto& cand_y = scratch.cand_y;
+        auto& cand_z = scratch.cand_z;
+
+#if defined(_OPENMP)
+        #pragma omp for schedule(dynamic, 32)
+#endif
+        for (size_t s_idx = 0; s_idx < num_cells; ++s_idx) {
+            uint32_t slot = touched[s_idx];
+            const auto& cell = grid_.cells_[slot];
+            if (cell.head == -1) continue;
+
+            self_pts.clear();
+            int curr = cell.head;
+            while (curr != -1) {
+                self_pts.push_back(curr);
+                curr = grid_.next_[curr];
             }
-        }
+            size_t n_self = self_pts.size();
 
-        // 2. Gather candidates from 13 forward neighbors
-        cand_idx_.clear();
-        cand_x_.clear();
-        cand_y_.clear();
-        cand_z_.clear();
-
-        for (int k = 0; k < 13; ++k) {
-            int tcx = cell.cx + kForwardOffsets[k][0];
-            int tcy = cell.cy + kForwardOffsets[k][1];
-            int tcz = cell.cz + kForwardOffsets[k][2];
-
-            size_t h = grid_.hash3D(tcx, tcy, tcz);
-            int probe = 0;
-            while (grid_.cells_[h].head != -1 && probe < Fast3DSpatialGrid::kMaxProbes) {
-                if (grid_.cells_[h].cx == tcx && grid_.cells_[h].cy == tcy && grid_.cells_[h].cz == tcz) {
-                    int c_nbr = grid_.cells_[h].head;
-                    while (c_nbr != -1) {
-                        cand_idx_.push_back(c_nbr);
-                        cand_x_.push_back(in.x[c_nbr]);
-                        cand_y_.push_back(in.y[c_nbr]);
-                        cand_z_.push_back(in.z[c_nbr]);
-                        c_nbr = grid_.next_[c_nbr];
-                    }
-                    break;
-                }
-                h = (h + 1) & grid_.mask_;
-                probe++;
-            }
-        }
-
-        // 3. Vector distance checks against candidate forward neighbors
-        size_t M = cand_idx_.size();
-        if (M > 0) {
+            // 1. Intra-cell pairwise checks
             for (size_t u = 0; u < n_self; ++u) {
-                int p_u = self_pts_[u];
-                float qx = in.x[p_u], qy = in.y[p_u], qz = in.z[p_u];
+                int p_u = self_pts[u];
+                float ux = in.x[p_u], uy = in.y[p_u], uz = in.z[p_u];
+                for (size_t v = u + 1; v < n_self; ++v) {
+                    int p_v = self_pts[v];
+                    float ddx = in.x[p_v] - ux, ddy = in.y[p_v] - uy, ddz = in.z[p_v] - uz;
+                    if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                        local_edges.emplace_back(p_u, p_v);
+                    }
+                }
+            }
+
+            // 2. Gather candidates from 13 forward neighbors
+            cand_idx.clear();
+            cand_x.clear();
+            cand_y.clear();
+            cand_z.clear();
+
+            for (int k = 0; k < 13; ++k) {
+                int tcx = cell.cx + kForwardOffsets[k][0];
+                int tcy = cell.cy + kForwardOffsets[k][1];
+                int tcz = cell.cz + kForwardOffsets[k][2];
+
+                size_t h = grid_.hash3D(tcx, tcy, tcz);
+                int probe = 0;
+                while (grid_.cells_[h].head != -1 && probe < Fast3DSpatialGrid::kMaxProbes) {
+                    if (grid_.cells_[h].cx == tcx && grid_.cells_[h].cy == tcy && grid_.cells_[h].cz == tcz) {
+                        int c_nbr = grid_.cells_[h].head;
+                        while (c_nbr != -1) {
+                            cand_idx.push_back(c_nbr);
+                            cand_x.push_back(in.x[c_nbr]);
+                            cand_y.push_back(in.y[c_nbr]);
+                            cand_z.push_back(in.z[c_nbr]);
+                            c_nbr = grid_.next_[c_nbr];
+                        }
+                        break;
+                    }
+                    h = (h + 1) & grid_.mask_;
+                    probe++;
+                }
+            }
+
+            // 3. Vector distance checks against candidate forward neighbors
+            size_t M = cand_idx.size();
+            if (M > 0) {
+                for (size_t u = 0; u < n_self; ++u) {
+                    int p_u = self_pts[u];
+                    float qx = in.x[p_u], qy = in.y[p_u], qz = in.z[p_u];
 
 #if defined(__riscv_vector)
-                bool use_rvv = (backend_ == Backend::Auto || backend_ == Backend::RVV);
-                if (use_rvv) {
-                    size_t k = 0;
-                    while (k < M) {
-                        size_t vl = __riscv_vsetvl_e32m8(M - k);
-                        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cand_x_[k], vl);
-                        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cand_y_[k], vl);
-                        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cand_z_[k], vl);
+                    bool use_rvv = (backend_ == Backend::Auto || backend_ == Backend::RVV);
+                    if (use_rvv) {
+                        size_t k = 0;
+                        while (k < M) {
+                            size_t vl = __riscv_vsetvl_e32m8(M - k);
+                            vfloat32m8_t vx = __riscv_vle32_v_f32m8(&cand_x[k], vl);
+                            vfloat32m8_t vy = __riscv_vle32_v_f32m8(&cand_y[k], vl);
+                            vfloat32m8_t vz = __riscv_vle32_v_f32m8(&cand_z[k], vl);
 
-                        vfloat32m8_t ddx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
-                        vfloat32m8_t ddy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
-                        vfloat32m8_t ddz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
+                            vfloat32m8_t ddx = __riscv_vfsub_vf_f32m8(vx, qx, vl);
+                            vfloat32m8_t ddy = __riscv_vfsub_vf_f32m8(vy, qy, vl);
+                            vfloat32m8_t ddz = __riscv_vfsub_vf_f32m8(vz, qz, vl);
 
-                        vfloat32m8_t d2 = __riscv_vfmul_vv_f32m8(ddx, ddx, vl);
-                        d2 = __riscv_vfmacc_vv_f32m8(d2, ddy, ddy, vl);
-                        d2 = __riscv_vfmacc_vv_f32m8(d2, ddz, ddz, vl);
+                            vfloat32m8_t d2 = __riscv_vfmul_vv_f32m8(ddx, ddx, vl);
+                            d2 = __riscv_vfmacc_vv_f32m8(d2, ddy, ddy, vl);
+                            d2 = __riscv_vfmacc_vv_f32m8(d2, ddz, ddz, vl);
 
-                        vbool4_t in_tol = __riscv_vmfle_vf_f32m8_b4(d2, tol_sq, vl);
-                        if (__riscv_vcpop_m_b4(in_tol, vl) > 0) {
-                            uint8_t mbytes[64];
-                            __riscv_vsm_v_b4(mbytes, in_tol, vl);
-                            for (size_t lane = 0; lane < vl; ++lane) {
-                                if ((mbytes[lane >> 3] >> (lane & 7u)) & 1u) {
-                                    uf_unite(p_u, cand_idx_[k + lane]);
+                            vbool4_t in_tol = __riscv_vmfle_vf_f32m8_b4(d2, tol_sq, vl);
+                            if (__riscv_vcpop_m_b4(in_tol, vl) > 0) {
+                                uint8_t mbytes[64];
+                                __riscv_vsm_v_b4(mbytes, in_tol, vl);
+                                for (size_t lane = 0; lane < vl; ++lane) {
+                                    if ((mbytes[lane >> 3] >> (lane & 7u)) & 1u) {
+                                        local_edges.emplace_back(p_u, cand_idx[k + lane]);
+                                    }
                                 }
                             }
+                            k += vl;
                         }
-                        k += vl;
+                        continue;
                     }
-                    continue;
-                }
 #endif
-                for (size_t k = 0; k < M; ++k) {
-                    float ddx = cand_x_[k] - qx;
-                    float ddy = cand_y_[k] - qy;
-                    float ddz = cand_z_[k] - qz;
-                    if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
-                        uf_unite(p_u, cand_idx_[k]);
+                    for (size_t k = 0; k < M; ++k) {
+                        float ddx = cand_x[k] - qx;
+                        float ddy = cand_y[k] - qy;
+                        float ddz = cand_z[k] - qz;
+                        if (ddx * ddx + ddy * ddy + ddz * ddz <= tol_sq) {
+                            local_edges.emplace_back(p_u, cand_idx[k]);
+                        }
                     }
                 }
             }
+        }
+    }
+
+    // 4. Unify all edges serially (deterministic, fast: < 1 ms)
+    for (int t = 0; t < n_threads; ++t) {
+        for (const auto& edge : thread_scratch_[t].edges) {
+            uf_unite(edge.first, edge.second);
         }
     }
 

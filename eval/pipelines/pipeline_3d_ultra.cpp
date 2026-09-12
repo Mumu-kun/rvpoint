@@ -362,15 +362,25 @@ int main(int argc, char** argv) {
     }
 
     // Node 4: Rebuild Search Index for Filtered Cloud (Stage 6)
-    pm.add_node("rebuild_search_index",
-        rvpoint::in<rvpoint::PointCloud>("filtered_cloud"),
-        rvpoint::out<rvpoint::Fast3DSpatialGrid>("filtered_grid"),
-        rvpoint::param<float>("search_radius", 0.25f)
-    )
-    .kernel([](const rvpoint::PointCloud& in, rvpoint::Fast3DSpatialGrid& grid, float radius) {
-        grid = rvpoint::Fast3DSpatialGrid(radius, std::max<size_t>(65536, in.n));
-        grid.build(in);
-    });
+    if (skip_normals) {
+        pm.add_node("rebuild_search_index",
+            rvpoint::in<rvpoint::PointCloud>("filtered_cloud"),
+            rvpoint::out<rvpoint::Fast3DSpatialGrid>("filtered_grid")
+        )
+        .kernel([](const rvpoint::PointCloud&, rvpoint::Fast3DSpatialGrid&) {
+            // Skipped when surface normals are not requested
+        });
+    } else {
+        pm.add_node("rebuild_search_index",
+            rvpoint::in<rvpoint::PointCloud>("filtered_cloud"),
+            rvpoint::out<rvpoint::Fast3DSpatialGrid>("filtered_grid"),
+            rvpoint::param<float>("search_radius", 0.25f)
+        )
+        .kernel([](const rvpoint::PointCloud& in, rvpoint::Fast3DSpatialGrid& grid, float radius) {
+            grid = rvpoint::Fast3DSpatialGrid(radius, std::max<size_t>(65536, in.n));
+            grid.build(in);
+        });
+    }
 
     // Node 5: Surface Normal Estimation (Stage 7)
     if (skip_normals) {
@@ -424,6 +434,7 @@ int main(int argc, char** argv) {
     // Node 7: Euclidean Clustering (Stage 9)
     rvpoint::EuclideanClustering ec(cluster_tolerance, min_cluster_size, max_cluster_size);
     ec.set_use_spatial_grid(true);
+    ec.set_method(rvpoint::ClusteringMethod::SymmetricUnionFind);
 
     pm.add_node("euclidean_clustering",
         rvpoint::in<rvpoint::PointCloud>("obstacle_cloud"),

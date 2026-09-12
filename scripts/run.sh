@@ -225,7 +225,32 @@ echo "==> Building target '$TARGET_NAME' (toolchain: $TOOLCHAIN, backend: $BACKE
 "$SCRIPT_DIR/build.sh" --toolchain "$TOOLCHAIN" --backend "$BACKEND" --target "$TARGET_NAME"
 echo ""
 
-# --- Run target in QEMU ---
+# --- Resolve Target Binary ---
+BIN_DIR="${BUILD_DIR}/${BACKEND}/bin/${BACKEND}"
+TARGET_BIN="$BIN_DIR/$TARGET_NAME"
+if [ ! -f "$TARGET_BIN" ]; then
+    TARGET_BIN="${BUILD_DIR}/${BACKEND}/bin/$TARGET_NAME"
+fi
+if [ ! -f "$TARGET_BIN" ]; then
+    TARGET_BIN="${PROJECT_ROOT}/build/bin/${BACKEND}/$TARGET_NAME"
+fi
+
+if [ ! -f "$TARGET_BIN" ]; then
+    echo "Error: Executable '$TARGET_NAME' not found in $BIN_DIR" >&2
+    exit 1
+fi
+
+# --- Native Execution on RISC-V Hardware ---
+if [ "$(uname -m)" = "riscv64" ]; then
+    echo "==> Executing '$TARGET_NAME' natively on RISC-V hardware [$BACKEND]..."
+    if [ ${#CPP_ARGS[@]} -gt 0 ]; then
+        echo "    Arguments: ${CPP_ARGS[*]}"
+    fi
+    echo "────────────────────────────────────────────────────────────"
+    exec "$TARGET_BIN" "${CPP_ARGS[@]}"
+fi
+
+# --- Emulated Execution under QEMU ---
 QEMU_BIN="$(find_qemu)"
 QEMU_FLAGS=(${QEMU_SYSROOT_FLAGS:-})
 if [ -d "/usr/riscv64-linux-gnu" ]; then
@@ -239,20 +264,6 @@ fi
 
 if [ -d "${PROJECT_ROOT}/env/deps/pcl" ]; then
     QEMU_FLAGS+=("-E" "LD_LIBRARY_PATH=${PROJECT_ROOT}/env/deps/pcl/usr/lib/riscv64-linux-gnu:${PROJECT_ROOT}/env/deps/pcl/lib:${PROJECT_ROOT}/env/deps/pcl/usr/lib")
-fi
-
-BIN_DIR="${BUILD_DIR}/${BACKEND}/bin/${BACKEND}"
-TARGET_BIN="$BIN_DIR/$TARGET_NAME"
-if [ ! -f "$TARGET_BIN" ]; then
-    TARGET_BIN="${BUILD_DIR}/${BACKEND}/bin/$TARGET_NAME"
-fi
-if [ ! -f "$TARGET_BIN" ]; then
-    TARGET_BIN="${PROJECT_ROOT}/build/bin/${BACKEND}/$TARGET_NAME"
-fi
-
-if [ ! -f "$TARGET_BIN" ]; then
-    echo "Error: Executable '$TARGET_NAME' not found in $BIN_DIR" >&2
-    exit 1
 fi
 
 echo "==> Executing '$TARGET_NAME' under QEMU [$BACKEND]..."
