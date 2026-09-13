@@ -49,3 +49,4 @@ void MockMotorActuator::clear_history() {
 }
 
 } // namespace rvpoint
+
