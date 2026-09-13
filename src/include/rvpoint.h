@@ -15,6 +15,9 @@
 #include "filters/voxel_grid/voxel_grid.h"
 #include "filters/statistical_outlier_removal/statistical_outlier_removal.h"
 #include "filters/radius_outlier_removal/radius_outlier_removal.h"
+#include "filters/camera_alignment/camera_alignment.h"
+#include "filters/passthrough_filter/passthrough_filter.h"
+#include "filters/corridor_safety_filter/corridor_safety_filter.h"
 #include "filters/filter_concept.h"
 
 #include "features/normal_estimation/normal_estimation.h"
