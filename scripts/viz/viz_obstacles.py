@@ -233,7 +233,8 @@ def export_foxglove_mcap(
     data: dict,
     obstacle_points: np.ndarray,
     output_mcap: Path,
-    frame_id: str = "lidar"
+    frame_id: str = "lidar",
+    include_labels: bool = True
 ):
     """
     Packs point cloud and 3D bounding geometries into a Foxglove MCAP file.
@@ -318,6 +319,13 @@ def export_foxglove_mcap(
             obb_entity.frame_id = frame_id
             obb_entity.timestamp.CopyFrom(make_timestamp(cur_time_ns))
 
+            # Optional Separate Labels Topic (/perception/labels)
+            scene_labels = SceneUpdate_pb2.SceneUpdate()
+            labels_entity = scene_labels.entities.add()
+            labels_entity.id = "obstacle_labels"
+            labels_entity.frame_id = frame_id
+            labels_entity.timestamp.CopyFrom(make_timestamp(cur_time_ns))
+
             for cl in clusters:
                 cid = cl.get("id", 0)
                 rgb = color_palette[cid % len(color_palette)]
@@ -331,7 +339,7 @@ def export_foxglove_mcap(
                 yaw_deg = obb.get("yaw_deg", 0.0)
                 yaw_rad = math.radians(yaw_deg)
 
-                # A. 3D Minimal OBB Cube
+                # A. 3D Minimal OBB Cube (Translucent volume)
                 cube = obb_entity.cubes.add()
                 cube.pose.position.x = cx
                 cube.pose.position.y = cy
@@ -343,9 +351,37 @@ def export_foxglove_mcap(
                 cube.color.r = rgb[0]
                 cube.color.g = rgb[1]
                 cube.color.b = rgb[2]
-                cube.color.a = 0.38
+                cube.color.a = 0.28
 
-                # B. Heading Yaw Arrow
+                # B. 3D Wireframe Edges (12 bounding box line segments for crisp visibility)
+                corners = obb.get("corners", [])
+                if len(corners) == 4:
+                    z_bot = cz - ez * 0.5
+                    z_top = cz + ez * 0.5
+                    lines_prim = obb_entity.lines.add()
+                    lines_prim.type = LinePrimitive_pb2.LinePrimitive.Type.LINE_LIST
+                    lines_prim.thickness = 0.03
+                    lines_prim.scale_invariant = False
+                    lines_prim.color.r = rgb[0]
+                    lines_prim.color.g = rgb[1]
+                    lines_prim.color.b = rgb[2]
+                    lines_prim.color.a = 0.90
+
+                    b = [(c["x"], c["y"], z_bot) for c in corners]
+                    t = [(c["x"], c["y"], z_top) for c in corners]
+
+                    def add_seg(p1, p2):
+                        pt1 = lines_prim.points.add()
+                        pt1.x, pt1.y, pt1.z = p1[0], p1[1], p1[2]
+                        pt2 = lines_prim.points.add()
+                        pt2.x, pt2.y, pt2.z = p2[0], p2[1], p2[2]
+
+                    for i in range(4):
+                        add_seg(b[i], b[(i + 1) % 4]) # bottom loop
+                        add_seg(t[i], t[(i + 1) % 4]) # top loop
+                        add_seg(b[i], t[i])           # 4 vertical struts
+
+                # C. Heading Yaw Arrow
                 arrow = obb_entity.arrows.add()
                 arrow.pose.position.x = cx
                 arrow.pose.position.y = cy
@@ -360,18 +396,19 @@ def export_foxglove_mcap(
                 arrow.color.b = rgb[2]
                 arrow.color.a = 1.0
 
-                # C. 3D Billboard Text Label
-                txt = obb_entity.texts.add()
+                # D. Compact Screen-Space Text Label (Fixed pixel size, non-obscuring!)
+                txt = labels_entity.texts.add()
                 txt.pose.position.x = cx
                 txt.pose.position.y = cy
-                txt.pose.position.z = cz + ez * 0.5 + 0.35
-                txt.text = f"#{cid} {label}\n{ex:.2f}m × {ey:.2f}m (θ={yaw_deg:+.1f}°)"
-                txt.font_size = 14
+                txt.pose.position.z = cz + ez * 0.5 + 0.25
+                txt.text = f"#{cid} {label.split()[0]} ({ex:.1f}×{ey:.1f}m)"
+                txt.font_size = 12.0
+                txt.scale_invariant = True # TRUE = Screen pixels (12px), NOT meters!
                 txt.billboard = True
                 txt.color.r = 1.0
                 txt.color.g = 1.0
                 txt.color.b = 1.0
-                txt.color.a = 0.95
+                txt.color.a = 0.90
 
             writer.write_message(
                 topic="/perception/bounding_boxes",
@@ -379,6 +416,14 @@ def export_foxglove_mcap(
                 log_time=cur_time_ns,
                 publish_time=cur_time_ns,
             )
+
+            if include_labels and len(labels_entity.texts) > 0:
+                writer.write_message(
+                    topic="/perception/labels",
+                    message=scene_labels,
+                    log_time=cur_time_ns,
+                    publish_time=cur_time_ns,
+                )
 
             # ──────────────────────────────────────────────────────────────────
             # 3. Fast Reactive Bounding Discs (/perception/bounding_discs)
@@ -396,18 +441,38 @@ def export_foxglove_mcap(
                 dr = disc.get("radius", 0.5)
                 z_min = disc.get("z_min", 0.0)
 
+                # Cylinder representing the clearance disc
                 cyl = disc_entity.cylinders.add()
                 cyl.pose.position.x = dcx
                 cyl.pose.position.y = dcy
-                cyl.pose.position.z = z_min + 0.02
+                cyl.pose.position.z = z_min + 0.03
                 cyl.pose.orientation.w = 1.0
                 cyl.size.x = dr * 2.0
                 cyl.size.y = dr * 2.0
-                cyl.size.z = 0.04
+                cyl.size.z = 0.06
+                cyl.bottom_scale = 1.0 # REQUIRED: 1.0 for true cylinder (default 0.0 is invisible cone)
+                cyl.top_scale = 1.0    # REQUIRED: 1.0 for true cylinder
                 cyl.color.r = 0.02
-                cyl.color.g = 0.71
-                cyl.color.b = 0.83
-                cyl.color.a = 0.22
+                cyl.color.g = 0.85
+                cyl.color.b = 0.95
+                cyl.color.a = 0.35
+
+                # Perimeter Circle Ring Line for crisp edge visibility
+                ring = disc_entity.lines.add()
+                ring.type = LinePrimitive_pb2.LinePrimitive.Type.LINE_STRIP
+                ring.thickness = 0.04
+                ring.scale_invariant = False
+                ring.color.r = 0.02
+                ring.color.g = 0.85
+                ring.color.b = 0.95
+                ring.color.a = 0.95
+                num_segments = 32
+                for s in range(num_segments + 1):
+                    th = s * (2.0 * math.pi / num_segments)
+                    rpt = ring.points.add()
+                    rpt.x = dcx + dr * math.cos(th)
+                    rpt.y = dcy + dr * math.sin(th)
+                    rpt.z = z_min + 0.05
 
             writer.write_message(
                 topic="/perception/bounding_discs",
@@ -427,8 +492,9 @@ def export_foxglove_mcap(
 
             # Left boundary line (+0.40m)
             line_l = corr_entity.lines.add()
-            line_l.type = LinePrimitive_pb2.LinePrimitive.LINE_STRIP
+            line_l.type = LinePrimitive_pb2.LinePrimitive.Type.LINE_STRIP
             line_l.thickness = 0.04
+            line_l.scale_invariant = False
             line_l.color.r = 0.94
             line_l.color.g = 0.27
             line_l.color.b = 0.27
@@ -440,8 +506,9 @@ def export_foxglove_mcap(
 
             # Right boundary line (-0.40m)
             line_r = corr_entity.lines.add()
-            line_r.type = LinePrimitive_pb2.LinePrimitive.LINE_STRIP
+            line_r.type = LinePrimitive_pb2.LinePrimitive.Type.LINE_STRIP
             line_r.thickness = 0.04
+            line_r.scale_invariant = False
             line_r.color.r = 0.94
             line_r.color.g = 0.27
             line_r.color.b = 0.27
@@ -733,6 +800,8 @@ def main():
                         help="Output image path for rendered figure (default: output/ticket_06_obstacles.png)")
     parser.add_argument("--optical", action="store_true",
                         help="Specify if input PCD is in camera optical frame (X right, Y down, Z forward)")
+    parser.add_argument("--no-labels", action="store_true",
+                        help="Omit 3D floating text labels from the MCAP timeline")
     parser.add_argument("--serve", action="store_true",
                         help="Launch HTTP 206 CORS server to stream directly into Foxglove Studio")
     parser.add_argument("--port", type=int, default=8080, help="Port for Foxglove server (default: 8080)")
@@ -771,7 +840,7 @@ def main():
 
     # Step 5: Export Foxglove MCAP timeline
     print(f"[2/4] Generating Foxglove Studio MCAP timeline...")
-    export_foxglove_mcap(data, obstacle_points, args.mcap)
+    export_foxglove_mcap(data, obstacle_points, args.mcap, include_labels=not args.no_labels)
 
     # Step 6: Render Matplotlib Overview
     print(f"[3/4] Rendering high-resolution multi-panel overview...")
