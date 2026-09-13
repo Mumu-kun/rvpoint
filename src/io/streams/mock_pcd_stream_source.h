@@ -37,6 +37,9 @@ public:
     size_t file_count() const noexcept { return paths_.size(); }
     size_t current_index() const noexcept { return current_idx_; }
 
+    void set_scale(float scale) noexcept { scale_ = scale; }
+    float scale() const noexcept { return scale_; }
+
 private:
     std::vector<std::string> paths_;
     double fps_ = 30.0;
@@ -44,6 +47,7 @@ private:
     MockTrajectoryMode mode_ = MockTrajectoryMode::ForwardStraight;
     float vx_ = 0.4f;
     float wz_ = 0.2f;
+    float scale_ = 1.0f;
 
     uint64_t frame_interval_ns_ = 33333333; // ~30 Hz
     size_t current_idx_ = 0;

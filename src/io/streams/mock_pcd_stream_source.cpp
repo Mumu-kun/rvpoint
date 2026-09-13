@@ -40,7 +40,7 @@ bool MockPcdStreamSource::poll_frame(StreamFrame& out) {
     }
 
     const std::string& path = paths_[current_idx_++];
-    if (!loadPCD(path, out.cloud)) {
+    if (!loadPCD(path, out.cloud, scale_)) {
         std::cerr << "[MockPcdStreamSource] Warning: Failed to load " << path << std::endl;
         return false;
     }

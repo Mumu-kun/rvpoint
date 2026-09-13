@@ -102,7 +102,7 @@ inline bool parsePCDHeader(std::ifstream& file, PCDHeader& header, std::size_t& 
 
 } // namespace detail
 
-inline bool loadPCD(const std::string& filename, PointCloud& cloud) {
+inline bool loadPCD(const std::string& filename, PointCloud& cloud, float scale = 1.0f) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << std::endl;
@@ -171,6 +171,7 @@ inline bool loadPCD(const std::string& filename, PointCloud& cloud) {
             }
             field_offset_in_buf += field_total_bytes;
         }
+        if (scale != 1.0f) cloud.scale(scale);
         std::cout << "Loaded " << header.points << " points (Binary Compressed)." << std::endl;
         return true;
     } else if (header.data_type == "binary") {
@@ -181,6 +182,7 @@ inline bool loadPCD(const std::string& filename, PointCloud& cloud) {
             cloud.y[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[y_idx]);
             cloud.z[i] = *reinterpret_cast<float*>(point_buf.data() + offsets[z_idx]);
         }
+        if (scale != 1.0f) cloud.scale(scale);
         std::cout << "Loaded " << header.points << " points (Binary)." << std::endl;
         return true;
     } else if (header.data_type == "ascii") {
@@ -201,6 +203,7 @@ inline bool loadPCD(const std::string& filename, PointCloud& cloud) {
             }
         }
         cloud.resize(i);
+        if (scale != 1.0f) cloud.scale(scale);
         std::cout << "Loaded " << cloud.n << " points (ASCII)." << std::endl;
         return true;
     }
@@ -208,7 +211,7 @@ inline bool loadPCD(const std::string& filename, PointCloud& cloud) {
     return false;
 }
 
-inline bool loadPCD(const std::string& filename, std::vector<PointXYZ>& points) {
+inline bool loadPCD(const std::string& filename, std::vector<PointXYZ>& points, float scale = 1.0f) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) return false;
 
@@ -263,16 +266,16 @@ inline bool loadPCD(const std::string& filename, std::vector<PointXYZ>& points) 
             field_offset += total_bytes;
         }
         for (size_t i = 0; i < header.points; ++i) {
-            points[i] = {tmp_x[i], tmp_y[i], tmp_z[i]};
+            points[i] = {tmp_x[i] * scale, tmp_y[i] * scale, tmp_z[i] * scale};
         }
         return true;
     } else if (header.data_type == "binary") {
         std::vector<char> point_buf(point_step);
         for (std::size_t i = 0; i < header.points; ++i) {
             file.read(point_buf.data(), point_step);
-            points[i].x = *reinterpret_cast<float*>(point_buf.data() + offsets[x_idx]);
-            points[i].y = *reinterpret_cast<float*>(point_buf.data() + offsets[y_idx]);
-            points[i].z = *reinterpret_cast<float*>(point_buf.data() + offsets[z_idx]);
+            points[i].x = *reinterpret_cast<float*>(point_buf.data() + offsets[x_idx]) * scale;
+            points[i].y = *reinterpret_cast<float*>(point_buf.data() + offsets[y_idx]) * scale;
+            points[i].z = *reinterpret_cast<float*>(point_buf.data() + offsets[z_idx]) * scale;
         }
         return true;
     } else if (header.data_type == "ascii") {
@@ -285,9 +288,9 @@ inline bool loadPCD(const std::string& filename, std::vector<PointXYZ>& points) 
             std::string token;
             while (iss >> token) tokens.push_back(token);
             if (tokens.size() >= header.fields.size()) {
-                points[i].x = std::stof(tokens[x_idx]);
-                points[i].y = std::stof(tokens[y_idx]);
-                points[i].z = std::stof(tokens[z_idx]);
+                points[i].x = std::stof(tokens[x_idx]) * scale;
+                points[i].y = std::stof(tokens[y_idx]) * scale;
+                points[i].z = std::stof(tokens[z_idx]) * scale;
                 i++;
             }
         }

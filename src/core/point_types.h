@@ -7,6 +7,10 @@
 #include <cmath>
 #include <utility>
 
+#if defined(__riscv_vector)
+#include <riscv_vector.h>
+#endif
+
 namespace rvpoint {
 
 /**
@@ -144,6 +148,71 @@ public:
       std::memcpy(y.data(), src.y, src.n * sizeof(float));
       std::memcpy(z.data(), src.z, src.n * sizeof(float));
     }
+  }
+
+  /**
+   * @brief Scale all coordinates uniformly in-place.
+   * @param factor Uniform scale factor (e.g. 0.001f for mm -> meters).
+   */
+  void scale(float factor) noexcept {
+    scale(factor, factor, factor);
+  }
+
+  /**
+   * @brief Scale coordinates along X, Y, and Z axes in-place.
+   * @param sx Scale factor for X
+   * @param sy Scale factor for Y
+   * @param sz Scale factor for Z
+   */
+  void scale(float sx, float sy, float sz) noexcept {
+#if defined(__riscv_vector)
+    std::size_t i = 0;
+    while (i < n) {
+      std::size_t vl = __riscv_vsetvl_e32m8(n - i);
+      vfloat32m8_t vx = __riscv_vle32_v_f32m8(x.data() + i, vl);
+      vfloat32m8_t vy = __riscv_vle32_v_f32m8(y.data() + i, vl);
+      vfloat32m8_t vz = __riscv_vle32_v_f32m8(z.data() + i, vl);
+      vx = __riscv_vfmul_vf_f32m8(vx, sx, vl);
+      vy = __riscv_vfmul_vf_f32m8(vy, sy, vl);
+      vz = __riscv_vfmul_vf_f32m8(vz, sz, vl);
+      __riscv_vse32_v_f32m8(x.data() + i, vx, vl);
+      __riscv_vse32_v_f32m8(y.data() + i, vy, vl);
+      __riscv_vse32_v_f32m8(z.data() + i, vz, vl);
+      i += vl;
+    }
+#else
+    for (std::size_t i = 0; i < n; ++i) {
+      x[i] *= sx;
+      y[i] *= sy;
+      z[i] *= sz;
+    }
+#endif
+  }
+
+  /**
+   * @brief Compute the 3D axis-aligned bounding box of the point cloud.
+   */
+  void get_bounds(float& min_x, float& max_x,
+                  float& min_y, float& max_y,
+                  float& min_z, float& max_z) const noexcept {
+    if (empty()) {
+      min_x = max_x = min_y = max_y = min_z = max_z = 0.0f;
+      return;
+    }
+    float m_min_x = x[0], m_max_x = x[0];
+    float m_min_y = y[0], m_max_y = y[0];
+    float m_min_z = z[0], m_max_z = z[0];
+    for (std::size_t i = 1; i < n; ++i) {
+      if (x[i] < m_min_x) m_min_x = x[i];
+      if (x[i] > m_max_x) m_max_x = x[i];
+      if (y[i] < m_min_y) m_min_y = y[i];
+      if (y[i] > m_max_y) m_max_y = y[i];
+      if (z[i] < m_min_z) m_min_z = z[i];
+      if (z[i] > m_max_z) m_max_z = z[i];
+    }
+    min_x = m_min_x; max_x = m_max_x;
+    min_y = m_min_y; max_y = m_max_y;
+    min_z = m_min_z; max_z = m_max_z;
   }
 
   PointCloudView as_soa() const noexcept {
