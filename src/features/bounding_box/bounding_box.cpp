@@ -321,3 +321,4 @@ void ObstacleGeometryExtractor::extract_all(const PointCloud& cloud,
 }
 
 } // namespace rvpoint
+
