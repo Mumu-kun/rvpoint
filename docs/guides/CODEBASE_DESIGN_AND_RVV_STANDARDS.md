@@ -149,6 +149,21 @@ To ensure strict physical modularity, maintainability, and clean AI-assisted nav
 
 ---
 
+### 2.6 The Leaf-Kernel Invariant & Dependency Injection (Kernels Don't Own Kernels)
+
+To protect the 32 KB L1 Data Cache on the SpacemiT K1 (ADR-0010), maximize DAG scheduling flexibility (ADR-0012), and prevent redundant scratchpad memory duplication across worker threads (ADR-0013):
+
+1. **Leaf-Kernel Invariant**:
+   Atomic compute kernels in `src/` (such as `VoxelGrid`, `RansacPlane`, `NormalEstimation`, `RadiusOutlierRemoval`, `ForwardCorridorSafetyFilter`) must remain pure leaf operators. **A compute kernel must NEVER instantiate, embed, or own another compute kernel as a private member.**
+2. **Anti-Pattern (Nested Kernels)**:
+   Embedding an algorithm like `RansacPlane` inside another filter (e.g. `GroundFilter`) embeds $\approx 274\,\text{KB}$ of dormant scratch buffers, bloats the object footprint $8.5\times$ past the L1D cache limit, prevents `PipelineManager` from probing intermediate equations (`PlaneModel`), and causes L2 thrashing in multi-core pools.
+3. **The Dependency Injection Pattern**:
+   When a compound algorithm requires a secondary compute kernel:
+   - **In Pipeline DAGs (ADR-0012)**: Factor the operation into discrete pipeline nodes connected via typed slots (e.g. `cam_cloud` $\rightarrow$ `extrinsics_node` $\rightarrow$ `body_cloud` $\rightarrow$ `ransac_node` $\rightarrow$ `ground_plane` $\rightarrow$ `elevation_slice_node`).
+   - **In Standalone Modules**: Inject the dependent kernel by non-const reference (`RansacPlane&`) via the method signature (e.g. `calibrate_ground(const PointCloud&, RansacPlane&, int)`). The caller or pipeline manager owns the kernel and its scratch memory.
+
+---
+
 ## 3. RVV 1.0 Vector Optimization Standards
 
 ### 3.1 The 5 Hardware Vector Invariants
