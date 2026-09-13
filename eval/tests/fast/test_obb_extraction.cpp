@@ -1,11 +1,15 @@
 #include <cmath>
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <cstdlib>
 #include <algorithm>
 
 #include "features/bounding_box/bounding_box.h"
+#include "filters/camera_alignment/camera_alignment.h"
+#include "filters/passthrough_filter/passthrough_filter.h"
 #include "segmentation/forward_cell_clustering.h"
+#include "io/simple_pcd_loader.h"
 #include "core/point_types.h"
 
 using namespace rvpoint;
@@ -212,6 +216,116 @@ static void test_end_to_end_clustering_and_extraction() {
     std::cout << "    [PASS] End-to-end integration verified: 2 clusters segmented and transformed to dual geometric bounds." << std::endl;
 }
 
+static void test_real_pcd_obstacle_extraction() {
+    std::cout << "[5] Running Obstacle Extractor on real dataset (data/pcd_compressed/0000000000.pcd)..." << std::endl;
+    PointCloud raw_cloud;
+    std::string path = "data/pcd_compressed/0000000000.pcd";
+    if (!loadPCD(path, raw_cloud)) {
+        path = "data/0000000000.pcd";
+        if (!loadPCD(path, raw_cloud)) {
+            std::cout << "    [SKIP] Sample PCD file not found." << std::endl;
+            return;
+        }
+    }
+
+    // Convert raw LiDAR points into camera optical frame
+    // KITTI: X fwd, Y left, Z up (-1.73m is road)
+    // Camera: X right (-Y), Y down (-Z), Z forward (X)
+    PointCloud cam_cloud;
+    cam_cloud.resize(raw_cloud.size());
+    for (size_t i = 0; i < raw_cloud.size(); ++i) {
+        cam_cloud.x[i] = -raw_cloud.y[i];
+        cam_cloud.y[i] = -raw_cloud.z[i];
+        cam_cloud.z[i] = raw_cloud.x[i];
+    }
+
+    // Stage 1: Camera Alignment
+    CameraAlignmentParams align_params;
+    align_params.mount_height_m = 1.73f;
+    CameraAlignment align(align_params);
+    float g[3] = {0.0f, 9.81f, 0.0f};
+    PointCloud body_cloud;
+    align.transform_to_body(cam_cloud, g, body_cloud);
+
+    // Stage 2: PassThroughFilter to isolate driving corridor non-ground obstacles
+    PassThroughFilter filter(0.15f, 2.50f);
+    filter.set_limits_x(2.0f, 25.0f);
+    filter.set_limits_y(-5.0f, 5.0f);
+    PointCloud obstacles_cloud;
+    filter.filter(body_cloud, obstacles_cloud);
+
+    TEST_CHECK(!obstacles_cloud.empty(), "Obstacle points isolated from real PCD");
+
+    // Stage 3: ForwardCellClustering
+    ForwardCellClustering clusterer(0.35f, 15, 2500);
+    ClusterResult clusters;
+    clusterer(obstacles_cloud, clusters);
+
+    TEST_CHECK(clusters.num_clusters() > 0, "At least one obstacle cluster segmented");
+
+    // Stage 4: ObstacleGeometryExtractor (ADR-0009)
+    ObstacleGeometryExtractor extractor(4096);
+    std::vector<ObstacleGeometry> obstacle_geoms;
+    extractor.extract_all(obstacles_cloud, clusters, obstacle_geoms);
+
+    std::cout << "    Segmented " << clusters.num_clusters() << " obstacle clusters from "
+              << obstacles_cloud.size() << " corridor points:" << std::endl;
+
+    for (size_t i = 0; i < obstacle_geoms.size() && i < 10; ++i) {
+        const auto& o = obstacle_geoms[i];
+        std::cout << "      [Obstacle #" << i << "] Centroid: ("
+                  << o.obb.cx << ", " << o.obb.cy << ", " << o.obb.cz
+                  << ")m, OBB Extents: (" << o.obb.extent_x << " x " << o.obb.extent_y << " x " << o.obb.extent_z
+                  << ")m, Yaw: " << (o.obb.yaw_rad * 180.0f / kPi)
+                  << " deg, Bounding Disc R: " << o.disc.radius << "m ("
+                  << o.obb.point_count << " pts)" << std::endl;
+    }
+
+    // Export real extracted obstacle telemetry to JSON for visualization
+    std::ofstream json_file("output/ticket_06_real_data.json");
+    if (json_file.is_open()) {
+        json_file << "{\n  \"clusters\": [\n";
+        for (size_t i = 0; i < obstacle_geoms.size(); ++i) {
+            const auto& o = obstacle_geoms[i];
+            json_file << "    {\n";
+            json_file << "      \"id\": " << i << ",\n";
+            json_file << "      \"point_count\": " << o.obb.point_count << ",\n";
+            json_file << "      \"disc\": {\"cx\": " << o.disc.cx << ", \"cy\": " << o.disc.cy
+                      << ", \"radius\": " << o.disc.radius << ", \"z_min\": " << o.disc.z_min
+                      << ", \"z_max\": " << o.disc.z_max << "},\n";
+            json_file << "      \"obb\": {\"cx\": " << o.obb.cx << ", \"cy\": " << o.obb.cy
+                      << ", \"cz\": " << o.obb.cz << ", \"extent_x\": " << o.obb.extent_x
+                      << ", \"extent_y\": " << o.obb.extent_y << ", \"extent_z\": " << o.obb.extent_z
+                      << ", \"yaw_deg\": " << (o.obb.yaw_rad * 180.0f / kPi) << ",\n";
+            json_file << "        \"corners\": [";
+            for (int k = 0; k < 4; ++k) {
+                json_file << "{\"x\": " << o.obb.corners_x[k] << ", \"y\": " << o.obb.corners_y[k] << "}"
+                          << (k < 3 ? ", " : "");
+            }
+            json_file << "]},\n";
+
+            // Export sample points for this cluster
+            json_file << "      \"sample_points\": [";
+            auto [idx_ptr, idx_count] = clusters.cluster(i);
+            size_t step = std::max<size_t>(1, idx_count / 80); // sample up to 80 points
+            bool first = true;
+            for (size_t s = 0; s < idx_count; s += step) {
+                uint32_t p_idx = idx_ptr[s];
+                if (!first) json_file << ", ";
+                json_file << "{\"x\": " << obstacles_cloud.x[p_idx]
+                          << ", \"y\": " << obstacles_cloud.y[p_idx]
+                          << ", \"z\": " << obstacles_cloud.z[p_idx] << "}";
+                first = false;
+            }
+            json_file << "]\n";
+            json_file << "    }" << (i + 1 < obstacle_geoms.size() ? "," : "") << "\n";
+        }
+        json_file << "  ]\n}\n";
+        json_file.close();
+        std::cout << "    [PASS] Exported real obstacle geometries to output/ticket_06_real_data.json" << std::endl;
+    }
+}
+
 int main() {
     std::cout << "============================================================" << std::endl;
     std::cout << " Running test_obb_extraction (ADR-0009 Dual Obstacle Extractor)" << std::endl;
@@ -221,6 +335,7 @@ int main() {
     test_bounding_disc();
     test_synthetic_rotated_obb();
     test_end_to_end_clustering_and_extraction();
+    test_real_pcd_obstacle_extraction();
 
     std::cout << "============================================================" << std::endl;
     std::cout << " test_obb_extraction PASSED ALL CHECKS" << std::endl;
