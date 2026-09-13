@@ -22,6 +22,7 @@
 
 #include "features/normal_estimation/normal_estimation.h"
 #include "features/fused_filter_normals/fused_filter_normals.h"
+#include "features/bounding_box/bounding_box.h"
 
 #include "search/octree/octree.h"
 #include "search/spatial_hashing/spatial_hashing.h"

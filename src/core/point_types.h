@@ -302,6 +302,16 @@ struct ClusterResult {
     uint32_t len = offsets[idx + 1] - start;
     return {indices.data() + start, len};
   }
+
+  const uint32_t* cluster_indices(std::size_t idx) const noexcept {
+    if (idx >= num_clusters()) return nullptr;
+    return indices.data() + offsets[idx];
+  }
+
+  std::size_t cluster_size(std::size_t idx) const noexcept {
+    if (idx >= num_clusters()) return 0;
+    return offsets[idx + 1] - offsets[idx];
+  }
 };
 
 /**
