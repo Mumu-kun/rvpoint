@@ -207,14 +207,17 @@ The architecture covers the entire spectrum of mobile autonomy: from low-level s
 - **Goal**: Partition non-ground obstacle points into discrete physical objects.
 - **Algorithm**: `rvpoint::EuclideanClusterer` using `Fast3DSpatialGrid` with cluster tolerance $d_{\text{tol}} = 0.08\,\text{m}$ and size bounds $[30, 2000]$ points.
 
-#### `[TICKET-2.2]` 2D Convex Hull & 3D Oriented Bounding Box (OBB)
-- **Goal**: Compute precise bounding geometry and orientation for each cluster without external libraries.
-- **Steps**:
-  1. Project 3D cluster points to 2D $(X_i, Y_i)$.
-  2. Compute 2D Convex Hull via **Andrew's Monotone Chain** ($O(K \log K)$).
-  3. Compute Minimum Area Bounding Box via **Rotating Calipers** ($O(K)$).
-  4. Compute vertical elevation bounds $[Z_{\text{min}}, Z_{\text{max}}]$.
-  5. Output: Center $(c_x, c_y, c_z)$, extents $(e_x, e_y, e_z)$, and yaw angle $\theta_{\text{box}}$.
+#### `[TICKET-2.2]` Decoupled 2D Convex Hull, Bounding Discs & 3D Oriented Bounding Boxes (OBBs)
+- **Goal**: Compute precise bounding geometry, reactive safety discs, and heading orientation for each cluster via pure Tier 1 leaf operators (ADR-0014) without external libraries.
+- **Kernels & Representations**:
+  1. `ConvexHull2D` (`src/features/convex_hull/`): Counter-clockwise convex polygon via RVV 1.0 Akl-Toussaint extrema pre-filtering and Andrew's Monotone Chain ($O(K \log K)$), Vectorized Jarvis March ($O(M \cdot K)$), or Angular Binning ($O(K)$).
+  2. `BoundingBoxExtractor` (`src/features/bounding_box/`): 3D OBBs (center, extents, yaw angle, 4 footprint corners) supporting 4 unconditional strategies:
+     - `MIN_AREA`: Freeman-Shapira Rotating Calipers hull edge sweep ($O(M)$).
+     - `L_SHAPE_ALIGN`: Zhang et al. (2017) RVV Truncated Closeness with midpoint sign-injection (`vfsgnjx.vv`), 3-candidate streaming, and lane-local accumulation.
+     - `EDGE_ALIGN`: Hull Edge-Perimeter Alignment (EPA) scoring edge collinearity ($S_{\text{EPA}} = \sum L_k \max(|\mathbf{d}_k \cdot \mathbf{u}|, |\mathbf{d}_k \cdot \mathbf{v}|)^4$), sub-degree exact on vehicle sheet metal in $O(C \cdot M)$ time ($23\times$ faster than point closeness).
+     - `WIREFRAME_PCA`: Closed-form $O(M)$ 2D covariance eigendecomposition of hull boundary edges.
+  3. `BoundingDiscExtractor` (`src/features/bounding_disc/`): High-rate isotropic bounding discs ($c_x, c_y, R_{\text{disc}}$) via point-centroid reduction (`compute_from_points`) or concentric circumscribing disc (`compute_concentric`).
+- **Zero-Heap Steady State**: All scratch workspaces pre-allocated in `reserve()` (ADR-0010).
 
 #### `[TICKET-2.3]` Lateral Evasion & Intelligent Pivot Selector
 - **Goal**: When an obstacle enters the warning zone ($d < 1.2\,\text{m}$):

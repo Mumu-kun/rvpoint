@@ -6,7 +6,10 @@
 #include <algorithm>
 #include <chrono>
 
+#include "features/convex_hull/convex_hull.h"
+#include "features/bounding_disc/bounding_disc.h"
 #include "features/bounding_box/bounding_box.h"
+#include "filters/voxel_grid/voxel_grid.h"
 #include "filters/camera_alignment/camera_alignment.h"
 #include "filters/passthrough_filter/passthrough_filter.h"
 #include "segmentation/forward_cell_clustering.h"
@@ -16,10 +19,12 @@
 using namespace rvpoint;
 
 static void print_usage(const char* prog) {
-    std::cout << "Usage: " << prog << " <input_pcd> [output_json] [output_obstacles_pcd] [--optical|--body]\n"
+    std::cout << "Usage: " << prog << " <input_pcd> [output_json] [output_obstacles_pcd] [options]\n"
               << "Options:\n"
-              << "  --optical   Input is camera optical frame (X right, Y down, Z forward). Aligns with gravity.\n"
-              << "  --body      Input is already vehicle body frame (X forward, Y left, Z up). Default.\n"
+              << "  --optical             Input is camera optical frame (X right, Y down, Z forward). Aligns with gravity.\n"
+              << "  --body                Input is already vehicle body frame (X forward, Y left, Z up). Default.\n"
+              << "  --strategy <strat>    Bounding box strategy: min_area | l_shape | edge_align | pca | adaptive. Default: edge_align.\n"
+              << "  --voxel <size>        Optional pre-clustering voxelization filter (meters, e.g. 0.08).\n"
               << std::endl;
 }
 
@@ -34,10 +39,19 @@ int main(int argc, char** argv) {
     std::string output_pcd = (argc > 3 && argv[3][0] != '-') ? argv[3] : "";
 
     bool is_optical = false;
+    std::string strat_str = "edge_align";
+    float voxel_size = 0.0f;
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--optical") is_optical = true;
         if (arg == "--body") is_optical = false;
+        if (arg == "--strategy" && i + 1 < argc) {
+            strat_str = argv[++i];
+        }
+        if (arg == "--voxel" && i + 1 < argc) {
+            voxel_size = std::stof(argv[++i]);
+        }
     }
 
     std::cout << "============================================================" << std::endl;
@@ -48,6 +62,10 @@ int main(int argc, char** argv) {
         std::cout << " Output PCD:   " << output_pcd << std::endl;
     }
     std::cout << " Coordinate:   " << (is_optical ? "Camera Optical (Transforming to Body)" : "Vehicle Body (ISO 8855)") << std::endl;
+    std::cout << " Strategy:     " << strat_str << std::endl;
+    if (voxel_size > 0.0f) {
+        std::cout << " Voxel Size:   " << voxel_size << " m (Pre-clustering downsampler with extent margin)" << std::endl;
+    }
     std::cout << "============================================================" << std::endl;
 
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -84,33 +102,115 @@ int main(int argc, char** argv) {
         }
     }
 
-    // 3. PassThroughFilter (Corridor cropping: isolate obstacles from road ground and overhead)
+    // 3. Ground & Canopy Elevation Slicing (Whole 360-degree scene, no X/Y corridor crop)
     PassThroughFilter filter(0.15f, 2.50f);
-    filter.set_limits_x(1.0f, 25.0f);
-    filter.set_limits_y(-5.5f, 5.5f);
-    PointCloud obstacles_cloud;
-    filter.filter(body_cloud, obstacles_cloud);
+    PointCloud raw_obstacles_cloud;
+    filter.filter(body_cloud, raw_obstacles_cloud);
 
-    std::cout << "[2] Isolated " << obstacles_cloud.size() << " non-ground driving corridor points." << std::endl;
-    if (obstacles_cloud.empty()) {
-        std::cerr << "[WARN] Zero obstacle points in driving corridor. Check coordinate frame." << std::endl;
+    std::cout << "[2] Isolated " << raw_obstacles_cloud.size() << " non-ground obstacle points across the whole scene." << std::endl;
+    if (raw_obstacles_cloud.empty()) {
+        std::cerr << "[WARN] Zero obstacle points in scene. Check coordinate frame." << std::endl;
         return 0;
     }
 
+    // Optional Level 1 Scene Voxelization
+    PointCloud obstacles_cloud;
+    if (voxel_size > 0.0f) {
+        VoxelGrid voxel_filter(voxel_size);
+        voxel_filter(raw_obstacles_cloud, obstacles_cloud, voxel_size);
+        std::cout << "[2b] Voxel downsampled to " << obstacles_cloud.size() << " points (cell: " << voxel_size << "m)." << std::endl;
+    } else {
+        obstacles_cloud = std::move(raw_obstacles_cloud);
+    }
+
     // 4. ForwardCellClustering (RVV 1.0 accelerated spatial grouping)
-    ForwardCellClustering clusterer(0.35f, 15, 3000);
+    auto t_clust_start = std::chrono::high_resolution_clock::now();
+    ForwardCellClustering clusterer(0.35f, 15, 25000);
     ClusterResult clusters;
     clusterer(obstacles_cloud, clusters);
-    std::cout << "[3] Segmented " << clusters.num_clusters() << " obstacle clusters." << std::endl;
+    auto t_clust_end = std::chrono::high_resolution_clock::now();
+    double clust_ms = std::chrono::duration<double, std::milli>(t_clust_end - t_clust_start).count();
+    std::cout << "[3] Segmented " << clusters.num_clusters() << " obstacle clusters in " << clust_ms << " ms." << std::endl;
 
-    // 5. ObstacleGeometryExtractor (ADR-0009: Bounding Discs + Rotating Calipers 3D OBBs)
-    ObstacleGeometryExtractor extractor(4096);
-    std::vector<ObstacleGeometry> obstacle_geoms;
-    extractor.extract_all(obstacles_cloud, clusters, obstacle_geoms);
+    // 5. Decoupled Leaf Kernels: ConvexHull2D -> BoundingBoxExtractor -> BoundingDiscExtractor
+    ConvexHull2D hull_extractor(2048);
+
+    BoundingBoxParams bbox_params;
+    bool is_adaptive = (strat_str == "adaptive");
+    if (strat_str == "min_area") bbox_params.strategy = BoundingBoxStrategy::MIN_AREA;
+    else if (strat_str == "l_shape") bbox_params.strategy = BoundingBoxStrategy::L_SHAPE_ALIGN;
+    else if (strat_str == "pca") bbox_params.strategy = BoundingBoxStrategy::WIREFRAME_PCA;
+    else bbox_params.strategy = BoundingBoxStrategy::EDGE_ALIGN; // Default
+
+    BoundingBoxExtractor bbox_extractor(bbox_params, 2048);
+    BoundingDiscExtractor disc_extractor;
+
+    PointCloud2D hull_scratch;
+    std::vector<OrientedBoundingBox> obstacle_boxes(clusters.num_clusters());
+    std::vector<BoundingDisc> obstacle_discs(clusters.num_clusters());
+
+    double hull_us_total = 0.0;
+    double bbox_us_total = 0.0;
+    double disc_us_total = 0.0;
+
+    auto t_geom_start = std::chrono::high_resolution_clock::now();
+
+    for (size_t c = 0; c < clusters.num_clusters(); ++c) {
+        const uint32_t* c_idx = clusters.cluster_indices(c);
+        const size_t c_size = clusters.cluster_size(c);
+
+        // Stage A: 2D Convex Hull
+        auto ta0 = std::chrono::high_resolution_clock::now();
+        hull_extractor(obstacles_cloud, c_idx, c_size, hull_scratch);
+        auto ta1 = std::chrono::high_resolution_clock::now();
+        hull_us_total += std::chrono::duration<double, std::micro>(ta1 - ta0).count();
+
+        // Stage B: 3D Bounding Box (Adaptive policy or direct strategy)
+        auto tb0 = std::chrono::high_resolution_clock::now();
+        if (is_adaptive) {
+            // Pipeline-level policy: small/sparse clusters -> MIN_AREA; substantial clusters -> EDGE_ALIGN
+            if (c_size < 20 || hull_scratch.size() < 4) {
+                bbox_extractor.compute_min_area(obstacles_cloud, c_idx, c_size, hull_scratch, obstacle_boxes[c]);
+            } else {
+                bbox_extractor.compute_edge_align(obstacles_cloud, c_idx, c_size, hull_scratch, obstacle_boxes[c]);
+            }
+        } else {
+            bbox_extractor(obstacles_cloud, c_idx, c_size, hull_scratch, obstacle_boxes[c]);
+        }
+
+        // Bounding margin padding if voxel downsampling was active (prevents under-bounding)
+        if (voxel_size > 0.0f) {
+            obstacle_boxes[c].extent_x += voxel_size;
+            obstacle_boxes[c].extent_y += voxel_size;
+        }
+        auto tb1 = std::chrono::high_resolution_clock::now();
+        bbox_us_total += std::chrono::duration<double, std::micro>(tb1 - tb0).count();
+
+        // Stage C: Concentric Circumscribed Bounding Disc
+        auto tc0 = std::chrono::high_resolution_clock::now();
+        disc_extractor.compute_concentric(obstacle_boxes[c], obstacle_discs[c]);
+        auto tc1 = std::chrono::high_resolution_clock::now();
+        disc_us_total += std::chrono::duration<double, std::micro>(tc1 - tc0).count();
+    }
+
+    auto t_geom_end = std::chrono::high_resolution_clock::now();
+    double geom_total_ms = std::chrono::duration<double, std::milli>(t_geom_end - t_geom_start).count();
 
     auto t1 = std::chrono::high_resolution_clock::now();
-    double total_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    std::cout << "[4] Extracted dual geometries in " << total_ms << " ms total." << std::endl;
+    double total_pipeline_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    std::cout << "\n============================================================" << std::endl;
+    std::cout << " Obstacle Perception Timing Profile (QEMU Emulation)" << std::endl;
+    std::cout << "============================================================" << std::endl;
+    std::cout << "  [1] PassThrough & Voxel Filter:    " << std::chrono::duration<double, std::milli>(t_clust_start - t0).count() << " ms" << std::endl;
+    std::cout << "  [2] ForwardCellClustering:         " << clust_ms << " ms (" << clusters.num_clusters() << " clusters)" << std::endl;
+    std::cout << "  [3] Geometry Extraction (Total):   " << geom_total_ms << " ms" << std::endl;
+    std::cout << "      ├─ ConvexHull2D:               " << hull_us_total << " us (" << (hull_us_total / 1000.0) << " ms, " << (hull_us_total / clusters.num_clusters()) << " us/cluster)" << std::endl;
+    std::cout << "      ├─ BoundingBox (" << strat_str << "): " << bbox_us_total << " us (" << (bbox_us_total / 1000.0) << " ms, " << (bbox_us_total / clusters.num_clusters()) << " us/cluster)" << std::endl;
+    std::cout << "      └─ BoundingDisc (Concentric):  " << disc_us_total << " us (" << (disc_us_total / 1000.0) << " ms, " << (disc_us_total / clusters.num_clusters()) << " us/cluster)" << std::endl;
+    std::cout << "  ----------------------------------------------------------" << std::endl;
+    std::cout << "  End-to-End Frame Processing:       " << total_pipeline_ms << " ms" << std::endl;
+    std::cout << "============================================================\n" << std::endl;
 
     // 6. Export to JSON
     std::ofstream json_file(output_json);
@@ -125,24 +225,25 @@ int main(int argc, char** argv) {
     json_file << "  \"input_pcd\": \"" << input_pcd << "\",\n";
     json_file << "  \"raw_point_count\": " << raw_cloud.size() << ",\n";
     json_file << "  \"obstacle_point_count\": " << obstacles_cloud.size() << ",\n";
-    json_file << "  \"num_clusters\": " << obstacle_geoms.size() << ",\n";
+    json_file << "  \"num_clusters\": " << obstacle_boxes.size() << ",\n";
     json_file << "  \"clusters\": [\n";
 
-    for (size_t i = 0; i < obstacle_geoms.size(); ++i) {
-        const auto& o = obstacle_geoms[i];
+    for (size_t i = 0; i < obstacle_boxes.size(); ++i) {
+        const auto& box = obstacle_boxes[i];
+        const auto& disc = obstacle_discs[i];
         json_file << "    {\n";
         json_file << "      \"id\": " << i << ",\n";
-        json_file << "      \"point_count\": " << o.obb.point_count << ",\n";
-        json_file << "      \"disc\": {\"cx\": " << o.disc.cx << ", \"cy\": " << o.disc.cy
-                  << ", \"radius\": " << o.disc.radius << ", \"z_min\": " << o.disc.z_min
-                  << ", \"z_max\": " << o.disc.z_max << "},\n";
-        json_file << "      \"obb\": {\"cx\": " << o.obb.cx << ", \"cy\": " << o.obb.cy
-                  << ", \"cz\": " << o.obb.cz << ", \"extent_x\": " << o.obb.extent_x
-                  << ", \"extent_y\": " << o.obb.extent_y << ", \"extent_z\": " << o.obb.extent_z
-                  << ", \"yaw_deg\": " << (o.obb.yaw_rad / kDegToRad) << ",\n";
+        json_file << "      \"point_count\": " << box.point_count << ",\n";
+        json_file << "      \"disc\": {\"cx\": " << disc.cx << ", \"cy\": " << disc.cy
+                  << ", \"radius\": " << disc.radius << ", \"z_min\": " << disc.z_min
+                  << ", \"z_max\": " << disc.z_max << "},\n";
+        json_file << "      \"obb\": {\"cx\": " << box.cx << ", \"cy\": " << box.cy
+                  << ", \"cz\": " << box.cz << ", \"extent_x\": " << box.extent_x
+                  << ", \"extent_y\": " << box.extent_y << ", \"extent_z\": " << box.extent_z
+                  << ", \"yaw_deg\": " << (box.yaw_rad / kDegToRad) << ",\n";
         json_file << "        \"corners\": [";
         for (int k = 0; k < 4; ++k) {
-            json_file << "{\"x\": " << o.obb.corners_x[k] << ", \"y\": " << o.obb.corners_y[k] << "}"
+            json_file << "{\"x\": " << box.corners[k].x << ", \"y\": " << box.corners[k].y << "}"
                       << (k < 3 ? ", " : "");
         }
         json_file << "]},\n";
@@ -161,7 +262,7 @@ int main(int argc, char** argv) {
             first = false;
         }
         json_file << "]\n";
-        json_file << "    }" << (i + 1 < obstacle_geoms.size() ? "," : "") << "\n";
+        json_file << "    }" << (i + 1 < obstacle_boxes.size() ? "," : "") << "\n";
     }
     json_file << "  ]\n}\n";
     json_file.close();
@@ -177,3 +278,4 @@ int main(int argc, char** argv) {
     std::cout << "==> Obstacle extraction completed successfully." << std::endl;
     return 0;
 }
+

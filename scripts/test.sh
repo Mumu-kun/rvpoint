@@ -73,6 +73,7 @@ FAST_TESTS=(
     "test_concepts"
     "test_fused_filter_normals"
     "test_spatial_slab"
+    "test_obb_extraction"
 )
 if [ "$BACKEND" = "rvv" ]; then
     FAST_TESTS+=("test_rvv_features")

@@ -4,8 +4,8 @@ viz_obstacles.py — Real-Time LiDAR Bounding Box Extractor & Foxglove MCAP Visu
 ====================================================================================
 
 Takes a PCD point cloud file, runs the RVPoint perception pipeline (CameraAlignment,
-PassThroughFilter, ForwardCellClustering, and ObstacleGeometryExtractor for 3D OBBs
-and Bounding Discs), exports a Foxglove-compliant MCAP timeline, and serves it for
+PassThroughFilter, ForwardCellClustering, and decoupled BoundingBoxExtractor &
+BoundingDiscExtractor for 3D OBBs and Bounding Discs), exports a Foxglove-compliant MCAP timeline, and serves it for
 instant 3D visualization.
 
 Usage:
@@ -63,6 +63,7 @@ try:
         Vector3_pb2,
     )
     from google.protobuf.timestamp_pb2 import Timestamp
+
     HAS_FOXGLOVE = True
 except ImportError:
     HAS_FOXGLOVE = False
@@ -71,6 +72,7 @@ except ImportError:
 # ──────────────────────────────────────────────────────────────────────────────
 # 1. Pipeline Execution & PCD Loading
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def to_wsl_path(path: Path) -> str:
     """Convert Windows path to WSL /mnt/ path if running on Windows."""
@@ -82,7 +84,9 @@ def to_wsl_path(path: Path) -> str:
     return s
 
 
-def run_cpp_bounding_boxing(pcd_path: Path, output_json: Path, output_pcd: Path, is_optical: bool) -> bool:
+def run_cpp_bounding_boxing(
+    pcd_path: Path, output_json: Path, output_pcd: Path, is_optical: bool
+) -> bool:
     """Run the C++ pipeline_obstacles binary via WSL or native linux."""
     print(f"\n[1/4] Executing RVPoint C++ Perception Pipeline on '{pcd_path.name}'...")
     wsl_pcd = to_wsl_path(pcd_path)
@@ -94,7 +98,7 @@ def run_cpp_bounding_boxing(pcd_path: Path, output_json: Path, output_pcd: Path,
 
     # Check if inside native Linux or on Windows host
     if sys.platform.startswith("linux"):
-        cmd = f"./scripts/run.sh pipeline_obstacles \"{wsl_pcd}\" \"{wsl_json}\" \"{wsl_out_pcd}\" {opt_flag}"
+        cmd = f'./scripts/run.sh pipeline_obstacles "{wsl_pcd}" "{wsl_json}" "{wsl_out_pcd}" {opt_flag}'
     else:
         cmd = f'wsl -d rvpoint bash -c "source env/activate.sh && ./scripts/run.sh pipeline_obstacles \\"{wsl_pcd}\\" \\"{wsl_json}\\" \\"{wsl_out_pcd}\\" {opt_flag}"'
 
@@ -102,7 +106,9 @@ def run_cpp_bounding_boxing(pcd_path: Path, output_json: Path, output_pcd: Path,
     if ret == 0 and output_json.exists():
         print(f"[OK] C++ Bounding Box Extractor completed successfully.")
         return True
-    print("[WARN] C++ pipeline execution failed or not configured; falling back to Python geometry engine.")
+    print(
+        "[WARN] C++ pipeline execution failed or not configured; falling back to Python geometry engine."
+    )
     return False
 
 
@@ -154,6 +160,7 @@ def load_pcd_points(pcd_path: Path) -> np.ndarray:
     # Fallback to open3d if available
     try:
         import open3d as o3d
+
         pcd = o3d.io.read_point_cloud(str(pcd_path))
         return np.asarray(pcd.points, dtype=np.float32)
     except Exception:
@@ -163,6 +170,7 @@ def load_pcd_points(pcd_path: Path) -> np.ndarray:
 # ──────────────────────────────────────────────────────────────────────────────
 # 2. Python Fallback Bounding Box Engine (If C++ not invoked)
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def compute_convex_hull_2d(pts: list[dict]) -> list[tuple[float, float]]:
     """Andrew's Monotone Chain 2D convex hull."""
@@ -212,6 +220,7 @@ def infer_label(obb: dict, disc: dict, pts_count: int) -> str:
 # 3. Foxglove MCAP Timeline Writer
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def make_timestamp(ns: int) -> Timestamp:
     ts = Timestamp()
     ts.seconds = ns // 1_000_000_000
@@ -234,7 +243,7 @@ def export_foxglove_mcap(
     obstacle_points: np.ndarray,
     output_mcap: Path,
     frame_id: str = "lidar",
-    include_labels: bool = True
+    include_labels: bool = True,
 ):
     """
     Packs point cloud and 3D bounding geometries into a Foxglove MCAP file.
@@ -245,7 +254,10 @@ def export_foxglove_mcap(
       /vehicle/safety_corridor      -> foxglove.SceneUpdate (Lines)
     """
     if not HAS_FOXGLOVE:
-        print("[ERROR] foxglove-schemas-protobuf and mcap-protobuf-support are required.", file=sys.stderr)
+        print(
+            "[ERROR] foxglove-schemas-protobuf and mcap-protobuf-support are required.",
+            file=sys.stderr,
+        )
         return
 
     output_mcap.parent.mkdir(parents=True, exist_ok=True)
@@ -280,11 +292,13 @@ def export_foxglove_mcap(
                 for cl in clusters:
                     cid = cl.get("id", 0)
                     for p in cl.get("sample_points", []):
-                        all_pts.append((p["x"], p["y"], p.get("z", 0.0), float(cid + 1)))
+                        all_pts.append(
+                            (p["x"], p["y"], p.get("z", 0.0), float(cid + 1))
+                        )
 
             if all_pts:
                 raw_bytes = bytearray()
-                for (x, y, z, intensity) in all_pts:
+                for x, y, z, intensity in all_pts:
                     raw_bytes.extend(struct.pack("<ffff", x, y, z, intensity))
 
                 pcd_msg = PointCloud_pb2.PointCloud()
@@ -335,7 +349,11 @@ def export_foxglove_mcap(
                 label = infer_label(obb, disc, pts_cnt)
 
                 cx, cy, cz = obb.get("cx", 0.0), obb.get("cy", 0.0), obb.get("cz", 0.0)
-                ex, ey, ez = obb.get("extent_x", 1.0), obb.get("extent_y", 1.0), obb.get("extent_z", 1.0)
+                ex, ey, ez = (
+                    obb.get("extent_x", 1.0),
+                    obb.get("extent_y", 1.0),
+                    obb.get("extent_z", 1.0),
+                )
                 yaw_deg = obb.get("yaw_deg", 0.0)
                 yaw_rad = math.radians(yaw_deg)
 
@@ -377,9 +395,9 @@ def export_foxglove_mcap(
                         pt2.x, pt2.y, pt2.z = p2[0], p2[1], p2[2]
 
                     for i in range(4):
-                        add_seg(b[i], b[(i + 1) % 4]) # bottom loop
-                        add_seg(t[i], t[(i + 1) % 4]) # top loop
-                        add_seg(b[i], t[i])           # 4 vertical struts
+                        add_seg(b[i], b[(i + 1) % 4])  # bottom loop
+                        add_seg(t[i], t[(i + 1) % 4])  # top loop
+                        add_seg(b[i], t[i])  # 4 vertical struts
 
                 # C. Heading Yaw Arrow
                 arrow = obb_entity.arrows.add()
@@ -403,7 +421,7 @@ def export_foxglove_mcap(
                 txt.pose.position.z = cz + ez * 0.5 + 0.25
                 txt.text = f"#{cid} {label.split()[0]} ({ex:.1f}×{ey:.1f}m)"
                 txt.font_size = 12.0
-                txt.scale_invariant = True # TRUE = Screen pixels (12px), NOT meters!
+                txt.scale_invariant = True  # TRUE = Screen pixels (12px), NOT meters!
                 txt.billboard = True
                 txt.color.r = 1.0
                 txt.color.g = 1.0
@@ -450,8 +468,8 @@ def export_foxglove_mcap(
                 cyl.size.x = dr * 2.0
                 cyl.size.y = dr * 2.0
                 cyl.size.z = 0.06
-                cyl.bottom_scale = 1.0 # REQUIRED: 1.0 for true cylinder (default 0.0 is invisible cone)
-                cyl.top_scale = 1.0    # REQUIRED: 1.0 for true cylinder
+                cyl.bottom_scale = 1.0  # REQUIRED: 1.0 for true cylinder (default 0.0 is invisible cone)
+                cyl.top_scale = 1.0  # REQUIRED: 1.0 for true cylinder
                 cyl.color.r = 0.02
                 cyl.color.g = 0.85
                 cyl.color.b = 0.95
@@ -528,22 +546,31 @@ def export_foxglove_mcap(
     temp_path.replace(output_mcap)
     size_kb = output_mcap.stat().st_size / 1024.0
     print(f"\n[OK] Exported Foxglove MCAP timeline -> {output_mcap} ({size_kb:.1f} KB)")
-    print(f"     Topics: /lidar/obstacles, /perception/bounding_boxes, /perception/bounding_discs, /vehicle/safety_corridor")
+    print(
+        f"     Topics: /lidar/obstacles, /perception/bounding_boxes, /perception/bounding_discs, /vehicle/safety_corridor"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 4. HTTP Range & CORS Streaming Server for Foxglove Studio
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class FoxgloveRangeServer(http.server.SimpleHTTPRequestHandler):
     """Compliant HTTP 206 Partial Content server with open CORS."""
+
     target_dir: Path = None
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Range, Content-Type, Authorization")
-        self.send_header("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges")
+        self.send_header(
+            "Access-Control-Allow-Headers", "Range, Content-Type, Authorization"
+        )
+        self.send_header(
+            "Access-Control-Expose-Headers",
+            "Content-Length, Content-Range, Accept-Ranges",
+        )
         self.send_header("Accept-Ranges", "bytes")
         super().end_headers()
 
@@ -562,7 +589,7 @@ def serve_mcap_server(target_file: Path, port: int = 8080):
             super().__init__(*args, directory=str(target_dir), **kwargs)
 
     url = f"http://localhost:{port}/{filename}"
-    foxglove_web_url = f"https://app.foxglove.dev/open?ds=file&ds.url={url}"
+    foxglove_web_url = f"https://app.foxglove.dev/open?ds=remote-file&ds.url={url}"
 
     print("\n" + "═" * 86)
     print(" 🦊 Foxglove Studio Streaming Server Active")
@@ -585,12 +612,15 @@ def serve_mcap_server(target_file: Path, port: int = 8080):
 # 5. Terminal Roster & Matplotlib Renderer
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def print_ansi_roster(data: dict):
     clusters = data.get("clusters", [])
     print("\n" + "═" * 88)
     print(" RVPoint ADR-0009 Dual Obstacle Telemetry Summary")
     print("═" * 88)
-    print(f"{'ID':^4} | {'Pts':^6} | {'Centroid (X, Y, Z)':^22} | {'OBB (L × W × H)':^18} | {'Yaw':^8} | {'Disc R':^7} | {'Class':<14}")
+    print(
+        f"{'ID':^4} | {'Pts':^6} | {'Centroid (X, Y, Z)':^22} | {'OBB (L × W × H)':^18} | {'Yaw':^8} | {'Disc R':^7} | {'Class':<14}"
+    )
     print("─" * 88)
     for idx, cl in enumerate(clusters):
         cid = cl.get("id", idx)
@@ -598,11 +628,17 @@ def print_ansi_roster(data: dict):
         obb = cl.get("obb", {})
         disc = cl.get("disc", {})
         ocx, ocy, ocz = obb.get("cx", 0), obb.get("cy", 0), obb.get("cz", 0)
-        ex, ey, ez = obb.get("extent_x", 0), obb.get("extent_y", 0), obb.get("extent_z", 0)
+        ex, ey, ez = (
+            obb.get("extent_x", 0),
+            obb.get("extent_y", 0),
+            obb.get("extent_z", 0),
+        )
         yaw = obb.get("yaw_deg", 0)
         dr = disc.get("radius", 0)
         label = infer_label(obb, disc, pts_count)
-        print(f"#{cid:^3} | {pts_count:^6} | ({ocx:5.1f}, {ocy:5.1f}, {ocz:4.1f})m | {ex:4.2f} × {ey:4.2f} × {ez:4.2f}m | {yaw:+6.1f}° | {dr:5.2f}m | {label:<14}")
+        print(
+            f"#{cid:^3} | {pts_count:^6} | ({ocx:5.1f}, {ocy:5.1f}, {ocz:4.1f})m | {ex:4.2f} × {ey:4.2f} × {ez:4.2f}m | {yaw:+6.1f}° | {dr:5.2f}m | {label:<14}"
+        )
     print("═" * 88 + "\n")
 
 
@@ -618,12 +654,25 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
         return
 
     cluster_colors = [
-        "#3b82f6", "#f59e0b", "#ec4899", "#8b5cf6",
-        "#06b6d4", "#10b981", "#64748b", "#ef4444"
+        "#3b82f6",
+        "#f59e0b",
+        "#ec4899",
+        "#8b5cf6",
+        "#06b6d4",
+        "#10b981",
+        "#64748b",
+        "#ef4444",
     ]
 
     fig = plt.figure(figsize=(18, 9), facecolor="#0f172a")
-    gs = fig.add_gridspec(2, 3, width_ratios=[1.3, 1.2, 1.1], height_ratios=[1, 1], hspace=0.28, wspace=0.25)
+    gs = fig.add_gridspec(
+        2,
+        3,
+        width_ratios=[1.3, 1.2, 1.1],
+        height_ratios=[1, 1],
+        hspace=0.28,
+        wspace=0.25,
+    )
 
     ax_bev = fig.add_subplot(gs[:, 0], facecolor="#1e293b")
     ax_3d = fig.add_subplot(gs[0, 1], projection="3d", facecolor="#1e293b")
@@ -631,14 +680,43 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
     ax_tbl = fig.add_subplot(gs[:, 2], facecolor="#1e293b")
 
     # 1. BEV
-    ax_bev.set_title("ISO 8855 Bird's Eye View (BEV Top-Down)\nDual Geometric Bounds: Discs (Cyan) + 3D OBBs (Color)",
-                     color="#f8fafc", fontsize=11, fontweight="bold", pad=12)
+    ax_bev.set_title(
+        "ISO 8855 Bird's Eye View (BEV Top-Down)\nDual Geometric Bounds: Discs (Cyan) + 3D OBBs (Color)",
+        color="#f8fafc",
+        fontsize=11,
+        fontweight="bold",
+        pad=12,
+    )
     ax_bev.grid(True, linestyle="--", alpha=0.2, color="#94a3b8")
-    ax_bev.fill([0, 20, 20, 0], [-0.4, -0.4, 0.4, 0.4], color="#ef4444", alpha=0.10, label="Safety Corridor (|Y| ≤ 0.4m)")
-    ax_bev.plot([0, 20], [0.4, 0.4], color="#ef4444", linestyle="--", linewidth=1.2, alpha=0.6)
-    ax_bev.plot([0, 20], [-0.4, -0.4], color="#ef4444", linestyle="--", linewidth=1.2, alpha=0.6)
-    ax_bev.scatter(0, 0, color="#10b981", s=140, marker="o", edgecolors="#f8fafc", linewidth=1.8, zorder=10)
-    ax_bev.annotate("", xy=(1.2, 0), xytext=(0, 0), arrowprops=dict(arrowstyle="->", color="#10b981", lw=2.5, mutation_scale=15))
+    ax_bev.fill(
+        [0, 20, 20, 0],
+        [-0.4, -0.4, 0.4, 0.4],
+        color="#ef4444",
+        alpha=0.10,
+        label="Safety Corridor (|Y| ≤ 0.4m)",
+    )
+    ax_bev.plot(
+        [0, 20], [0.4, 0.4], color="#ef4444", linestyle="--", linewidth=1.2, alpha=0.6
+    )
+    ax_bev.plot(
+        [0, 20], [-0.4, -0.4], color="#ef4444", linestyle="--", linewidth=1.2, alpha=0.6
+    )
+    ax_bev.scatter(
+        0,
+        0,
+        color="#10b981",
+        s=140,
+        marker="o",
+        edgecolors="#f8fafc",
+        linewidth=1.8,
+        zorder=10,
+    )
+    ax_bev.annotate(
+        "",
+        xy=(1.2, 0),
+        xytext=(0, 0),
+        arrowprops=dict(arrowstyle="->", color="#10b981", lw=2.5, mutation_scale=15),
+    )
 
     table_rows = []
 
@@ -657,36 +735,92 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
             ax_bev.scatter(px, py, color=color, s=12, alpha=0.75, zorder=4)
 
         dcx, dcy, dr = disc.get("cx", 0.0), disc.get("cy", 0.0), disc.get("radius", 0.0)
-        ax_bev.add_patch(Circle((dcx, dcy), dr, edgecolor="#06b6d4", facecolor="#06b6d4", alpha=0.08, linestyle="--", linewidth=1.4, zorder=3))
+        ax_bev.add_patch(
+            Circle(
+                (dcx, dcy),
+                dr,
+                edgecolor="#06b6d4",
+                facecolor="#06b6d4",
+                alpha=0.08,
+                linestyle="--",
+                linewidth=1.4,
+                zorder=3,
+            )
+        )
 
         corners = obb.get("corners", [])
         if len(corners) == 4:
             poly_pts = [(c["x"], c["y"]) for c in corners]
-            ax_bev.add_patch(Polygon(poly_pts, closed=True, edgecolor=color, facecolor=color, alpha=0.22, linestyle="-", linewidth=2.0, zorder=5))
+            ax_bev.add_patch(
+                Polygon(
+                    poly_pts,
+                    closed=True,
+                    edgecolor=color,
+                    facecolor=color,
+                    alpha=0.22,
+                    linestyle="-",
+                    linewidth=2.0,
+                    zorder=5,
+                )
+            )
 
         ocx, ocy = obb.get("cx", dcx), obb.get("cy", dcy)
         yaw_rad = math.radians(obb.get("yaw_deg", 0.0))
         arrow_len = max(0.6, obb.get("extent_x", 1.0) * 0.45)
-        ax_bev.annotate("", xy=(ocx + arrow_len * math.cos(yaw_rad), ocy + arrow_len * math.sin(yaw_rad)), xytext=(ocx, ocy),
-                        arrowprops=dict(arrowstyle="->", color=color, lw=2.0, mutation_scale=12), zorder=6)
+        ax_bev.annotate(
+            "",
+            xy=(
+                ocx + arrow_len * math.cos(yaw_rad),
+                ocy + arrow_len * math.sin(yaw_rad),
+            ),
+            xytext=(ocx, ocy),
+            arrowprops=dict(arrowstyle="->", color=color, lw=2.0, mutation_scale=12),
+            zorder=6,
+        )
 
-        ax_bev.text(ocx + 0.2, ocy + 0.2, f"#{cid}\n{label.split()[0]}", color="#f8fafc", fontsize=8, fontweight="bold", zorder=7,
-                    bbox=dict(boxstyle="round,pad=0.2", facecolor=color, alpha=0.65, edgecolor="none"))
+        ax_bev.text(
+            ocx + 0.2,
+            ocy + 0.2,
+            f"#{cid}\n{label.split()[0]}",
+            color="#f8fafc",
+            fontsize=8,
+            fontweight="bold",
+            zorder=7,
+            bbox=dict(
+                boxstyle="round,pad=0.2", facecolor=color, alpha=0.65, edgecolor="none"
+            ),
+        )
 
-        table_rows.append([
-            f"#{cid}", f"{pt_count}", f"({ocx:.1f}, {ocy:.1f})",
-            f"{obb.get('extent_x', 0):.2f} × {obb.get('extent_y', 0):.2f}",
-            f"{obb.get('yaw_deg', 0):+.1f}°", f"{dr:.2f}m", label
-        ])
+        table_rows.append(
+            [
+                f"#{cid}",
+                f"{pt_count}",
+                f"({ocx:.1f}, {ocy:.1f})",
+                f"{obb.get('extent_x', 0):.2f} × {obb.get('extent_y', 0):.2f}",
+                f"{obb.get('yaw_deg', 0):+.1f}°",
+                f"{dr:.2f}m",
+                label,
+            ]
+        )
 
-    ax_bev.set_xlabel("Forward Axis +X (m) [Vehicle Heading →]", color="#cbd5e1", fontsize=10)
-    ax_bev.set_ylabel("Lateral Axis +Y (m) [Left ← / Right →]", color="#cbd5e1", fontsize=10)
+    ax_bev.set_xlabel(
+        "Forward Axis +X (m) [Vehicle Heading →]", color="#cbd5e1", fontsize=10
+    )
+    ax_bev.set_ylabel(
+        "Lateral Axis +Y (m) [Left ← / Right →]", color="#cbd5e1", fontsize=10
+    )
     ax_bev.tick_params(colors="#94a3b8")
     ax_bev.set_xlim(-1.0, 20.0)
     ax_bev.set_ylim(-6.0, 5.0)
 
     # 2. 3D Wireframe
-    ax_3d.set_title("3D Isometric Multi-Cluster Wireframe Bounds", color="#f8fafc", fontsize=11, fontweight="bold", pad=8)
+    ax_3d.set_title(
+        "3D Isometric Multi-Cluster Wireframe Bounds",
+        color="#f8fafc",
+        fontsize=11,
+        fontweight="bold",
+        pad=8,
+    )
     ax_3d.tick_params(colors="#94a3b8", labelsize=8)
     ax_3d.grid(True, linestyle=":", alpha=0.2)
 
@@ -697,7 +831,14 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
         pts = cl.get("sample_points", [])
 
         if pts:
-            ax_3d.scatter([p["x"] for p in pts], [p["y"] for p in pts], [p.get("z", 0.0) for p in pts], color=color, s=6, alpha=0.6)
+            ax_3d.scatter(
+                [p["x"] for p in pts],
+                [p["y"] for p in pts],
+                [p.get("z", 0.0) for p in pts],
+                color=color,
+                s=6,
+                alpha=0.6,
+            )
 
         corners = obb.get("corners", [])
         cz = obb.get("cz", 0.0)
@@ -706,9 +847,30 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
             b = [(c["x"], c["y"], cz - ez / 2.0) for c in corners]
             t = [(c["x"], c["y"], cz + ez / 2.0) for c in corners]
             for i in range(4):
-                ax_3d.plot([b[i][0], b[(i+1)%4][0]], [b[i][1], b[(i+1)%4][1]], [b[i][2], b[(i+1)%4][2]], color=color, lw=1.2, alpha=0.85)
-                ax_3d.plot([t[i][0], t[(i+1)%4][0]], [t[i][1], t[(i+1)%4][1]], [t[i][2], t[(i+1)%4][2]], color=color, lw=1.2, alpha=0.85)
-                ax_3d.plot([b[i][0], t[i][0]], [b[i][1], t[i][1]], [b[i][2], t[i][2]], color=color, lw=1.2, alpha=0.85)
+                ax_3d.plot(
+                    [b[i][0], b[(i + 1) % 4][0]],
+                    [b[i][1], b[(i + 1) % 4][1]],
+                    [b[i][2], b[(i + 1) % 4][2]],
+                    color=color,
+                    lw=1.2,
+                    alpha=0.85,
+                )
+                ax_3d.plot(
+                    [t[i][0], t[(i + 1) % 4][0]],
+                    [t[i][1], t[(i + 1) % 4][1]],
+                    [t[i][2], t[(i + 1) % 4][2]],
+                    color=color,
+                    lw=1.2,
+                    alpha=0.85,
+                )
+                ax_3d.plot(
+                    [b[i][0], t[i][0]],
+                    [b[i][1], t[i][1]],
+                    [b[i][2], t[i][2]],
+                    color=color,
+                    lw=1.2,
+                    alpha=0.85,
+                )
 
     ax_3d.view_init(elev=26, azim=-125)
     ax_3d.set_xlim(2, 19)
@@ -716,11 +878,19 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
     ax_3d.set_zlim(0, 3)
 
     # 3. Primary Obstacle Zoom
-    ax_close.set_title("Close-up Detail: Primary Hazard Obstacle", color="#f8fafc", fontsize=11, fontweight="bold", pad=8)
+    ax_close.set_title(
+        "Close-up Detail: Primary Hazard Obstacle",
+        color="#f8fafc",
+        fontsize=11,
+        fontweight="bold",
+        pad=8,
+    )
     ax_close.grid(True, linestyle="--", alpha=0.2, color="#94a3b8")
     ax_close.tick_params(colors="#94a3b8")
 
-    primary = next((c for c in clusters if c.get("id") == 7), clusters[0] if clusters else None)
+    primary = next(
+        (c for c in clusters if c.get("id") == 7), clusters[0] if clusters else None
+    )
     if primary:
         col = "#ef4444"
         pts = primary.get("sample_points", [])
@@ -728,30 +898,85 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
         obb = primary.get("obb", {})
 
         if pts:
-            ax_close.scatter([p["x"] for p in pts], [p["y"] for p in pts], color="#f8fafc", s=18, alpha=0.9, zorder=5, label=f"LiDAR Pts ({primary.get('point_count')} pts)")
+            ax_close.scatter(
+                [p["x"] for p in pts],
+                [p["y"] for p in pts],
+                color="#f8fafc",
+                s=18,
+                alpha=0.9,
+                zorder=5,
+                label=f"LiDAR Pts ({primary.get('point_count')} pts)",
+            )
         dcx, dcy, dr = disc.get("cx", 0), disc.get("cy", 0), disc.get("radius", 0)
-        ax_close.add_patch(Circle((dcx, dcy), dr, edgecolor="#06b6d4", facecolor="#06b6d4", alpha=0.12, linestyle="--", linewidth=2.0, zorder=3, label=f"Bounding Disc (R={dr:.2f}m)"))
+        ax_close.add_patch(
+            Circle(
+                (dcx, dcy),
+                dr,
+                edgecolor="#06b6d4",
+                facecolor="#06b6d4",
+                alpha=0.12,
+                linestyle="--",
+                linewidth=2.0,
+                zorder=3,
+                label=f"Bounding Disc (R={dr:.2f}m)",
+            )
+        )
 
         corners = obb.get("corners", [])
         if len(corners) == 4:
-            ax_close.add_patch(Polygon([(c["x"], c["y"]) for c in corners], closed=True, edgecolor=col, facecolor=col, alpha=0.25, linewidth=2.5, zorder=4,
-                               label=f"3D OBB ({obb.get('extent_x'):.2f}m × {obb.get('extent_y'):.2f}m)"))
+            ax_close.add_patch(
+                Polygon(
+                    [(c["x"], c["y"]) for c in corners],
+                    closed=True,
+                    edgecolor=col,
+                    facecolor=col,
+                    alpha=0.25,
+                    linewidth=2.5,
+                    zorder=4,
+                    label=f"3D OBB ({obb.get('extent_x'):.2f}m × {obb.get('extent_y'):.2f}m)",
+                )
+            )
 
         yaw_rad = math.radians(obb.get("yaw_deg", 0))
         arrow_len = obb.get("extent_x", 2.0) * 0.5
-        ax_close.annotate("", xy=(obb.get("cx") + arrow_len * math.cos(yaw_rad), obb.get("cy") + arrow_len * math.sin(yaw_rad)),
-                          xytext=(obb.get("cx"), obb.get("cy")),
-                          arrowprops=dict(arrowstyle="->", color=col, lw=2.5, mutation_scale=15), zorder=6)
-        ax_close.legend(loc="upper left", fontsize=8, facecolor="#0f172a", edgecolor="#475569", labelcolor="#e2e8f0")
+        ax_close.annotate(
+            "",
+            xy=(
+                obb.get("cx") + arrow_len * math.cos(yaw_rad),
+                obb.get("cy") + arrow_len * math.sin(yaw_rad),
+            ),
+            xytext=(obb.get("cx"), obb.get("cy")),
+            arrowprops=dict(arrowstyle="->", color=col, lw=2.5, mutation_scale=15),
+            zorder=6,
+        )
+        ax_close.legend(
+            loc="upper left",
+            fontsize=8,
+            facecolor="#0f172a",
+            edgecolor="#475569",
+            labelcolor="#e2e8f0",
+        )
         ax_close.set_xlim(3.0, 9.0)
         ax_close.set_ylim(-4.5, -0.5)
 
     # 4. Table
     ax_tbl.axis("off")
-    ax_tbl.set_title("Real Obstacle Telemetry Roster (ADR-0009)", color="#f8fafc", fontsize=11, fontweight="bold", pad=8)
+    ax_tbl.set_title(
+        "Real Obstacle Telemetry Roster (ADR-0009)",
+        color="#f8fafc",
+        fontsize=11,
+        fontweight="bold",
+        pad=8,
+    )
     col_labels = ["ID", "Pts", "Centroid (X,Y)", "OBB (L×W)", "Yaw", "Disc R", "Class"]
     col_widths = [0.10, 0.12, 0.22, 0.22, 0.14, 0.14, 0.24]
-    table = ax_tbl.table(cellText=table_rows, colLabels=col_labels, colWidths=col_widths, loc="center", cellLoc="center")
+    table = ax_tbl.table(
+        cellText=table_rows,
+        colLabels=col_labels,
+        colWidths=col_widths,
+        loc="center",
+        cellLoc="center",
+    )
     table.auto_set_font_size(False)
     table.set_fontsize(7.5)
     table.scale(1.0, 1.45)
@@ -788,26 +1013,69 @@ def render_matplotlib(data: dict, output_png: Path, show_window: bool):
 # Main Entry Point
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def main():
-    parser = argparse.ArgumentParser(description="RVPoint PCD Obstacle Bounding Box & Foxglove MCAP Visualizer")
-    parser.add_argument("pcd", nargs="?", default="data/pcd_compressed/0000000000.pcd",
-                        help="Input PCD file path (default: data/pcd_compressed/0000000000.pcd)")
-    parser.add_argument("--mcap", type=Path, default=Path("output/obstacles.mcap"),
-                        help="Output MCAP timeline file path (default: output/obstacles.mcap)")
-    parser.add_argument("--json", type=Path, default=Path("output/ticket_06_real_data.json"),
-                        help="Path to intermediate or output obstacle JSON (default: output/ticket_06_real_data.json)")
-    parser.add_argument("--png", type=Path, default=Path("output/ticket_06_obstacles.png"),
-                        help="Output image path for rendered figure (default: output/ticket_06_obstacles.png)")
-    parser.add_argument("--optical", action="store_true",
-                        help="Specify if input PCD is in camera optical frame (X right, Y down, Z forward)")
-    parser.add_argument("--no-labels", action="store_true",
-                        help="Omit 3D floating text labels from the MCAP timeline")
-    parser.add_argument("--serve", action="store_true",
-                        help="Launch HTTP 206 CORS server to stream directly into Foxglove Studio")
-    parser.add_argument("--port", type=int, default=8080, help="Port for Foxglove server (default: 8080)")
-    parser.add_argument("--show", action="store_true", help="Display interactive matplotlib BEV window")
-    parser.add_argument("--open3d", action="store_true", help="Display interactive 3D Open3D point cloud & box viewer")
-    parser.add_argument("--skip-cpp", action="store_true", help="Skip C++ pipeline execution and use existing JSON")
+    parser = argparse.ArgumentParser(
+        description="RVPoint PCD Obstacle Bounding Box & Foxglove MCAP Visualizer"
+    )
+    parser.add_argument(
+        "pcd",
+        nargs="?",
+        default="data/pcd_compressed/0000000000.pcd",
+        help="Input PCD file path (default: data/pcd_compressed/0000000000.pcd)",
+    )
+    parser.add_argument(
+        "--mcap",
+        type=Path,
+        default=Path("output/obstacles.mcap"),
+        help="Output MCAP timeline file path (default: output/obstacles.mcap)",
+    )
+    parser.add_argument(
+        "--json",
+        type=Path,
+        default=Path("output/ticket_06_real_data.json"),
+        help="Path to intermediate or output obstacle JSON (default: output/ticket_06_real_data.json)",
+    )
+    parser.add_argument(
+        "--png",
+        type=Path,
+        default=Path("output/ticket_06_obstacles.png"),
+        help="Output image path for rendered figure (default: output/ticket_06_obstacles.png)",
+    )
+    parser.add_argument(
+        "--optical",
+        action="store_true",
+        help="Specify if input PCD is in camera optical frame (X right, Y down, Z forward)",
+    )
+    parser.add_argument(
+        "--no-labels",
+        action="store_true",
+        help="Omit 3D floating text labels from the MCAP timeline",
+    )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Launch HTTP 206 CORS server to stream directly into Foxglove Studio",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port for Foxglove server (default: 8080)",
+    )
+    parser.add_argument(
+        "--show", action="store_true", help="Display interactive matplotlib BEV window"
+    )
+    parser.add_argument(
+        "--open3d",
+        action="store_true",
+        help="Display interactive 3D Open3D point cloud & box viewer",
+    )
+    parser.add_argument(
+        "--skip-cpp",
+        action="store_true",
+        help="Skip C++ pipeline execution and use existing JSON",
+    )
     args = parser.parse_args()
 
     pcd_path = Path(args.pcd)
@@ -840,7 +1108,9 @@ def main():
 
     # Step 5: Export Foxglove MCAP timeline
     print(f"[2/4] Generating Foxglove Studio MCAP timeline...")
-    export_foxglove_mcap(data, obstacle_points, args.mcap, include_labels=not args.no_labels)
+    export_foxglove_mcap(
+        data, obstacle_points, args.mcap, include_labels=not args.no_labels
+    )
 
     # Step 6: Render Matplotlib Overview
     print(f"[3/4] Rendering high-resolution multi-panel overview...")
@@ -850,13 +1120,17 @@ def main():
     print(f"\n[4/4] Foxglove Visualization Ready:")
     url = f"http://localhost:{args.port}/{args.mcap.name}"
     print(f"      MCAP File:   {args.mcap.resolve()}")
-    print(f"      Foxglove URL: https://app.foxglove.dev/open?ds=file&ds.url={url}")
+    print(
+        f"      Foxglove URL: https://app.foxglove.dev/open?ds=remote-file&ds.url={url}"
+    )
     print(f"      Direct Open:  foxglove://open?url={url}\n")
 
     if args.serve:
         serve_mcap_server(args.mcap, args.port)
     else:
-        print(f"[TIP] Run with '--serve' to launch streaming server: uv run python scripts/viz/viz_obstacles.py {args.pcd} --serve")
+        print(
+            f"[TIP] Run with '--serve' to launch streaming server: uv run python scripts/viz/viz_obstacles.py {args.pcd} --serve"
+        )
 
 
 if __name__ == "__main__":

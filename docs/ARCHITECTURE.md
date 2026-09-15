@@ -138,9 +138,19 @@ Every algorithm in `src/` is a stateful, non-virtual C++ class with value semant
     $$\lambda_3 = 2 \sqrt{-p/3} \cos\left(\frac{\theta + 4\pi}{3}\right) - \frac{a}{3}$$
     Eliminates iterative Jacobi rotations, delivering **$>4\times$** acceleration over classical eigensolvers.
   - **Viewpoint Reorientation**: Vectorized dot-product test ensuring normals orient towards the sensor origin.
-* **`FusedFilterNormals`** ([`fused_filter_normals.h`](../src/features/fused_filter_normals.h), [`fused_filter_normals.cpp`](../src/features/fused_filter_normals.cpp)):
+* **`FusedFilterNormals`** ([`fused_filter_normals.h`](../src/features/fused_filter_normals/fused_filter_normals.h), [`fused_filter_normals.cpp`](../src/features/fused_filter_normals/fused_filter_normals.cpp)):
   - Single-pass algorithmic fusion executing Radius Outlier Removal (ROR) and Cardano surface normal estimation simultaneously.
   - Completely avoids a second grid construction pass and redundant neighbor queries.
+* **`ConvexHull2D`** ([`convex_hull.h`](../src/features/convex_hull/convex_hull.h), [`convex_hull.cpp`](../src/features/convex_hull/convex_hull.cpp)):
+  - Pure Tier 1 leaf operator extracting 2D counter-clockwise convex polygon boundaries into `PointCloud2D` containers.
+  - RVV 1.0 Akl-Toussaint 8-extrema pre-filtering with vector accumulators (`vfmin.vv_tu`/`vfmax.vv_tu`), Andrew's Monotone Chain ($O(K \log K)$), Vectorized Jarvis March ($O(M \cdot K)$), and Angular Binning ($O(K)$).
+* **`BoundingBoxExtractor`** ([`bounding_box.h`](../src/features/bounding_box/bounding_box.h), [`bounding_box.cpp`](../src/features/bounding_box/bounding_box.cpp)):
+  - Pure Tier 1 leaf operator computing 3D `OrientedBoundingBox` instances from convex hulls and point clusters.
+  - Supports 4 unconditional strategies: `MIN_AREA` (Rotating Calipers), `L_SHAPE_ALIGN` (RVV Truncated Closeness with midpoint sign-injection and 3-candidate streaming), `EDGE_ALIGN` (Hull Edge-Perimeter Alignment), and `WIREFRAME_PCA` (Hull boundary covariance).
+  - Pre-allocated scratch workspaces ensuring zero heap allocations on the hot path (ADR-0010).
+* **`BoundingDiscExtractor`** ([`bounding_disc.h`](../src/features/bounding_disc/bounding_disc.h), [`bounding_disc.cpp`](../src/features/bounding_disc/bounding_disc.cpp)):
+  - Pure Tier 1 leaf operator computing 2D bounding discs and elevation intervals $[z_{\min}, z_{\max}]$.
+  - Supports Point-Centroid reduction (`compute_from_points`, $O(K)$ vector reduction) and branchless Concentric circumscribing disc (`compute_concentric`, $O(1)$ from OBB).
 
 ### 4.4 Segmentation (`src/segmentation/`)
 * **`RansacPlane`** ([`ransac_plane.h`](../src/segmentation/ransac_plane.h), [`ransac_plane.cpp`](../src/segmentation/ransac_plane.cpp)):
@@ -201,6 +211,6 @@ For the 8-core SpacemiT K1 SoC, `PipelineManager` supports three scheduling stra
 
 - **Dual-Path Parity**: Every vector algorithm implements an exact or epsilon-exact scalar reference path (`Backend::Scalar`).
 - **Two-Tier Test Architecture**:
-  - `eval/tests/fast/`: 13 essential fast unit and regression tests executed on every build.
+  - `eval/tests/fast/`: 14 essential fast unit and regression tests executed on every build.
   - `eval/tests/experimental/`: In-depth microarchitectural audits and algorithmic parameter sweeps.
 - **Build System Policy**: `CMakeLists.txt` strictly enforces the 7-folder root policy, autodiscovering library sources and tests while producing static binary `librvpoint.a`.

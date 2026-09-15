@@ -3,154 +3,156 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <cmath>
+
 #include "core/point_types.h"
 
 namespace rvpoint {
 
 /**
- * @brief 2D Point representation for convex hull computation.
+ * @brief Strategy selector for bounding box orientation extraction.
  */
-struct Point2D {
-    float x = 0.0f;
-    float y = 0.0f;
-    uint32_t orig_idx = 0;
+enum class BoundingBoxStrategy : uint8_t {
+    MIN_AREA,      ///< Pure Freeman-Shapira Rotating Calipers / Vectorized Hull Edge Projection
+    L_SHAPE_ALIGN, ///< Optimized Zhang et al. Face Closeness Alignment (RVV Batched + Midpoint)
+    WIREFRAME_PCA, ///< Continuous Perimeter Covariance (Closed-form O(1), density-invariant)
+    EDGE_ALIGN     ///< Hull Edge-Perimeter Alignment (EPA: O(M) edge-length weighted orientation snapping)
 };
 
 /**
- * @brief Lightweight Bounding Disc for high-rate reactive evasion (ADR-0009).
- *
- * Provides isotropic safety margin around the obstacle centroid for O(1)
- * branchless collision clearance checks in the 50 Hz vehicle control loop.
+ * @brief Configuration parameters for BoundingBoxExtractor.
  */
-struct BoundingDisc {
-    float cx = 0.0f;          ///< 2D Centroid X in body frame (meters)
-    float cy = 0.0f;          ///< 2D Centroid Y in body frame (meters)
-    float radius = 0.0f;      ///< Maximum Euclidean radius from centroid (meters)
-    float z_min = 0.0f;       ///< Minimum vertical elevation (meters)
-    float z_max = 0.0f;       ///< Maximum vertical elevation (meters)
-    uint32_t point_count = 0; ///< Number of points belonging to the obstacle cluster
+struct BoundingBoxParams {
+    BoundingBoxStrategy strategy = BoundingBoxStrategy::L_SHAPE_ALIGN;
+    float truncation_dist = 0.20f;       ///< Truncation distance d0 for closeness evaluation (meters)
+    float area_constraint_ratio = 1.20f; ///< Feasible area window: Area <= 1.20 * A_min
+    uint32_t decimation_threshold = 64;  ///< Stratified scoring decimation threshold (points)
+
+    // Optional gating / threshold hints for pipeline orchestrators
+    float min_l_shape_extent = 0.80f;    ///< Suggested minimum dimension for L-shape fitting (meters)
+    uint32_t min_l_shape_points = 15;    ///< Suggested minimum points for L-shape fitting
+    float min_closeness_gain = 1.20f;    ///< Suggested minimum closeness gain over min-area
 };
 
 /**
- * @brief 3D Oriented Bounding Box (OBB) computed via Rotating Calipers (ADR-0009).
+ * @brief Pure leaf kernel extracting 3D Oriented Bounding Boxes from point cloud clusters.
  *
- * Provides exact minimal-area oriented rectangular volume for visual telemetry,
- * Foxglove Studio display, and downstream tracking.
- */
-struct OrientedBoundingBox {
-    float cx = 0.0f;          ///< 3D Center X in body frame (meters)
-    float cy = 0.0f;          ///< 3D Center Y in body frame (meters)
-    float cz = 0.0f;          ///< 3D Center Z in body frame (meters)
-    float extent_x = 0.0f;    ///< Extent / length along heading yaw axis (meters)
-    float extent_y = 0.0f;    ///< Extent / width perpendicular to heading axis (meters)
-    float extent_z = 0.0f;    ///< Vertical height span (meters)
-    float yaw_rad = 0.0f;     ///< Heading angle in horizontal plane relative to +X axis (radians, [-pi, pi])
-    float corners_x[4] = {0}; ///< 2D ground footprint corner vertices (CCW order: X)
-    float corners_y[4] = {0}; ///< 2D ground footprint corner vertices (CCW order: Y)
-    uint32_t point_count = 0; ///< Number of points belonging to the obstacle cluster
-};
-
-/**
- * @brief Paired dual representation of an extracted obstacle cluster.
- */
-struct ObstacleGeometry {
-    BoundingDisc disc;
-    OrientedBoundingBox obb;
-};
-
-/**
- * @brief Zero-heap obstacle geometry extractor (ADR-0009, ADR-0010, ADR-0011).
+ * Conforms to AGENTS.md Leaf-Kernel Invariant (owns zero child kernels, does not compute BoundingDisc),
+ * ADR-0010 (zero heap allocations on steady-state hot paths), and ADR-0011 (backend dispatch).
  *
- * Implements:
- * 1. Vectorized Bounding Disc extraction ($O(K)$)
- * 2. Andrew's Monotone Chain 2D Convex Hull ($O(K \log K)$)
- * 3. Freeman-Shapira Rotating Calipers minimum-area OBB ($O(M)$)
- *
- * Reuses internal scratch workspaces across frames to guarantee zero allocations on steady-state hot paths.
+ * All strategies are pure and unconditional.
  */
-class ObstacleGeometryExtractor {
+class BoundingBoxExtractor {
 public:
-    explicit ObstacleGeometryExtractor(std::size_t max_points = 4096);
+    explicit BoundingBoxExtractor(const BoundingBoxParams& params = BoundingBoxParams{},
+                                  std::size_t max_points = 2048,
+                                  Backend backend = Backend::Auto);
 
-    /**
-     * @brief Pre-allocates scratch memory for hot-path zero-heap operation.
-     */
     void reserve(std::size_t max_points);
 
-    /**
-     * @brief Extract lightweight BoundingDisc for a single cluster of points.
-     * @param cloud Source point cloud.
-     * @param indices Array of indices into the cloud belonging to the cluster.
-     * @param count Number of indices.
-     * @param out Extracted BoundingDisc.
-     */
-    void compute_disc(const PointCloud& cloud,
-                      const uint32_t* indices,
-                      std::size_t count,
-                      BoundingDisc& out);
+    void set_backend(Backend b) noexcept { backend_ = b; }
+    Backend backend() const noexcept { return backend_; }
+
+    void set_strategy(BoundingBoxStrategy s) noexcept { params_.strategy = s; }
+    BoundingBoxStrategy strategy() const noexcept { return params_.strategy; }
+
+    const BoundingBoxParams& params() const noexcept { return params_; }
+    void set_params(const BoundingBoxParams& p) noexcept { params_ = p; }
 
     /**
-     * @brief Extract 2D Convex Hull from a single cluster of points (Andrew's Monotone Chain).
-     * @param cloud Source point cloud.
-     * @param indices Array of indices into the cloud.
-     * @param count Number of indices.
-     * @param out_hull Output convex polygon vertices in counter-clockwise order.
+     * @brief Extract 3D Oriented Bounding Box using the configured strategy.
      */
-    void compute_convex_hull_2d(const PointCloud& cloud,
-                                const uint32_t* indices,
-                                std::size_t count,
-                                std::vector<Point2D>& out_hull);
+    void compute(const PointCloud& cloud,
+                 const uint32_t* indices,
+                 std::size_t count,
+                 const PointCloud2D& hull,
+                 OrientedBoundingBox& out_box);
 
     /**
-     * @brief Extract 3D Oriented Bounding Box for a single cluster (Rotating Calipers).
-     * @param cloud Source point cloud.
-     * @param indices Array of indices into the cloud.
-     * @param count Number of indices.
-     * @param out Extracted OrientedBoundingBox.
+     * @brief Unconditional minimum-area bounding box from convex hull.
      */
-    void compute_obb(const PointCloud& cloud,
-                     const uint32_t* indices,
-                     std::size_t count,
-                     OrientedBoundingBox& out);
+    void compute_min_area(const PointCloud& cloud,
+                          const uint32_t* indices,
+                          std::size_t count,
+                          const PointCloud2D& hull,
+                          OrientedBoundingBox& out_box);
 
     /**
-     * @brief Extract both BoundingDisc and OrientedBoundingBox for a single cluster.
+     * @brief Unconditional Zhang et al. face closeness alignment on feasible candidate window.
      */
-    void compute_single(const PointCloud& cloud,
-                        const uint32_t* indices,
-                        std::size_t count,
-                        ObstacleGeometry& out);
+    void compute_l_shape(const PointCloud& cloud,
+                         const uint32_t* indices,
+                         std::size_t count,
+                         const PointCloud2D& hull,
+                         OrientedBoundingBox& out_box);
 
     /**
-     * @brief Batch extraction: extracts BoundingDiscs for all clusters in ClusterResult.
+     * @brief Unconditional Hull Edge-Perimeter Alignment (EPA) on feasible candidate window.
      */
-    void extract_discs(const PointCloud& cloud,
-                       const ClusterResult& clusters,
-                       std::vector<BoundingDisc>& out);
+    void compute_edge_align(const PointCloud& cloud,
+                            const uint32_t* indices,
+                            std::size_t count,
+                            const PointCloud2D& hull,
+                            OrientedBoundingBox& out_box);
 
     /**
-     * @brief Batch extraction: extracts full dual ObstacleGeometry for all clusters in ClusterResult.
+     * @brief Unconditional continuous perimeter line-integral covariance PCA.
      */
-    void extract_all(const PointCloud& cloud,
-                     const ClusterResult& clusters,
-                     std::vector<ObstacleGeometry>& out);
+    void compute_wireframe_pca(const PointCloud2D& hull,
+                               float z_min, float z_max,
+                               uint32_t pt_count,
+                               OrientedBoundingBox& out_box);
 
     /**
-     * @brief Functor operator: extracts dual ObstacleGeometry for all clusters.
+     * @brief Functor call operator.
      */
     void operator()(const PointCloud& cloud,
-                    const ClusterResult& clusters,
-                    std::vector<ObstacleGeometry>& out) {
-        extract_all(cloud, clusters, out);
+                    const uint32_t* indices,
+                    std::size_t count,
+                    const PointCloud2D& hull,
+                    OrientedBoundingBox& out_box) {
+        compute(cloud, indices, count, hull, out_box);
     }
 
 private:
-    std::vector<Point2D> pts_2d_scratch_;
-    std::vector<Point2D> hull_scratch_;
-    std::vector<float>   scratch_x_;
-    std::vector<float>   scratch_y_;
-    std::vector<float>   scratch_z_;
+    struct CandidateBox {
+        float ux = 0.0f, uy = 0.0f;
+        float u_min = 0.0f, u_max = 0.0f, v_min = 0.0f, v_max = 0.0f;
+        float area = 0.0f;
+    };
+
+    struct BatchedCandidate {
+        float ux = 0.0f, uy = 0.0f;
+        float u_mid = 0.0f, v_mid = 0.0f;
+        float thresh_u = 0.0f, thresh_v = 0.0f;
+    };
+
+    BoundingBoxParams params_;
+    Backend backend_;
+
+    // Stage-owned pre-allocated scratch workspaces (ADR-0010)
+    std::vector<float> scratch_x_;
+    std::vector<float> scratch_y_;
+    std::vector<float> scratch_z_;
+    std::vector<float> scratch_dec_x_;
+    std::vector<float> scratch_dec_y_;
+    std::vector<CandidateBox> candidates_;
+
+    void extract_candidates(const PointCloud2D& hull, std::size_t& candidate_count,
+                            std::size_t& min_area_idx, float& min_area);
+
+    void populate_box(const CandidateBox& win, float min_z, float max_z,
+                      uint32_t pt_count, OrientedBoundingBox& out_box);
+
+    float evaluate_closeness_single(const CandidateBox& cand, const float* px, const float* py, std::size_t count);
+    float evaluate_closeness_single_rvv(const CandidateBox& cand, const float* px, const float* py, std::size_t count);
+    float evaluate_closeness_single_scalar(const CandidateBox& cand, const float* px, const float* py, std::size_t count);
+
+#if defined(__riscv_vector)
+    void evaluate_closeness_batch3_rvv(const float* px, const float* py, std::size_t count,
+                                       const BatchedCandidate& c0, const BatchedCandidate& c1, const BatchedCandidate& c2,
+                                       float& s0, float& s1, float& s2);
+#endif
 };
 
 } // namespace rvpoint
-

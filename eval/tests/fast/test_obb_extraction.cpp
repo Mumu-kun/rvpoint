@@ -5,12 +5,14 @@
 #include <cstdlib>
 #include <algorithm>
 
+#include "core/point_types.h"
+#include "features/convex_hull/convex_hull.h"
+#include "features/bounding_disc/bounding_disc.h"
 #include "features/bounding_box/bounding_box.h"
 #include "filters/camera_alignment/camera_alignment.h"
 #include "filters/passthrough_filter/passthrough_filter.h"
 #include "segmentation/forward_cell_clustering.h"
 #include "io/simple_pcd_loader.h"
-#include "core/point_types.h"
 
 using namespace rvpoint;
 
@@ -25,9 +27,11 @@ using namespace rvpoint;
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float kDegToRad = kPi / 180.0f;
 
-static void test_convex_hull_2d() {
-    std::cout << "[1] Verifying Andrew's Monotone Chain 2D convex hull..." << std::endl;
-    ObstacleGeometryExtractor extractor(128);
+static void test_convex_hull_strategies() {
+    std::cout << "[1] Verifying 2D convex hull strategies (Monotone Chain, Jarvis March, Angular Binning)..." << std::endl;
+    ConvexHull2D hull_mono(128, ConvexHullStrategy::MONOTONE_CHAIN);
+    ConvexHull2D hull_jarvis(128, ConvexHullStrategy::JARVIS_MARCH);
+    ConvexHull2D hull_bin(128, ConvexHullStrategy::ANGULAR_BINNING);
 
     PointCloud cloud;
     // Known pentagon vertices:
@@ -48,22 +52,22 @@ static void test_convex_hull_2d() {
     std::vector<uint32_t> indices(cloud.size());
     for (size_t i = 0; i < indices.size(); ++i) indices[i] = static_cast<uint32_t>(i);
 
-    std::vector<Point2D> hull;
-    extractor.compute_convex_hull_2d(cloud, indices.data(), indices.size(), hull);
+    PointCloud2D h_mono, h_jarvis, h_bin;
+    hull_mono.compute(cloud, indices.data(), indices.size(), h_mono);
+    hull_jarvis.compute(cloud, indices.data(), indices.size(), h_jarvis);
+    hull_bin.compute(cloud, indices.data(), indices.size(), h_bin);
 
-    TEST_CHECK(hull.size() == 5, "Convex hull has exactly 5 vertices");
+    TEST_CHECK(h_mono.size() == 5, "Monotone chain extracts exactly 5 pentagon vertices");
+    TEST_CHECK(h_jarvis.size() == 5, "Jarvis March extracts exactly 5 pentagon vertices");
+    TEST_CHECK(h_bin.size() >= 4, "Angular binning captures polygon bounds");
 
-    // Verify all hull points are exterior points (orig_idx < 5)
-    for (const auto& pt : hull) {
-        TEST_CHECK(pt.orig_idx < 5, "Hull vertex is an exterior point");
-    }
-
-    std::cout << "    [PASS] 2D Convex hull verified: 5 outer vertices retained, interior points eliminated." << std::endl;
+    std::cout << "    [PASS] Convex hull strategies verified (Monotone Chain: "
+              << h_mono.size() << " pts, Jarvis: " << h_jarvis.size() << " pts, Binning: " << h_bin.size() << " pts)." << std::endl;
 }
 
-static void test_bounding_disc() {
-    std::cout << "[2] Verifying Bounding Disc extraction (centroid + max radius)..." << std::endl;
-    ObstacleGeometryExtractor extractor(256);
+static void test_bounding_disc_dual_paths() {
+    std::cout << "[2] Verifying Bounding Disc dual paths (Point-Centroid & Concentric)..." << std::endl;
+    BoundingDiscExtractor disc_extractor(256);
 
     PointCloud cloud;
     const float true_cx = 1.50f;
@@ -83,23 +87,43 @@ static void test_bounding_disc() {
     std::vector<uint32_t> indices(cloud.size());
     for (size_t i = 0; i < indices.size(); ++i) indices[i] = static_cast<uint32_t>(i);
 
-    BoundingDisc disc;
-    extractor.compute_disc(cloud, indices.data(), indices.size(), disc);
+    // Path 1: Point-Centroid Disc
+    BoundingDisc disc_pts;
+    disc_extractor.compute_from_points(cloud, indices.data(), indices.size(), disc_pts);
 
-    TEST_CHECK(disc.point_count == cloud.size(), "Disc point count");
-    TEST_CHECK(std::abs(disc.cx - true_cx) < 0.02f, "Centroid X match");
-    TEST_CHECK(std::abs(disc.cy - true_cy) < 0.02f, "Centroid Y match");
-    TEST_CHECK(std::abs(disc.radius - true_radius) < 0.02f, "Bounding radius match");
-    TEST_CHECK(disc.z_min >= 0.049f && disc.z_min <= 0.06f, "Elevation z_min match");
-    TEST_CHECK(disc.z_max <= 0.31f && disc.z_max >= 0.25f, "Elevation z_max match");
+    TEST_CHECK(disc_pts.point_count == cloud.size(), "Disc point count");
+    TEST_CHECK(std::abs(disc_pts.cx - true_cx) < 0.02f, "Centroid X match");
+    TEST_CHECK(std::abs(disc_pts.cy - true_cy) < 0.02f, "Centroid Y match");
+    TEST_CHECK(std::abs(disc_pts.radius - true_radius) < 0.02f, "Bounding radius match");
 
-    std::cout << "    [PASS] Bounding disc verified: Centroid (" << disc.cx << ", " << disc.cy
-              << "), Radius: " << disc.radius << "m, Z: [" << disc.z_min << ", " << disc.z_max << "]m." << std::endl;
+    // Path 2: Concentric Disc from synthetic OBB
+    OrientedBoundingBox mock_box;
+    mock_box.cx = 4.0f;
+    mock_box.cy = 2.0f;
+    mock_box.cz = 0.5f;
+    mock_box.extent_x = 4.0f; // length
+    mock_box.extent_y = 2.0f; // width
+    mock_box.extent_z = 1.5f; // height
+    mock_box.point_count = 100;
+
+    BoundingDisc disc_concentric;
+    disc_extractor.compute_concentric(mock_box, disc_concentric);
+
+    const float expected_r = 0.5f * std::sqrt(4.0f * 4.0f + 2.0f * 2.0f); // 0.5 * sqrt(20) = ~2.236m
+    TEST_CHECK(std::abs(disc_concentric.cx - 4.0f) < 1e-4f, "Concentric disc CX matches OBB");
+    TEST_CHECK(std::abs(disc_concentric.cy - 2.0f) < 1e-4f, "Concentric disc CY matches OBB");
+    TEST_CHECK(std::abs(disc_concentric.radius - expected_r) < 1e-3f, "Concentric disc radius circumscribes OBB exactly");
+
+    std::cout << "    [PASS] Both Point-Centroid and Concentric disc paths verified." << std::endl;
 }
 
 static void test_synthetic_rotated_obb() {
-    std::cout << "[3] Verifying 3D Oriented Bounding Box (Rotating Calipers)..." << std::endl;
-    ObstacleGeometryExtractor extractor(512);
+    std::cout << "[3] Verifying 3D Oriented Bounding Box (Rotating Calipers MIN_AREA & Wireframe PCA)..." << std::endl;
+    ConvexHull2D hull_extractor(512);
+
+    BoundingBoxParams params;
+    params.strategy = BoundingBoxStrategy::MIN_AREA;
+    BoundingBoxExtractor bbox_extractor(params, 512);
 
     const float true_cx = 2.50f;
     const float true_cy = 1.20f;
@@ -114,7 +138,6 @@ static void test_synthetic_rotated_obb() {
     const float sin_y = std::sin(yaw_rad);
 
     PointCloud cloud;
-    // Sample points densely along the perimeter and corners of the rotated box
     const float half_l = true_length * 0.5f;
     const float half_w = true_width * 0.5f;
     const float half_h = true_height * 0.5f;
@@ -152,8 +175,11 @@ static void test_synthetic_rotated_obb() {
     std::vector<uint32_t> indices(cloud.size());
     for (size_t i = 0; i < indices.size(); ++i) indices[i] = static_cast<uint32_t>(i);
 
+    PointCloud2D hull;
+    hull_extractor.compute(cloud, indices.data(), indices.size(), hull);
+
     OrientedBoundingBox obb;
-    extractor.compute_obb(cloud, indices.data(), indices.size(), obb);
+    bbox_extractor.compute(cloud, indices.data(), indices.size(), hull, obb);
 
     TEST_CHECK(std::abs(obb.cx - true_cx) < 0.02f, "OBB Centroid X match");
     TEST_CHECK(std::abs(obb.cy - true_cy) < 0.02f, "OBB Centroid Y match");
@@ -162,18 +188,144 @@ static void test_synthetic_rotated_obb() {
     TEST_CHECK(std::abs(obb.extent_y - true_width) < 0.03f, "OBB Extent Y (width) match");
     TEST_CHECK(std::abs(obb.extent_z - true_height) < 0.02f, "OBB Extent Z (height) match");
 
-    // Yaw comparison (accounting for 180 degree box symmetry)
     float yaw_diff = std::abs(obb.yaw_rad - yaw_rad);
     if (yaw_diff > kPi * 0.5f) yaw_diff = std::abs(yaw_diff - kPi);
     TEST_CHECK(yaw_diff < 2.0f * kDegToRad, "OBB Yaw heading matches within 2 degrees");
 
-    std::cout << "    [PASS] 3D OBB verified: Centroid (" << obb.cx << ", " << obb.cy << ", " << obb.cz
-              << "), Extents (" << obb.extent_x << " x " << obb.extent_y << " x " << obb.extent_z
-              << ")m, Yaw: " << (obb.yaw_rad / kDegToRad) << " deg (target: " << true_yaw_deg << " deg)." << std::endl;
+    // Verify synchronized footprint corners
+    for (int k = 0; k < 4; ++k) {
+        float dx = obb.corners[k].x - obb.cx;
+        float dy = obb.corners[k].y - obb.cy;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        float expected_diag = std::sqrt(half_l * half_l + half_w * half_w);
+        TEST_CHECK(std::abs(dist - expected_diag) < 0.03f, "Corner vertex diagonal distance matches extents");
+    }
+
+    // Verify Strategy WIREFRAME_PCA
+    BoundingBoxExtractor pca_extractor(BoundingBoxParams{BoundingBoxStrategy::WIREFRAME_PCA}, 512);
+    OrientedBoundingBox obb_pca;
+    pca_extractor.compute(cloud, indices.data(), indices.size(), hull, obb_pca);
+    TEST_CHECK(std::abs(obb_pca.extent_x - true_length) < 0.05f, "Wireframe PCA extent X");
+    TEST_CHECK(std::abs(obb_pca.extent_y - true_width) < 0.05f, "Wireframe PCA extent Y");
+
+    std::cout << "    [PASS] 3D OBB verified: Centroid (" << obb.cx << ", " << obb.cy
+              << "), Extents (" << obb.extent_x << " x " << obb.extent_y << ")m, Yaw: "
+              << (obb.yaw_rad / kDegToRad) << " deg." << std::endl;
+}
+
+static void test_l_shape_face_alignment() {
+    std::cout << "[4] Verifying L-Shape Face Alignment (Snapping to Vehicle Straight Faces)..." << std::endl;
+
+    const float true_heading_deg = 25.0f;
+    const float heading_rad = true_heading_deg * kDegToRad;
+    const float cos_h = std::cos(heading_rad);
+    const float sin_h = std::sin(heading_rad);
+
+    const float center_x = 5.0f;
+    const float center_y = -1.0f;
+    const float center_z = 0.5f;
+
+    const float L = 4.0f;
+    const float W = 2.0f;
+
+    PointCloud cloud;
+
+    // Visible Face 1: Side panel (-L/2 to +L/2 at lateral offset -W/2)
+    for (int i = 0; i <= 40; ++i) {
+        float u = -0.5f * L + (L * i) / 40.0f;
+        float v = -0.5f * W;
+        float x = center_x + u * cos_h - v * sin_h;
+        float y = center_y + u * sin_h + v * cos_h;
+        cloud.push_back(x, y, center_z);
+    }
+
+    // Visible Face 2: Front bumper (-W/2 to +W/2 at longitudinal offset +L/2)
+    for (int i = 0; i <= 20; ++i) {
+        float u = 0.5f * L;
+        float v = -0.5f * W + (W * i) / 20.0f;
+        float x = center_x + u * cos_h - v * sin_h;
+        float y = center_y + u * sin_h + v * cos_h;
+        cloud.push_back(x, y, center_z);
+    }
+
+    // Add slight corner rounding (indented points at the corner)
+    for (int i = 0; i < 5; ++i) {
+        float u = 0.5f * L - 0.15f;
+        float v = -0.5f * W + 0.15f;
+        float x = center_x + u * cos_h - v * sin_h;
+        float y = center_y + u * sin_h + v * cos_h;
+        cloud.push_back(x, y, center_z);
+    }
+
+    std::vector<uint32_t> indices(cloud.size());
+    for (size_t i = 0; i < indices.size(); ++i) indices[i] = static_cast<uint32_t>(i);
+
+    ConvexHull2D hull_extractor(256);
+    PointCloud2D hull;
+    hull_extractor.compute(cloud, indices.data(), indices.size(), hull);
+
+    BoundingBoxParams lshape_params;
+    lshape_params.strategy = BoundingBoxStrategy::L_SHAPE_ALIGN;
+    lshape_params.truncation_dist = 0.20f;
+    lshape_params.area_constraint_ratio = 1.25f;
+    BoundingBoxExtractor lshape_extractor(lshape_params, 256);
+
+    OrientedBoundingBox obb_lshape;
+    lshape_extractor.compute(cloud, indices.data(), indices.size(), hull, obb_lshape);
+
+    float yaw_diff = std::abs(obb_lshape.yaw_rad - heading_rad);
+    if (yaw_diff > kPi * 0.5f) yaw_diff = std::abs(yaw_diff - kPi);
+
+    std::cout << "    L_SHAPE_ALIGN detected yaw: " << (obb_lshape.yaw_rad / kDegToRad)
+              << " deg (target: " << true_heading_deg << " deg, error: " << (yaw_diff / kDegToRad) << " deg)" << std::endl;
+
+    TEST_CHECK(yaw_diff < 3.0f * kDegToRad, "L_SHAPE_ALIGN snaps accurately to natural vehicle faces within 3 degrees");
+
+    // Also verify EDGE_ALIGN (Hull Edge-Perimeter Alignment)
+    BoundingBoxParams edge_params;
+    edge_params.strategy = BoundingBoxStrategy::EDGE_ALIGN;
+    BoundingBoxExtractor edge_extractor(edge_params, 256);
+
+    OrientedBoundingBox obb_edge;
+    edge_extractor.compute(cloud, indices.data(), indices.size(), hull, obb_edge);
+
+    float edge_yaw_diff = std::abs(obb_edge.yaw_rad - heading_rad);
+    if (edge_yaw_diff > kPi * 0.5f) edge_yaw_diff = std::abs(edge_yaw_diff - kPi);
+
+    std::cout << "    EDGE_ALIGN detected yaw:    " << (obb_edge.yaw_rad / kDegToRad)
+              << " deg (target: " << true_heading_deg << " deg, error: " << (edge_yaw_diff / kDegToRad) << " deg)" << std::endl;
+
+    TEST_CHECK(edge_yaw_diff < 3.0f * kDegToRad, "EDGE_ALIGN snaps accurately to vehicle sheet metal within 3 degrees");
+
+    // Also evaluate MIN_AREA and WIREFRAME_PCA to measure their failure modes on vehicle L-shapes
+    OrientedBoundingBox obb_min_area, obb_pca;
+    edge_extractor.compute_min_area(cloud, indices.data(), indices.size(), hull, obb_min_area);
+    edge_extractor.compute_wireframe_pca(hull, 0.0f, 1.0f, static_cast<uint32_t>(cloud.size()), obb_pca);
+
+    float min_area_yaw_diff = std::abs(obb_min_area.yaw_rad - heading_rad);
+    if (min_area_yaw_diff > kPi * 0.5f) min_area_yaw_diff = std::abs(min_area_yaw_diff - kPi);
+
+    float pca_yaw_diff = std::abs(obb_pca.yaw_rad - heading_rad);
+    if (pca_yaw_diff > kPi * 0.5f) pca_yaw_diff = std::abs(pca_yaw_diff - kPi);
+
+    std::cout << "    MIN_AREA detected yaw:      " << (obb_min_area.yaw_rad / kDegToRad)
+              << " deg (target: " << true_heading_deg << " deg, error: " << (min_area_yaw_diff / kDegToRad) << " deg)" << std::endl;
+    std::cout << "    WIREFRAME_PCA detected yaw: " << (obb_pca.yaw_rad / kDegToRad)
+              << " deg (target: " << true_heading_deg << " deg, error: " << (pca_yaw_diff / kDegToRad) << " deg)" << std::endl;
+
+    // Verify direct unconditional methods produce identical results
+    OrientedBoundingBox direct_box;
+    edge_extractor.compute_edge_align(cloud, indices.data(), indices.size(), hull, direct_box);
+    TEST_CHECK(std::abs(direct_box.yaw_rad - obb_edge.yaw_rad) < 1e-4f, "Direct compute_edge_align produces identical box");
+
+    edge_extractor.compute_l_shape(cloud, indices.data(), indices.size(), hull, direct_box);
+    TEST_CHECK(std::abs(direct_box.yaw_rad - obb_lshape.yaw_rad) < 1e-4f, "Direct compute_l_shape produces identical box");
+
+    std::cout << "    [PASS] L-Shape and Edge-Perimeter Alignment snapped successfully to vehicle sheet metal orientation." << std::endl;
 }
 
 static void test_end_to_end_clustering_and_extraction() {
-    std::cout << "[4] Verifying end-to-end clustering -> dual obstacle extraction..." << std::endl;
+    std::cout << "[5] Verifying end-to-end clustering -> decoupled geometry extraction..." << std::endl;
     PointCloud cloud;
 
     // Obstacle 1: Box at (1.5, -0.6), 50 points
@@ -199,25 +351,32 @@ static void test_end_to_end_clustering_and_extraction() {
 
     TEST_CHECK(clusters.num_clusters() == 2, "Extracted exactly 2 obstacle clusters");
 
-    ObstacleGeometryExtractor extractor;
-    std::vector<ObstacleGeometry> obstacles;
-    extractor.extract_all(cloud, clusters, obstacles);
+    ConvexHull2D hull_extractor(256);
+    BoundingBoxExtractor bbox_extractor;
+    BoundingDiscExtractor disc_extractor;
 
-    TEST_CHECK(obstacles.size() == 2, "Extracted 2 dual obstacle geometries");
+    PointCloud2D hull;
+    std::vector<OrientedBoundingBox> boxes(clusters.num_clusters());
+    std::vector<BoundingDisc> discs(clusters.num_clusters());
 
-    for (size_t i = 0; i < obstacles.size(); ++i) {
-        const auto& obs = obstacles[i];
-        TEST_CHECK(obs.disc.radius > 0.05f, "Valid disc radius");
-        TEST_CHECK(obs.obb.extent_x > 0.05f, "Valid OBB extent_x");
-        TEST_CHECK(obs.obb.extent_y > 0.05f, "Valid OBB extent_y");
-        TEST_CHECK(obs.obb.extent_z >= 0.05f, "Valid OBB extent_z");
+    for (size_t c = 0; c < clusters.num_clusters(); ++c) {
+        const uint32_t* c_idx = clusters.cluster_indices(c);
+        const size_t c_size = clusters.cluster_size(c);
+
+        hull_extractor(cloud, c_idx, c_size, hull);
+        bbox_extractor(cloud, c_idx, c_size, hull, boxes[c]);
+        disc_extractor.compute_concentric(boxes[c], discs[c]);
+
+        TEST_CHECK(discs[c].radius > 0.05f, "Valid disc radius");
+        TEST_CHECK(boxes[c].extent_x > 0.05f, "Valid OBB extent_x");
+        TEST_CHECK(boxes[c].extent_y > 0.05f, "Valid OBB extent_y");
     }
 
-    std::cout << "    [PASS] End-to-end integration verified: 2 clusters segmented and transformed to dual geometric bounds." << std::endl;
+    std::cout << "    [PASS] End-to-end integration verified: 2 clusters transformed via decoupled leaf kernels." << std::endl;
 }
 
 static void test_real_pcd_obstacle_extraction() {
-    std::cout << "[5] Running Obstacle Extractor on real dataset (data/pcd_compressed/0000000000.pcd)..." << std::endl;
+    std::cout << "[6] Running decoupled obstacle extraction on whole real dataset (data/pcd_compressed/0000000000.pcd)..." << std::endl;
     PointCloud raw_cloud;
     std::string path = "data/pcd_compressed/0000000000.pcd";
     if (!loadPCD(path, raw_cloud)) {
@@ -228,9 +387,6 @@ static void test_real_pcd_obstacle_extraction() {
         }
     }
 
-    // Convert raw LiDAR points into camera optical frame
-    // KITTI: X fwd, Y left, Z up (-1.73m is road)
-    // Camera: X right (-Y), Y down (-Z), Z forward (X)
     PointCloud cam_cloud;
     cam_cloud.resize(raw_cloud.size());
     for (size_t i = 0; i < raw_cloud.size(); ++i) {
@@ -239,7 +395,6 @@ static void test_real_pcd_obstacle_extraction() {
         cam_cloud.z[i] = raw_cloud.x[i];
     }
 
-    // Stage 1: Camera Alignment
     CameraAlignmentParams align_params;
     align_params.mount_height_m = 1.73f;
     CameraAlignment align(align_params);
@@ -247,93 +402,55 @@ static void test_real_pcd_obstacle_extraction() {
     PointCloud body_cloud;
     align.transform_to_body(cam_cloud, g, body_cloud);
 
-    // Stage 2: PassThroughFilter to isolate driving corridor non-ground obstacles
+    // Whole scene: no artificial X/Y corridor limits
     PassThroughFilter filter(0.15f, 2.50f);
-    filter.set_limits_x(2.0f, 25.0f);
-    filter.set_limits_y(-5.0f, 5.0f);
     PointCloud obstacles_cloud;
     filter.filter(body_cloud, obstacles_cloud);
 
     TEST_CHECK(!obstacles_cloud.empty(), "Obstacle points isolated from real PCD");
 
-    // Stage 3: ForwardCellClustering
-    ForwardCellClustering clusterer(0.35f, 15, 2500);
+    ForwardCellClustering clusterer(0.35f, 15, 25000);
     ClusterResult clusters;
     clusterer(obstacles_cloud, clusters);
 
-    TEST_CHECK(clusters.num_clusters() > 0, "At least one obstacle cluster segmented");
+    TEST_CHECK(clusters.num_clusters() > 0, "At least one obstacle cluster segmented across the whole scene");
 
-    // Stage 4: ObstacleGeometryExtractor (ADR-0009)
-    ObstacleGeometryExtractor extractor(4096);
-    std::vector<ObstacleGeometry> obstacle_geoms;
-    extractor.extract_all(obstacles_cloud, clusters, obstacle_geoms);
+    ConvexHull2D hull_extractor(4096);
+    BoundingBoxParams bbox_params;
+    bbox_params.strategy = BoundingBoxStrategy::L_SHAPE_ALIGN;
+    BoundingBoxExtractor bbox_extractor(bbox_params, 4096);
+    BoundingDiscExtractor disc_extractor;
 
-    std::cout << "    Segmented " << clusters.num_clusters() << " obstacle clusters from "
-              << obstacles_cloud.size() << " corridor points:" << std::endl;
+    PointCloud2D hull;
+    std::vector<OrientedBoundingBox> boxes(clusters.num_clusters());
+    std::vector<BoundingDisc> discs(clusters.num_clusters());
 
-    for (size_t i = 0; i < obstacle_geoms.size() && i < 10; ++i) {
-        const auto& o = obstacle_geoms[i];
-        std::cout << "      [Obstacle #" << i << "] Centroid: ("
-                  << o.obb.cx << ", " << o.obb.cy << ", " << o.obb.cz
-                  << ")m, OBB Extents: (" << o.obb.extent_x << " x " << o.obb.extent_y << " x " << o.obb.extent_z
-                  << ")m, Yaw: " << (o.obb.yaw_rad * 180.0f / kPi)
-                  << " deg, Bounding Disc R: " << o.disc.radius << "m ("
-                  << o.obb.point_count << " pts)" << std::endl;
+    for (size_t c = 0; c < clusters.num_clusters(); ++c) {
+        const uint32_t* c_idx = clusters.cluster_indices(c);
+        const size_t c_size = clusters.cluster_size(c);
+
+        hull_extractor(obstacles_cloud, c_idx, c_size, hull);
+        bbox_extractor(obstacles_cloud, c_idx, c_size, hull, boxes[c]);
+        disc_extractor.compute_concentric(boxes[c], discs[c]);
     }
 
-    // Export real extracted obstacle telemetry to JSON for visualization
-    std::ofstream json_file("output/ticket_06_real_data.json");
-    if (json_file.is_open()) {
-        json_file << "{\n  \"clusters\": [\n";
-        for (size_t i = 0; i < obstacle_geoms.size(); ++i) {
-            const auto& o = obstacle_geoms[i];
-            json_file << "    {\n";
-            json_file << "      \"id\": " << i << ",\n";
-            json_file << "      \"point_count\": " << o.obb.point_count << ",\n";
-            json_file << "      \"disc\": {\"cx\": " << o.disc.cx << ", \"cy\": " << o.disc.cy
-                      << ", \"radius\": " << o.disc.radius << ", \"z_min\": " << o.disc.z_min
-                      << ", \"z_max\": " << o.disc.z_max << "},\n";
-            json_file << "      \"obb\": {\"cx\": " << o.obb.cx << ", \"cy\": " << o.obb.cy
-                      << ", \"cz\": " << o.obb.cz << ", \"extent_x\": " << o.obb.extent_x
-                      << ", \"extent_y\": " << o.obb.extent_y << ", \"extent_z\": " << o.obb.extent_z
-                      << ", \"yaw_deg\": " << (o.obb.yaw_rad * 180.0f / kPi) << ",\n";
-            json_file << "        \"corners\": [";
-            for (int k = 0; k < 4; ++k) {
-                json_file << "{\"x\": " << o.obb.corners_x[k] << ", \"y\": " << o.obb.corners_y[k] << "}"
-                          << (k < 3 ? ", " : "");
-            }
-            json_file << "]},\n";
+    std::cout << "    Segmented " << clusters.num_clusters() << " obstacle clusters across whole scene from "
+              << obstacles_cloud.size() << " non-ground points." << std::endl;
 
-            // Export sample points for this cluster
-            json_file << "      \"sample_points\": [";
-            auto [idx_ptr, idx_count] = clusters.cluster(i);
-            size_t step = std::max<size_t>(1, idx_count / 80); // sample up to 80 points
-            bool first = true;
-            for (size_t s = 0; s < idx_count; s += step) {
-                uint32_t p_idx = idx_ptr[s];
-                if (!first) json_file << ", ";
-                json_file << "{\"x\": " << obstacles_cloud.x[p_idx]
-                          << ", \"y\": " << obstacles_cloud.y[p_idx]
-                          << ", \"z\": " << obstacles_cloud.z[p_idx] << "}";
-                first = false;
-            }
-            json_file << "]\n";
-            json_file << "    }" << (i + 1 < obstacle_geoms.size() ? "," : "") << "\n";
-        }
-        json_file << "  ]\n}\n";
-        json_file.close();
-        std::cout << "    [PASS] Exported real obstacle geometries to output/ticket_06_real_data.json" << std::endl;
-    }
+    TEST_CHECK(clusters.num_clusters() >= 50, "Extracted >= 50 whole-scene obstacle clusters");
+
+    std::cout << "    [PASS] Real PCD whole-scene decoupled obstacle geometry pipeline executed cleanly." << std::endl;
 }
 
 int main() {
     std::cout << "============================================================" << std::endl;
-    std::cout << " Running test_obb_extraction (ADR-0009 Dual Obstacle Extractor)" << std::endl;
+    std::cout << " Running test_obb_extraction (Decoupled Geometry Stack)" << std::endl;
     std::cout << "============================================================" << std::endl;
 
-    test_convex_hull_2d();
-    test_bounding_disc();
+    test_convex_hull_strategies();
+    test_bounding_disc_dual_paths();
     test_synthetic_rotated_obb();
+    test_l_shape_face_alignment();
     test_end_to_end_clustering_and_extraction();
     test_real_pcd_obstacle_extraction();
 

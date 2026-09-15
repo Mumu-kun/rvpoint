@@ -231,6 +231,163 @@ public:
 using OwnedPointCloud = PointCloud;
 
 /**
+ * @brief Standard 2D Point structure.
+ */
+struct Point2D {
+  float x = 0.0f;
+  float y = 0.0f;
+};
+
+/**
+ * @brief Non-owning read-only view of a 2D point cloud in Structure-of-Arrays (SoA) layout.
+ */
+struct PointCloud2DView {
+  const float *x = nullptr;
+  const float *y = nullptr;
+  std::size_t n = 0;
+
+  constexpr PointCloud2DView() noexcept = default;
+  constexpr PointCloud2DView(const float *px, const float *py, std::size_t count) noexcept
+      : x(px), y(py), n(count) {}
+
+  constexpr std::size_t size() const noexcept { return n; }
+  constexpr bool empty() const noexcept { return n == 0; }
+  inline Point2D operator[](std::size_t i) const noexcept { return {x[i], y[i]}; }
+};
+
+/**
+ * @brief Owning 2D point cloud container storing contiguous X and Y coordinate buffers (SoA).
+ *
+ * Designed for 2D computational geometry (Convex Hull, Bounding Boxes) to enable
+ * unit-stride RVV loads (__riscv_vle32_v_f32m4 / __riscv_vle32_v_f32m8).
+ */
+class PointCloud2D {
+public:
+  std::vector<float> x;
+  std::vector<float> y;
+  std::size_t n = 0;
+
+  PointCloud2D() = default;
+  explicit PointCloud2D(std::size_t capacity) {
+    reserve(capacity);
+  }
+
+  void reserve(std::size_t cap) {
+    x.reserve(cap);
+    y.reserve(cap);
+  }
+
+  void resize(std::size_t count) {
+    if (x.capacity() < count) {
+      reserve(count);
+    }
+    x.resize(count);
+    y.resize(count);
+    n = count;
+  }
+
+  void clear() noexcept {
+    x.clear();
+    y.clear();
+    n = 0;
+  }
+
+  inline void push_back(float px, float py) {
+    x.push_back(px);
+    y.push_back(py);
+    n++;
+  }
+
+  inline void push_back(const Point2D& pt) {
+    push_back(pt.x, pt.y);
+  }
+
+  inline void pop_back() noexcept {
+    if (n > 0) {
+      x.pop_back();
+      y.pop_back();
+      n--;
+    }
+  }
+
+  std::size_t size() const noexcept { return n; }
+  std::size_t capacity() const noexcept { return x.capacity(); }
+  bool empty() const noexcept { return n == 0; }
+
+  Point2D operator[](std::size_t i) const noexcept {
+    return {x[i], y[i]};
+  }
+
+  PointCloud2DView view() const noexcept {
+    return PointCloud2DView(x.data(), y.data(), n);
+  }
+
+  operator PointCloud2DView() const noexcept {
+    return view();
+  }
+
+  /**
+   * @brief Compute bounding coordinates for X and Y in-place with RVV vector acceleration.
+   */
+  void compute_bounds(float& min_x, float& max_x, float& min_y, float& max_y) const noexcept {
+    if (n == 0) {
+      min_x = max_x = min_y = max_y = 0.0f;
+      return;
+    }
+#if defined(__riscv_vector)
+    std::size_t i = 0;
+    float m_min_x = x[0], m_max_x = x[0];
+    float m_min_y = y[0], m_max_y = y[0];
+    vfloat32m1_t v_min_x = __riscv_vfmv_s_f_f32m1(m_min_x, 1);
+    vfloat32m1_t v_max_x = __riscv_vfmv_s_f_f32m1(m_max_x, 1);
+    vfloat32m1_t v_min_y = __riscv_vfmv_s_f_f32m1(m_min_y, 1);
+    vfloat32m1_t v_max_y = __riscv_vfmv_s_f_f32m1(m_max_y, 1);
+
+    while (i < n) {
+      std::size_t vl = __riscv_vsetvl_e32m8(n - i);
+      vfloat32m8_t vx = __riscv_vle32_v_f32m8(x.data() + i, vl);
+      vfloat32m8_t vy = __riscv_vle32_v_f32m8(y.data() + i, vl);
+      v_min_x = __riscv_vfredmin_vs_f32m8_f32m1(vx, v_min_x, vl);
+      v_max_x = __riscv_vfredmax_vs_f32m8_f32m1(vx, v_max_x, vl);
+      v_min_y = __riscv_vfredmin_vs_f32m8_f32m1(vy, v_min_y, vl);
+      v_max_y = __riscv_vfredmax_vs_f32m8_f32m1(vy, v_max_y, vl);
+      i += vl;
+    }
+    min_x = __riscv_vfmv_f_s_f32m1_f32(v_min_x);
+    max_x = __riscv_vfmv_f_s_f32m1_f32(v_max_x);
+    min_y = __riscv_vfmv_f_s_f32m1_f32(v_min_y);
+    max_y = __riscv_vfmv_f_s_f32m1_f32(v_max_y);
+#else
+    float m_min_x = x[0], m_max_x = x[0];
+    float m_min_y = y[0], m_max_y = y[0];
+    for (std::size_t i = 1; i < n; ++i) {
+      if (x[i] < m_min_x) m_min_x = x[i];
+      if (x[i] > m_max_x) m_max_x = x[i];
+      if (y[i] < m_min_y) m_min_y = y[i];
+      if (y[i] > m_max_y) m_max_y = y[i];
+    }
+    min_x = m_min_x; max_x = m_max_x;
+    min_y = m_min_y; max_y = m_max_y;
+#endif
+  }
+};
+
+/**
+ * @brief 3D Oriented Bounding Box in Vehicle Body Frame.
+ */
+struct OrientedBoundingBox {
+  float cx = 0.0f;
+  float cy = 0.0f;
+  float cz = 0.0f;
+  float extent_x = 0.0f;  ///< Length along heading (meters)
+  float extent_y = 0.0f;  ///< Width perpendicular to heading (meters)
+  float extent_z = 0.0f;  ///< Height (meters)
+  float yaw_rad = 0.0f;   ///< Heading angle in radians [-pi, pi)
+  Point2D corners[4];     ///< 4 footprint vertices in body frame (synchronized with heading)
+  uint32_t point_count = 0;
+};
+
+/**
  * @brief Planar geometric model: ax + by + cz + d = 0.
  */
 struct PlaneModel {

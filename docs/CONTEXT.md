@@ -218,9 +218,37 @@ _Avoid_: Map transform, SLAM pose, global correction
 A low-latency safety filter that tests whether any non-ground points occupy a rectangular volumetric safety envelope directly ahead of the vehicle.
 _Avoid_: Safety zone, collision box, bumper check
 
+**BoundingDisc**:
+A 2D circular bounding cylinder defined by center $(c_x, c_y)$, radius $R_{\text{disc}}$, elevation bounds $[z_{\min}, z_{\max}]$, and point count, computed via `BoundingDiscExtractor` using either point-centroid reduction (`compute_from_points`) or concentric circumscribed radius (`compute_concentric`).
+_Avoid_: Sphere boundary, bounding circle without elevation bounds
+
 **Oriented Bounding Box (OBB)**:
-A minimum-area 3D bounding prism oriented along an obstacle's dominant planar heading angle, computed via Andrew's Monotone Chain convex hull and Rotating Calipers.
-_Avoid_: Axis-aligned bounding box, AABB, bounding rectangle
+A minimum-area 3D bounding prism oriented along an obstacle's dominant planar heading angle, defined by center $(c_x, c_y, c_z)$, extents $(e_x, e_y, e_z)$, heading yaw $\theta_{\text{box}}$ (rad), and four synchronized footprint corners `Point2D corners[4]`, extracted via `BoundingBoxExtractor` using one of four discrete geometric strategies.
+_Avoid_: Axis-aligned bounding box, AABB, bounding rectangle, unrotated corners
+
+**BoundingBoxStrategy**:
+The discrete, unconditional geometric scoring and alignment paradigms supported by `BoundingBoxExtractor`:
+- `MIN_AREA`: Freeman-Shapira Rotating Calipers hull edge sweep minimizing bounding box rectangle area ($O(M)$).
+- `L_SHAPE_ALIGN`: Zhang et al. (2017) criterion scoring candidate hull edge headings by RVV-vectorized point-to-edge closeness ($s = \sum \max(0, d_0 - \min(d_u, d_v))$), breaking the Hypotenuse Trap on L-shaped vehicle returns.
+- `EDGE_ALIGN`: Hull Edge-Perimeter Alignment (EPA) scoring candidate hull edge headings by length-weighted hull edge collinearity ($S_{\text{EPA}} = \sum L_k \max(|\mathbf{d}_k \cdot \mathbf{u}|, |\mathbf{d}_k \cdot \mathbf{v}|)^4$), providing sub-degree vehicle alignment in $O(C \cdot M)$ time ($23\times$ faster than point closeness).
+- `WIREFRAME_PCA`: Closed-form $O(M)$ 2D covariance eigendecomposition of hull boundary edges, free of internal point-density bias.
+_Avoid_: Hardcoded internal fallback logic inside leaf kernels, heuristic mode switches inside atomic operators
+
+**ConvexHull2D**:
+An atomic Tier 1 leaf kernel that extracts a 2D counter-clockwise convex polygon from an unorganized point cluster into a `PointCloud2D` container. Supports three selectable algorithms: Andrew's Monotone Chain ($O(K \log K)$ with RVV Akl-Toussaint extrema pre-filtering), Vectorized Jarvis March ($O(M \cdot K)$ reduction pass for small hull sizes), and Angular Binning ($O(K)$ polar sector radial max-reduction).
+_Avoid_: Recursive QuickHull, compound geometry extractor
+
+**Decoupled Obstacle Geometry**:
+The architectural separation of obstacle feature extraction into three independent, zero-heap Tier 1 leaf kernels (`ConvexHull2D`, `BoundingBoxExtractor`, and `BoundingDiscExtractor`) with zero cross-dependencies or monolithic DTOs.
+_Avoid_: Monolithic ObstacleGeometry DTO, kernels computing another kernel's representation
+
+**Adaptive Geometry Orchestration**:
+The pipeline-level orchestration pattern where heuristic policy gating (e.g. aspect ratio thresholding $L/W \ge 1.3$, minimum point count $N \ge 20$, or boundary fallback) is executed outside atomic leaf kernels in pipeline orchestrators (`pipeline_obstacles.cpp` with `--strategy adaptive`), keeping library kernels pure, deterministic, and testable.
+_Avoid_: Baking application-specific fallback state machines inside leaf compute kernels
+
+**Stratified Decimation & Midpoint Sign-Injection**:
+Vector microarchitectural optimizations for $L$-shape fitting on RVV 1.0: decimating dense interior cluster points to a representative boundary halo ($N \le 64$), substituting dual half-space subtractions with midpoint distance and sign-injection (`vfsgnjx.vv`), batching 3 candidate box orientations in a single streaming pass (`evaluate_closeness_batch3_rvv`), and accumulating scores in lane-local vector registers (`vfadd.vv_tu`).
+_Avoid_: In-loop vector reduction calls (`vfredusum`), redundant per-candidate point cloud reload passes
 
 **Rolling Local Costmap**:
 A body-centric or odometry-stabilized 2.5D elevation grid representing obstacle occupancy, traversability gradient, and euclidean obstacle clearance around the moving vehicle.

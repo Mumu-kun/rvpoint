@@ -198,7 +198,7 @@ endforeach()
 # ==============================================================================
 file(GLOB BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/eval/benchmarks/*.cpp")
 # Legacy benchmarks pending modernization with PipelineManager are excluded during transition; benchmark_multicore is enabled
-list(FILTER BENCHMARK_SOURCES INCLUDE REGEX "benchmark_multicore")
+list(FILTER BENCHMARK_SOURCES INCLUDE REGEX "benchmark_multicore|benchmark_geometry_strategies")
 
 foreach(bench_src ${BENCHMARK_SOURCES})
     get_filename_component(bench_name "${bench_src}" NAME_WE)
