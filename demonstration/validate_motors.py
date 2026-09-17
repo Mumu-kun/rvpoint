@@ -139,7 +139,7 @@ def run_wizard(
 
             # 1. Pulse for exactly 1.0 second
             actuator.set_raw_channel_duty(ch, test_duty)
-            time.sleep(1.0)
+            time.sleep(3.0)
 
             # 2. Hard stop immediately so wheel does NOT spin while you are reading!
             actuator.set_raw_channel_duty(ch, 0.0)
@@ -217,36 +217,40 @@ def run_wizard(
 def run_individual_test(actuator: DualL298NActuator, duty: float) -> None:
     print_banner()
     print(">>> INDIVIDUAL WHEEL POLARITY TEST <<<\n")
-    print("Testing each wheel: Forward (1.0s) -> Pause (0.5s) -> Reverse (1.0s)\n")
+    print("Testing each wheel: Forward (1.5s) -> Pause (0.5s) -> Reverse (1.5s)\n")
 
+    actuator.set_watchdog_enabled(False)
     wheel_keys = ["FL", "FR", "RL", "RR"]
     names = ["Front-Left (FL)", "Front-Right (FR)", "Rear-Left (RL)", "Rear-Right (RR)"]
 
-    for i, (key, name) in enumerate(zip(wheel_keys, names)):
-        print(f"=== Testing {name} ===")
+    try:
+        for i, (key, name) in enumerate(zip(wheel_keys, names)):
+            print(f"=== Testing {name} ===")
 
-        # Forward
-        print(f"  -> FORWARD (+{int(duty * 100)}%)... ", end="", flush=True)
-        duties = [0.0, 0.0, 0.0, 0.0]
-        duties[i] = duty
-        actuator.set_wheel_duties(*duties)
-        time.sleep(1.0)
+            # Forward
+            print(f"  -> FORWARD (+{int(duty * 100)}%)... ", end="", flush=True)
+            duties = [0.0, 0.0, 0.0, 0.0]
+            duties[i] = duty
+            actuator.set_wheel_duties(*duties)
+            time.sleep(1.5)
 
-        # Stop
-        actuator.set_wheel_duties(0.0, 0.0, 0.0, 0.0)
-        print("STOP.")
-        time.sleep(0.5)
+            # Stop
+            actuator.set_wheel_duties(0.0, 0.0, 0.0, 0.0)
+            print("STOP.")
+            time.sleep(0.5)
 
-        # Reverse
-        print(f"  -> REVERSE (-{int(duty * 100)}%)... ", end="", flush=True)
-        duties[i] = -duty
-        actuator.set_wheel_duties(*duties)
-        time.sleep(1.0)
+            # Reverse
+            print(f"  -> REVERSE (-{int(duty * 100)}%)... ", end="", flush=True)
+            duties[i] = -duty
+            actuator.set_wheel_duties(*duties)
+            time.sleep(1.5)
 
-        # Stop
-        actuator.set_wheel_duties(0.0, 0.0, 0.0, 0.0)
-        print("STOP.\n")
-        time.sleep(0.5)
+            # Stop
+            actuator.set_wheel_duties(0.0, 0.0, 0.0, 0.0)
+            print("STOP.\n")
+            time.sleep(0.5)
+    finally:
+        actuator.set_watchdog_enabled(True)
 
     print("[DONE] Individual wheel test completed.")
 
@@ -259,6 +263,7 @@ def run_directional_test(actuator: DualL298NActuator, duty: float) -> None:
     print(">>> DIRECTIONAL MOTIONS TEST (Omni-Tank 2-DoF) <<<\n")
     print("Executing: Forward -> Reverse -> Pivot Left -> Pivot Right (1.5s each)\n")
 
+    actuator.set_watchdog_enabled(False)
     moves = [
         ("FORWARD", duty, duty),
         ("REVERSE", -duty, -duty),
@@ -266,13 +271,16 @@ def run_directional_test(actuator: DualL298NActuator, duty: float) -> None:
         ("PIVOT RIGHT", duty, -duty),
     ]
 
-    for label, dl, dr in moves:
-        print(f">>> {label} (Left: {dl:.2f}, Right: {dr:.2f})... ", end="", flush=True)
-        actuator.set_duty_cycles(dl, dr)
-        time.sleep(1.5)
-        actuator.set_duty_cycles(0.0, 0.0)
-        print("STOP.")
-        time.sleep(0.5)
+    try:
+        for label, dl, dr in moves:
+            print(f">>> {label} (Left: {dl:.2f}, Right: {dr:.2f})... ", end="", flush=True)
+            actuator.set_duty_cycles(dl, dr)
+            time.sleep(1.5)
+            actuator.set_duty_cycles(0.0, 0.0)
+            print("STOP.")
+            time.sleep(0.5)
+    finally:
+        actuator.set_watchdog_enabled(True)
 
     print("\n[DONE] Directional motion test completed.")
 
@@ -294,7 +302,7 @@ def run_sweep_test(actuator: DualL298NActuator, config_path: Path) -> None:
         d = pct / 100.0
         print(f"Testing duty: {pct}% ({d:.2f})... ", end="", flush=True)
         actuator.set_wheel_duties(d, d, d, d)
-        time.sleep(1.0)
+        time.sleep(3.0)
         actuator.set_wheel_duties(0.0, 0.0, 0.0, 0.0)
 
         ans = input(f"\nDid all wheels start turning? [y/N/q]: ").strip().lower()

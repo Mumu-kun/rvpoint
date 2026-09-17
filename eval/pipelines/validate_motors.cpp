@@ -196,8 +196,9 @@ static void run_wizard(DualL298NActuator& actuator, const std::string& config_pa
 static void run_individual_test(DualL298NActuator& actuator, float duty) {
     print_banner();
     std::cout << ">>> INDIVIDUAL WHEEL POLARITY TEST <<<\n\n"
-              << "Testing each wheel: Forward (1.0s) -> Pause (0.5s) -> Reverse (1.0s)\n\n";
+              << "Testing each wheel: Forward (1.5s) -> Pause (0.5s) -> Reverse (1.5s)\n\n";
 
+    actuator.set_watchdog_enabled(false);
     const WheelId wheels[4] = {WheelId::FL, WheelId::FR, WheelId::RL, WheelId::RR};
     const char* names[4] = {"Front-Left (FL)", "Front-Right (FR)", "Rear-Left (RL)", "Rear-Right (RR)"};
 
@@ -209,7 +210,7 @@ static void run_individual_test(DualL298NActuator& actuator, float duty) {
         float d[4] = {0, 0, 0, 0};
         d[i] = duty;
         actuator.set_wheel_duties(d[0], d[1], d[2], d[3]);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
         // Stop
         actuator.set_wheel_duties(0, 0, 0, 0);
@@ -220,13 +221,14 @@ static void run_individual_test(DualL298NActuator& actuator, float duty) {
         std::cout << "  -> REVERSE (-" << static_cast<int>(duty * 100) << "%)..." << std::flush;
         d[i] = -duty;
         actuator.set_wheel_duties(d[0], d[1], d[2], d[3]);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
         // Stop
         actuator.set_wheel_duties(0, 0, 0, 0);
         std::cout << " STOP.\n\n";
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
+    actuator.set_watchdog_enabled(true);
     std::cout << "[DONE] Individual wheel test completed.\n";
 }
 
@@ -238,6 +240,7 @@ static void run_directional_test(DualL298NActuator& actuator, float duty) {
     std::cout << ">>> DIRECTIONAL MOTIONS TEST (Omni-Tank 2-DoF) <<<\n\n"
               << "Executing: Forward -> Reverse -> Pivot Left -> Pivot Right (1.5s each)\n\n";
 
+    actuator.set_watchdog_enabled(false);
     auto execute_move = [&](const std::string& label, float dl, float dr) {
         std::cout << ">>> " << label << " (Left: " << dl << ", Right: " << dr << ")..." << std::flush;
         actuator.set_duty_cycles(dl, dr);
@@ -252,6 +255,7 @@ static void run_directional_test(DualL298NActuator& actuator, float duty) {
     execute_move("PIVOT LEFT", -duty, duty);
     execute_move("PIVOT RIGHT", duty, -duty);
 
+    actuator.set_watchdog_enabled(true);
     std::cout << "\n[DONE] Directional motion test completed.\n";
 }
 
