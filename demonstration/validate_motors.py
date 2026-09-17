@@ -217,7 +217,9 @@ def run_wizard(
 def run_individual_test(actuator: DualL298NActuator, duty: float) -> None:
     print_banner()
     print(">>> INDIVIDUAL WHEEL POLARITY TEST <<<\n")
-    print("Testing each wheel: Forward (1.5s) -> Pause (0.5s) -> Reverse (1.5s)\n")
+    print(
+        "Testing each wheel: Forward (1.5s) -> Active Brake -> Pause (1.0s) -> Reverse (1.5s)\n"
+    )
 
     actuator.set_watchdog_enabled(False)
     wheel_keys = ["FL", "FR", "RL", "RR"]
@@ -225,7 +227,15 @@ def run_individual_test(actuator: DualL298NActuator, duty: float) -> None:
 
     try:
         for i, (key, name) in enumerate(zip(wheel_keys, names)):
-            print(f"=== Testing {name} ===")
+            wcfg = actuator.config.get("wheels", {}).get(key, {})
+            db_fwd = wcfg.get("deadband_forward", actuator.config.get("deadband", 0.12))
+            db_rev = wcfg.get("deadband_reverse", actuator.config.get("deadband", 0.12))
+            tr_fwd = wcfg.get("trim_forward", wcfg.get("trim", 1.0))
+            tr_rev = wcfg.get("trim_reverse", wcfg.get("trim", 1.0))
+            print(f"\n=== Testing {name} ===")
+            print(
+                f"    Config: Fwd(db={db_fwd:.2f}, trim={tr_fwd:.2f}) | Rev(db={db_rev:.2f}, trim={tr_rev:.2f})"
+            )
 
             # Forward
             print(f"  -> FORWARD (+{int(duty * 100)}%)... ", end="", flush=True)
@@ -234,10 +244,13 @@ def run_individual_test(actuator: DualL298NActuator, duty: float) -> None:
             actuator.set_wheel_duties(*duties)
             time.sleep(1.5)
 
-            # Stop
-            actuator.set_wheel_duties(0.0, 0.0, 0.0, 0.0)
+            # Active Brake & Settle Delay
+            actuator.emergency_brake()
+            print("[ACTIVE BRAKE]... ", end="", flush=True)
+            time.sleep(0.3)
+            actuator.reset_emergency_stop()
             print("STOP.")
-            time.sleep(0.5)
+            time.sleep(1.0)
 
             # Reverse
             print(f"  -> REVERSE (-{int(duty * 100)}%)... ", end="", flush=True)
@@ -245,14 +258,17 @@ def run_individual_test(actuator: DualL298NActuator, duty: float) -> None:
             actuator.set_wheel_duties(*duties)
             time.sleep(1.5)
 
-            # Stop
-            actuator.set_wheel_duties(0.0, 0.0, 0.0, 0.0)
-            print("STOP.\n")
-            time.sleep(0.5)
+            # Active Brake & Settle Delay
+            actuator.emergency_brake()
+            print("[ACTIVE BRAKE]... ", end="", flush=True)
+            time.sleep(0.3)
+            actuator.reset_emergency_stop()
+            print("STOP.")
+            time.sleep(1.0)
     finally:
         actuator.set_watchdog_enabled(True)
 
-    print("[DONE] Individual wheel test completed.")
+    print("\n[DONE] Individual wheel test completed.")
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +277,8 @@ def run_individual_test(actuator: DualL298NActuator, duty: float) -> None:
 def run_directional_test(actuator: DualL298NActuator, duty: float) -> None:
     print_banner()
     print(">>> DIRECTIONAL MOTIONS TEST (Omni-Tank 2-DoF) <<<\n")
-    print("Executing: Forward -> Reverse -> Pivot Left -> Pivot Right (1.5s each)\n")
+    print("Executing: Forward -> Reverse -> Pivot Left -> Pivot Right (1.5s each)")
+    print("Active dynamic braking and 1.5s settle delay between moves.\n")
 
     actuator.set_watchdog_enabled(False)
     moves = [
@@ -273,12 +290,23 @@ def run_directional_test(actuator: DualL298NActuator, duty: float) -> None:
 
     try:
         for label, dl, dr in moves:
-            print(f">>> {label} (Left: {dl:.2f}, Right: {dr:.2f})... ", end="", flush=True)
+            print(
+                f"\n>>> {label} (Left: {dl:.2f}, Right: {dr:.2f})... ",
+                end="",
+                flush=True,
+            )
             actuator.set_duty_cycles(dl, dr)
             time.sleep(1.5)
-            actuator.set_duty_cycles(0.0, 0.0)
-            print("STOP.")
-            time.sleep(0.5)
+
+            # 1. Active dynamic brake
+            actuator.emergency_brake()
+            print("[ACTIVE BRAKE]... ", end="", flush=True)
+            time.sleep(0.4)
+            actuator.reset_emergency_stop()
+
+            # 2. Settle pause
+            print("[PAUSE 1.5s] STOP.")
+            time.sleep(1.5)
     finally:
         actuator.set_watchdog_enabled(True)
 
@@ -325,7 +353,148 @@ def run_sweep_test(actuator: DualL298NActuator, config_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Mode 5: Interactive Terminal Teleoperation
+# Mode 5: Acoustic Gear-Mesh Frequency (GMF) Calibration
+# ---------------------------------------------------------------------------
+def run_acoustic_test(
+    actuator: DualL298NActuator, config_path: Path, duty: float
+) -> None:
+    print_banner()
+    print(">>> NON-INVASIVE ACOUSTIC GEAR-MESH FREQUENCY (GMF) CALIBRATION <<<\n")
+    print("Instructions:")
+    print(
+        " 1. Open Spectroid (Android) or SpectrumView / Audio Spectrum Analyzer (iOS)."
+    )
+    print(" 2. Hold your phone's microphone 2-3 cm from the gearbox under test.")
+    print(
+        " 3. When the wheel spins, observe the dominant sharp peak (typically 500 - 1600 Hz)."
+    )
+    print(
+        " 4. Enter the peak frequency in Hz when prompted (or press Enter to skip).\n"
+    )
+
+    actuator.set_watchdog_enabled(False)
+    wheel_keys = ["FL", "FR", "RL", "RR"]
+    names = ["Front-Left (FL)", "Front-Right (FR)", "Rear-Left (RL)", "Rear-Right (RR)"]
+
+    fwd_freqs: dict[str, float] = {}
+    rev_freqs: dict[str, float] = {}
+
+    try:
+        for i, (key, name) in enumerate(zip(wheel_keys, names)):
+            print("\n" + "=" * 60)
+            print(f"  TARGET WHEEL: {name}")
+            print("=" * 60)
+
+            # --- Forward Spin ---
+            input(f"\nPress [Enter] to spin {name} FORWARD for 4.0s...")
+            print(
+                f"  -> Spinning FORWARD at {int(duty * 100)}% duty... ",
+                end="",
+                flush=True,
+            )
+            duties = [0.0, 0.0, 0.0, 0.0]
+            duties[i] = duty
+            actuator.set_wheel_duties(*duties)
+            time.sleep(4.0)
+
+            actuator.emergency_brake()
+            time.sleep(0.3)
+            actuator.reset_emergency_stop()
+            print("STOP.")
+
+            val_str = input(
+                f"Enter measured peak frequency in Hz for {name} FORWARD (e.g. 1200) [skip]: "
+            ).strip()
+            if val_str:
+                try:
+                    fwd_freqs[key] = float(val_str)
+                except ValueError:
+                    print(
+                        "  Invalid number; skipping forward trim calculation for this wheel."
+                    )
+
+            time.sleep(1.0)
+
+            # --- Reverse Spin ---
+            input(f"\nPress [Enter] to spin {name} REVERSE for 4.0s...")
+            print(
+                f"  -> Spinning REVERSE at {int(duty * 100)}% duty... ",
+                end="",
+                flush=True,
+            )
+            duties = [0.0, 0.0, 0.0, 0.0]
+            duties[i] = -duty
+            actuator.set_wheel_duties(*duties)
+            time.sleep(4.0)
+
+            actuator.emergency_brake()
+            time.sleep(0.3)
+            actuator.reset_emergency_stop()
+            print("STOP.")
+
+            val_str = input(
+                f"Enter measured peak frequency in Hz for {name} REVERSE (e.g. 1150) [skip]: "
+            ).strip()
+            if val_str:
+                try:
+                    rev_freqs[key] = float(val_str)
+                except ValueError:
+                    print(
+                        "  Invalid number; skipping reverse trim calculation for this wheel."
+                    )
+
+            time.sleep(1.0)
+
+        # Calculate trims based on minimum measured frequencies
+        print("\n" + "=" * 65)
+        print(">>> ACOUSTIC CALIBRATION RESULTS & TRIM UPDATES <<<")
+        print("=" * 65)
+
+        updated = False
+        if len(fwd_freqs) >= 2:
+            min_fwd = min(fwd_freqs.values())
+            print(f"\nForward baseline (slowest wheel): {min_fwd:.1f} Hz")
+            for key, freq in fwd_freqs.items():
+                if freq > 0:
+                    trim_val = round(min_fwd / freq, 3)
+                    actuator.config["wheels"][key]["trim_forward"] = trim_val
+                    rpm = freq / 7.2
+                    print(
+                        f"  {key} FWD: {freq:.1f} Hz (~{rpm:.1f} RPM) -> trim_forward: {trim_val:.3f}"
+                    )
+                    updated = True
+
+        if len(rev_freqs) >= 2:
+            min_rev = min(rev_freqs.values())
+            print(f"\nReverse baseline (slowest wheel): {min_rev:.1f} Hz")
+            for key, freq in rev_freqs.items():
+                if freq > 0:
+                    trim_val = round(min_rev / freq, 3)
+                    actuator.config["wheels"][key]["trim_reverse"] = trim_val
+                    rpm = freq / 7.2
+                    print(
+                        f"  {key} REV: {freq:.1f} Hz (~{rpm:.1f} RPM) -> trim_reverse: {trim_val:.3f}"
+                    )
+                    updated = True
+
+        if updated:
+            if actuator.save_config(config_path):
+                print(f"\n[SUCCESS] Direction-aware trims saved to: {config_path}")
+            else:
+                print(
+                    f"\n[ERROR] Failed to save config to: {config_path}",
+                    file=sys.stderr,
+                )
+        else:
+            print("\nNot enough frequency data entered to compute trims.")
+
+    finally:
+        actuator.set_watchdog_enabled(True)
+        actuator.emergency_brake()
+
+
+# ---------------------------------------------------------------------------
+# Mode 6: Interactive Terminal Teleoperation
 # ---------------------------------------------------------------------------
 def run_teleop(actuator: DualL298NActuator) -> None:
     print_banner()
@@ -342,7 +511,7 @@ def run_teleop(actuator: DualL298NActuator) -> None:
     print("Safety Watchdog: Auto-brakes within 200 ms if no key is held.")
     print("Starting teleop loop...\n")
 
-    base_speed = 0.55
+    base_speed = 0.35
 
     with KeyboardReader() as reader:
         try:
@@ -391,7 +560,7 @@ def main():
     )
     parser.add_argument(
         "--test",
-        choices=["individual", "directional", "sweep"],
+        choices=["individual", "directional", "sweep", "acoustic"],
         help="Run automated test routine",
     )
     parser.add_argument(
@@ -403,7 +572,7 @@ def main():
         help="Path to l298n_pins.json",
     )
     parser.add_argument(
-        "--duty", type=float, default=0.55, help="Test duty cycle [0.1, 1.0]"
+        "--duty", type=float, default=0.30, help="Test duty cycle [0.1, 1.0]"
     )
     parser.add_argument(
         "--hw-pwm", action="store_true", help="Force Linux sysfs hardware PWM mode"
@@ -440,6 +609,8 @@ def main():
             run_directional_test(actuator, args.duty)
         elif args.test == "sweep":
             run_sweep_test(actuator, config_path)
+        elif args.test == "acoustic":
+            run_acoustic_test(actuator, config_path, args.duty)
         elif args.teleop:
             run_teleop(actuator)
     finally:

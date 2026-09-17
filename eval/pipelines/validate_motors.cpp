@@ -193,17 +193,18 @@ static void run_wizard(DualL298NActuator& actuator, const std::string& config_pa
 // ---------------------------------------------------------------------------
 // Mode 2: Individual Wheel Polarity Test
 // ---------------------------------------------------------------------------
+// Mode 2: Individual Wheel Polarity Test
+// ---------------------------------------------------------------------------
 static void run_individual_test(DualL298NActuator& actuator, float duty) {
     print_banner();
     std::cout << ">>> INDIVIDUAL WHEEL POLARITY TEST <<<\n\n"
-              << "Testing each wheel: Forward (1.5s) -> Pause (0.5s) -> Reverse (1.5s)\n\n";
+              << "Testing each wheel: Forward (1.5s) -> Active Brake -> Pause (1.0s) -> Reverse (1.5s)\n\n";
 
     actuator.set_watchdog_enabled(false);
     const WheelId wheels[4] = {WheelId::FL, WheelId::FR, WheelId::RL, WheelId::RR};
     const char* names[4] = {"Front-Left (FL)", "Front-Right (FR)", "Rear-Left (RL)", "Rear-Right (RR)"};
-
     for (int i = 0; i < 4; ++i) {
-        std::cout << "=== Testing " << names[i] << " ===\n";
+        std::cout << "\n=== Testing " << names[i] << " ===\n";
 
         // Forward
         std::cout << "  -> FORWARD (+" << static_cast<int>(duty * 100) << "%)..." << std::flush;
@@ -212,10 +213,13 @@ static void run_individual_test(DualL298NActuator& actuator, float duty) {
         actuator.set_wheel_duties(d[0], d[1], d[2], d[3]);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
-        // Stop
-        actuator.set_wheel_duties(0, 0, 0, 0);
+        // Active Brake & Settle Delay
+        actuator.emergency_brake();
+        std::cout << " [ACTIVE BRAKE]..." << std::flush;
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        actuator.reset_emergency_stop();
         std::cout << " STOP." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         // Reverse
         std::cout << "  -> REVERSE (-" << static_cast<int>(duty * 100) << "%)..." << std::flush;
@@ -223,13 +227,16 @@ static void run_individual_test(DualL298NActuator& actuator, float duty) {
         actuator.set_wheel_duties(d[0], d[1], d[2], d[3]);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
-        // Stop
-        actuator.set_wheel_duties(0, 0, 0, 0);
-        std::cout << " STOP.\n\n";
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        // Active Brake & Settle Delay
+        actuator.emergency_brake();
+        std::cout << " [ACTIVE BRAKE]..." << std::flush;
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        actuator.reset_emergency_stop();
+        std::cout << " STOP.\n";
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     actuator.set_watchdog_enabled(true);
-    std::cout << "[DONE] Individual wheel test completed.\n";
+    std::cout << "\n[DONE] Individual wheel test completed.\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -238,16 +245,24 @@ static void run_individual_test(DualL298NActuator& actuator, float duty) {
 static void run_directional_test(DualL298NActuator& actuator, float duty) {
     print_banner();
     std::cout << ">>> DIRECTIONAL MOTIONS TEST (Omni-Tank 2-DoF) <<<\n\n"
-              << "Executing: Forward -> Reverse -> Pivot Left -> Pivot Right (1.5s each)\n\n";
+              << "Executing: Forward -> Reverse -> Pivot Left -> Pivot Right (1.5s each)\n"
+              << "Active dynamic braking and 1.5s settle delay between moves.\n\n";
 
     actuator.set_watchdog_enabled(false);
     auto execute_move = [&](const std::string& label, float dl, float dr) {
         std::cout << ">>> " << label << " (Left: " << dl << ", Right: " << dr << ")..." << std::flush;
         actuator.set_duty_cycles(dl, dr);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-        actuator.set_duty_cycles(0.0f, 0.0f);
-        std::cout << " STOP." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // 1. Active dynamic brake to halt all wheels immediately
+        std::cout << " [ACTIVE BRAKE]..." << std::flush;
+        actuator.emergency_brake();
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        actuator.reset_emergency_stop();
+
+        // 2. Settling delay between directional moves
+        std::cout << " [PAUSE 1.5s] STOP." << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     };
 
     execute_move("FORWARD", duty, duty);
@@ -319,7 +334,7 @@ static void run_teleop(DualL298NActuator& actuator) {
               << "Safety Watchdog: Releases auto-brake within 200 ms if no key is pressed.\n"
               << "Starting teleop loop...\n\n";
 
-    float base_speed = 0.35f;
+    float base_speed = 0.55f;
 
 #if defined(__linux__) || defined(__APPLE__)
     enable_raw_mode();
@@ -367,7 +382,7 @@ static void run_teleop(DualL298NActuator& actuator) {
 int main(int argc, char** argv) {
     std::string config_path = "eval/actuators/l298n_pins.json";
     std::string mode = "wizard"; // Default to wizard for fast bring-up
-    float duty = 0.30f;
+    float duty = 0.55f;
     int force_pwm_mode = 0; // 0: config, 1: hw, 2: sw
 
     for (int i = 1; i < argc; ++i) {

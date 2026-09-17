@@ -1,49 +1,49 @@
 # Orange Pi RV2 (SpacemiT K1) 26-Pin GPIO & Dual L298N Wiring Guide
 
-The **Orange Pi RV2** features a **26-pin expansion header (2x13 pins)**. This guide details the **Column-Separated 8-Wire Direct-IN PWM** wiring layout, where Board 1 connects entirely along the **Inner Column** and Board 2 connects entirely along the **Outer Column**.
+The **Orange Pi RV2** features a **26-pin expansion header (2x13 pins)**. This guide details the **Column-Separated 12-Wire Enable-Pin (Drive-Coast)** wiring layout:
+- **Board 1 (Front Axle)** connects entirely along the **Inner Column (Odd Pins)**.
+- **Board 2 (Rear Axle)** connects entirely along the **Outer Column (Even Pins)**.
+- **Zero cross-overs**: All wires stay in their respective column!
+
+> [!IMPORTANT]
+> **Remove the 4 black jumper caps on `ENA` and `ENB`** on both L298N driver boards. Connecting PWM to the enable pins switches the H-bridge from Active Dynamic Braking (which causes stiction lockup) to **Free-Running Coast (Drive-Coast)**, preserving rotational inertia and synchronizing all 4 wheels.
 
 ---
 
 ## 1. Column-Separated 26-Pin Header Diagram
 
-- **Inner Column (Odd pins)**: Entirely dedicated to **Board 1 (Front Axle)**.
-- **Outer Column (Even pins)**: Entirely dedicated to **Board 2 (Rear Axle)**.
-- **Zero cross-over**: No zigzagging between columns!
-
 ```text
                         [ORANGE PI RV2 26-PIN HEADER]
-                        
+
            [INNER COLUMN: BOARD 1]         [OUTER COLUMN: BOARD 2]
-           
+
                      [ CAP: 3.3V ]  ( 1)  ( 2)  [ CAP: 5V ]
                                     ( 3)  ( 4)  [ CAP: 5V ]
                                     ( 5)  ( 6) <=== [COMMON GND] (Battery (-) & L298N GNDs)
                  Board 1 [IN1] ===> ( 7)  ( 8) <=== Board 2 [IN1]
-                  [GND / Alt GND]   ( 9)  (10) <=== Board 2 [IN2]
+                   [GND / Alt GND]  ( 9)  (10) <=== Board 2 [IN2]
                  Board 1 [IN2] ===> (11)  (12) <=== Board 2 [IN3]
                  Board 1 [IN3] ===> (13)  (14)      [GND / Alt GND]
                  Board 1 [IN4] ===> (15)  (16) <=== Board 2 [IN4]
-                     [ CAP: 3.3V ]  (17)  (18) 
-                                    (19)  (20) 
-                                    (21)  (22) 
-                                    (23)  (24) 
-                                    (25)  (26) 
+           [CAP: 3.3V / DO NOT USE] (17)  (18) <=== Board 2 [ENA] (RR Enable, gpio92)
+     Board 1 [ENA] (FR, gpio77) ==> (19)  (20)      [GND / Alt GND]
+     Board 1 [ENB] (FL, gpio78) ==> (21)  (22) <=== Board 2 [ENB] (RL Enable, gpio49)
+                                    (23)  (24)
+                                    (25)  (26)
 ```
 
 ---
 
 ## 2. Pins to Cover / Protect
 
-Cover these 4 power pins before plugging:
+Cover these power pins before plugging:
 * **Pins 2 & 4 (5V Power)**: Cover with tape or empty DuPont housing.
-* **Pins 1 & 17 (3.3V Power)**: Cover to protect the internal SoC PMIC.
+* **Pins 1 & 17 (3.3V Power)**: Cover with tape to protect the internal SoC PMIC.
 * **Both L298N `+5V` Screw Terminals**: Must have **nothing connected**.
 
 ---
 
 ## 3. Detailed Wiring Connection Table
-
-Leave the **black jumper caps on `ENA` and `ENB` INSTALLED** on both L298N modules.
 
 ### A. Common Ground (MANDATORY)
 | From | Connects to Orange Pi RV2 | Function |
@@ -54,38 +54,47 @@ Leave the **black jumper caps on `ENA` and `ENB` INSTALLED** on both L298N modul
 
 ---
 
-### B. Board 1: Front Axle Module (All on INNER Column)
-Just plug your 4 wires down the **Inner Column**, skipping Pin 9 in the middle:
+### B. Board 1: Front Axle Module (All on INNER Column / Odd Pins)
+Plug wires down the **Inner Column**:
 
-| Front L298N Wire | Calibrated Wheel | Inner Column Pin # | Linux Sysfs GPIO |
-| :--- | :--- | :--- | :--- |
-| **`IN1`** | Front-Right (FR) Dir 1 | **Pin 7** | `gpio74` |
-| *(Pin 9 is GND)* | *(Skip or use as ground)* | — | — |
-| **`IN2`** | Front-Right (FR) Dir 2 | **Pin 11** | `gpio71` |
-| **`IN3`** | Front-Left (FL) Dir 1 | **Pin 13** | `gpio72` |
-| **`IN4`** | Front-Left (FL) Dir 2 | **Pin 15** | `gpio73` |
+| Front L298N Wire | Target Wheel | Inner Column Pin # | Linux Sysfs GPIO | Function |
+| :--- | :--- | :--- | :--- | :--- |
+| **`IN1`** | Front-Right (FR) | **Pin 7** | `gpio74` | Direction 1 |
+| *(Pin 9 is GND)* | *(Skip or use as ground)* | — | — | — |
+| **`IN2`** | Front-Right (FR) | **Pin 11** | `gpio71` | Direction 2 |
+| **`IN3`** | Front-Left (FL) | **Pin 13** | `gpio72` | Direction 1 |
+| **`IN4`** | Front-Left (FL) | **Pin 15** | `gpio73` | Direction 2 |
+| *(Pin 17 is 3.3V)* | *(COVER WITH TAPE)* | — | — | — |
+| **`ENA`** | Front-Right (FR) | **Pin 19** | `gpio77` | Speed PWM (Coast) |
+| **`ENB`** | Front-Left (FL) | **Pin 21** | `gpio78` | Speed PWM (Coast) |
 
 ---
 
-### C. Board 2: Rear Axle Module (All on OUTER Column)
-Plug your 4 wires down the **Outer Column**, skipping Pin 14 in the middle:
+### C. Board 2: Rear Axle Module (All on OUTER Column / Even Pins)
+Plug wires down the **Outer Column**:
 
-| Rear L298N Wire | Calibrated Wheel | Outer Column Pin # | Linux Sysfs GPIO |
-| :--- | :--- | :--- | :--- |
-| **`IN1`** | Rear-Right (RR) Dir 1 | **Pin 8** | `gpio47` |
-| **`IN2`** | Rear-Right (RR) Dir 2 | **Pin 10** | `gpio48` |
-| **`IN3`** | Rear-Left (RL) Dir 1 | **Pin 12** | `gpio70` |
-| *(Pin 14 is GND)* | *(Skip or use as ground)* | — | — |
-| **`IN4`** | Rear-Left (RL) Dir 2 | **Pin 16** | `gpio91` |
+| Rear L298N Wire | Target Wheel | Outer Column Pin # | Linux Sysfs GPIO | Function |
+| :--- | :--- | :--- | :--- | :--- |
+| **`IN1`** | Rear-Right (RR) | **Pin 8** | `gpio47` | Direction 1 |
+| **`IN2`** | Rear-Right (RR) | **Pin 10** | `gpio48` | Direction 2 |
+| **`IN3`** | Rear-Left (RL) | **Pin 12** | `gpio70` | Direction 1 |
+| *(Pin 14 is GND)* | *(Skip or use as ground)* | — | — | — |
+| **`IN4`** | Rear-Left (RL) | **Pin 16** | `gpio91` | Direction 2 |
+| **`ENA`** | Rear-Right (RR) | **Pin 18** | `gpio92` | Speed PWM (Coast) |
+| *(Pin 20 is GND)* | *(Skip or use as ground)* | — | — | — |
+| **`ENB`** | Rear-Left (RL) | **Pin 22** | `gpio49` | Speed PWM (Coast) |
 
 ---
 
 ## 4. First-Time Verification
 
 1. Place the vehicle on a stand (wheels off the ground).
-2. Boot the Orange Pi RV2 via USB-C, then turn on the motor battery.
-3. Run the wizard:
+2. Ensure the 4 black jumper caps on `ENA` and `ENB` are removed.
+3. Turn on the motor battery and run the directional test:
    ```bash
-   python3 demonstration/validate_motors.py --wizard
+   sudo ./validate_motors --test directional --duty 0.45
    ```
-   Follow the prompts to identify each spinning wheel and direction. The wizard will update `eval/actuators/l298n_pins.json` automatically!
+4. Or interactive WASD teleoperation:
+   ```bash
+   sudo ./validate_motors --teleop
+   ```

@@ -90,6 +90,10 @@ static void parse_wheel_block(const std::string& block, MotorPinConfig& cfg) {
     cfg.in2_pin = static_cast<int>(extract_json_num(block, "in2_pin", cfg.in2_pin));
     cfg.invert = extract_json_bool(block, "invert", cfg.invert);
     cfg.trim = static_cast<float>(extract_json_num(block, "trim", cfg.trim));
+    cfg.trim_forward = static_cast<float>(extract_json_num(block, "trim_forward", cfg.trim));
+    cfg.trim_reverse = static_cast<float>(extract_json_num(block, "trim_reverse", cfg.trim));
+    cfg.deadband_forward = static_cast<float>(extract_json_num(block, "deadband_forward", cfg.deadband_forward));
+    cfg.deadband_reverse = static_cast<float>(extract_json_num(block, "deadband_reverse", cfg.deadband_reverse));
 }
 
 bool DualL298NConfig::load_from_json(const std::string& filepath) {
@@ -141,7 +145,11 @@ bool DualL298NConfig::save_to_json(const std::string& filepath) const {
         file << "      \"in1_pin\": " << w.in1_pin << ",\n";
         file << "      \"in2_pin\": " << w.in2_pin << ",\n";
         file << "      \"invert\": " << (w.invert ? "true" : "false") << ",\n";
-        file << "      \"trim\": " << w.trim << "\n";
+        file << "      \"trim\": " << w.trim << ",\n";
+        file << "      \"trim_forward\": " << w.trim_forward << ",\n";
+        file << "      \"trim_reverse\": " << w.trim_reverse << ",\n";
+        file << "      \"deadband_forward\": " << w.deadband_forward << ",\n";
+        file << "      \"deadband_reverse\": " << w.deadband_reverse << "\n";
         file << "    }" << (is_last ? "\n" : ",\n");
     };
 
@@ -206,7 +214,7 @@ int DualL298NActuator::open_gpio_value_fd(int pin) {
 
 void DualL298NActuator::write_gpio_fast(int fd, int value) {
     if (fd >= 0) {
-        pwrite(fd, value ? "1" : "0", 1, 0);
+        (void)write(fd, value ? "1" : "0", 1);
     }
 }
 
@@ -350,10 +358,26 @@ void DualL298NActuator::set_wheel_duties(float fl, float fr, float rl, float rr)
 
     last_command_time_ns_ = get_current_time_ns();
 
-    // Map each wheel to its assigned driver channel
+    // Map each wheel to its assigned driver channel with direction-aware deadband and trim
     auto assign_wheel = [&](const MotorPinConfig& cfg, float duty) {
         if (cfg.channel_index >= 0 && cfg.channel_index < 4) {
-            float applied = duty * cfg.trim;
+            float clamped = clamp_val(duty, -1.0f, 1.0f);
+            if (std::abs(clamped) < 1e-3f) {
+                target_duties_[cfg.channel_index].store(0.0f, std::memory_order_release);
+                return;
+            }
+
+            float applied = 0.0f;
+            if (clamped > 0.0f) {
+                float db = (cfg.deadband_forward >= 0.0f) ? cfg.deadband_forward : config_.deadband;
+                float tr = cfg.trim_forward;
+                applied = (db + (1.0f - db) * clamped) * tr;
+            } else {
+                float db = (cfg.deadband_reverse >= 0.0f) ? cfg.deadband_reverse : config_.deadband;
+                float tr = cfg.trim_reverse;
+                applied = -((db + (1.0f - db) * std::abs(clamped)) * tr);
+            }
+
             if (cfg.invert) applied = -applied;
             target_duties_[cfg.channel_index].store(clamp_val(applied, -1.0f, 1.0f), std::memory_order_release);
         }
@@ -368,22 +392,9 @@ void DualL298NActuator::set_wheel_duties(float fl, float fr, float rl, float rr)
 void DualL298NActuator::set_duty_cycles(float duty_left, float duty_right) {
     if (emergency_stop_.load(std::memory_order_acquire)) return;
 
-    float dl = clamp_val(duty_left, -1.0f, 1.0f);
-    float dr = clamp_val(duty_right, -1.0f, 1.0f);
-
-    // Stiction deadband injection
-    if (std::abs(dl) > 1e-3f) {
-        dl += (dl > 0.0f ? config_.deadband : -config_.deadband);
-    }
-    if (std::abs(dr) > 1e-3f) {
-        dr += (dr > 0.0f ? config_.deadband : -config_.deadband);
-    }
-
-    dl = clamp_val(dl, -1.0f, 1.0f);
-    dr = clamp_val(dr, -1.0f, 1.0f);
-
     // Omni-Tank: Left bank = FL & RL; Right bank = FR & RR
-    set_wheel_duties(dl, dr, dl, dr);
+    // Direction-aware deadband and trims are automatically applied per-wheel in set_wheel_duties
+    set_wheel_duties(duty_left, duty_right, duty_left, duty_right);
 }
 
 void DualL298NActuator::worker_loop() {
@@ -415,9 +426,10 @@ void DualL298NActuator::worker_loop() {
         }
 
         // 3. Update outputs: Direct-IN PWM mode (4-wire per board) or 3-pin mode
+        // 3. 4-Phase Interleaved Direct-IN PWM Mode
         if (!is_simulated_) {
             const MotorPinConfig* wheels[4] = {&config_.fl, &config_.fr, &config_.rl, &config_.rr};
-            int pulse_fds[4] = {-1, -1, -1, -1};
+            int active_fds[4] = {-1, -1, -1, -1};
             uint64_t on_time_ns[4] = {0, 0, 0, 0};
 
             for (int i = 0; i < 4; ++i) {
@@ -428,80 +440,100 @@ void DualL298NActuator::worker_loop() {
                 int pwm_fd = gpio_fds_[i * 3 + 2];
                 uint64_t ot = static_cast<uint64_t>(std::abs(d) * static_cast<float>(period_ns));
 
-                if (wheels[i]->pwm_pin < 0) {
-                    // Direct-IN PWM Mode (ENA/ENB jumper caps ON)
-                    if (std::abs(d) < 1e-3f) {
+                if (wheels[i]->pwm_pin >= 0 && pwm_fd >= 0) {
+                    // Enable-Pin Drive-Coast Mode:
+                    // in1/in2 set steady direction; pwm_fd modulates ENA/ENB
+                    if (std::abs(d) < 1e-3f || ot == 0) {
                         write_gpio_fast(in1_fd, 0);
                         write_gpio_fast(in2_fd, 0);
-                    } else if (d > 0.0f) {
-                        // Forward: IN2 is LOW, IN1 pulses
-                        write_gpio_fast(in2_fd, 0);
-                        if (ot > 0) {
-                            pulse_fds[i] = in1_fd;
-                            on_time_ns[i] = ot;
-                        } else {
-                            write_gpio_fast(in1_fd, 0);
+                        write_gpio_fast(pwm_fd, 0);
+                        if (ch >= 0 && ch < 4) {
+                            active_fds[ch] = -1;
+                            on_time_ns[ch] = 0;
                         }
-                    } else {
-                        // Reverse: IN1 is LOW, IN2 pulses
-                        write_gpio_fast(in1_fd, 0);
-                        if (ot > 0) {
-                            pulse_fds[i] = in2_fd;
-                            on_time_ns[i] = ot;
-                        } else {
-                            write_gpio_fast(in2_fd, 0);
-                        }
-                    }
-                } else {
-                    // 3-Pin Mode (Dedicated PWM on ENA/ENB)
-                    if (std::abs(d) < 1e-3f) {
-                        write_gpio_fast(in1_fd, 0);
-                        write_gpio_fast(in2_fd, 0);
                     } else if (d > 0.0f) {
                         write_gpio_fast(in1_fd, 1);
                         write_gpio_fast(in2_fd, 0);
+                        if (ch >= 0 && ch < 4) {
+                            active_fds[ch] = pwm_fd;
+                            on_time_ns[ch] = ot;
+                        }
                     } else {
                         write_gpio_fast(in1_fd, 0);
                         write_gpio_fast(in2_fd, 1);
+                        if (ch >= 0 && ch < 4) {
+                            active_fds[ch] = pwm_fd;
+                            on_time_ns[ch] = ot;
+                        }
                     }
-
-                    if (config_.use_hardware_pwm && !wheels[i]->sysfs_pwm_path.empty()) {
-                        set_sysfs_pwm_duty(wheels[i]->sysfs_pwm_path, d, config_.pwm_frequency_hz);
-                    } else if (ot > 0) {
-                        pulse_fds[i] = pwm_fd;
-                        on_time_ns[i] = ot;
+                } else {
+                    // Direct-IN Mode (4-wire jumpered):
+                    if (std::abs(d) < 1e-3f || ot == 0) {
+                        write_gpio_fast(in1_fd, 0);
+                        write_gpio_fast(in2_fd, 0);
+                        if (ch >= 0 && ch < 4) {
+                            active_fds[ch] = -1;
+                            on_time_ns[ch] = 0;
+                        }
+                    } else if (d > 0.0f) {
+                        write_gpio_fast(in2_fd, 0);
+                        if (ch >= 0 && ch < 4) {
+                            active_fds[ch] = in1_fd;
+                            on_time_ns[ch] = ot;
+                        }
                     } else {
-                        write_gpio_fast(pwm_fd, 0);
+                        write_gpio_fast(in1_fd, 0);
+                        if (ch >= 0 && ch < 4) {
+                            active_fds[ch] = in2_fd;
+                            on_time_ns[ch] = ot;
+                        }
                     }
                 }
             }
 
-            // Set pulsing pins HIGH at start of period
-            for (int i = 0; i < 4; ++i) {
-                if (pulse_fds[i] >= 0 && on_time_ns[i] > 0) {
-                    write_gpio_fast(pulse_fds[i], 1);
+            // Phase-Synchronized Direct-IN PWM:
+            // All active channels assert HIGH simultaneously at t = 0 (loop_start_ns)
+            bool channel_active[4] = {false, false, false, false};
+            int active_count = 0;
+
+            for (int ch = 0; ch < 4; ++ch) {
+                if (active_fds[ch] >= 0 && on_time_ns[ch] > 0) {
+                    write_gpio_fast(active_fds[ch], 1);
+                    channel_active[ch] = true;
+                    active_count++;
                 }
             }
 
-            // Wait until period expires, dropping pins to LOW as their duty threshold expires
-            while (true) {
+            // High-resolution event loop: de-assert channels as their on-times elapse
+            while (active_count > 0) {
                 uint64_t cur_ns = get_current_time_ns();
                 uint64_t elapsed_ns = cur_ns - loop_start_ns;
                 if (elapsed_ns >= period_ns) break;
 
-                for (int i = 0; i < 4; ++i) {
-                    if (pulse_fds[i] >= 0 && on_time_ns[i] > 0 && elapsed_ns >= on_time_ns[i]) {
-                        write_gpio_fast(pulse_fds[i], 0);
-                        on_time_ns[i] = 0;
+                for (int ch = 0; ch < 4; ++ch) {
+                    if (channel_active[ch] && elapsed_ns >= on_time_ns[ch]) {
+                        write_gpio_fast(active_fds[ch], 0);
+                        channel_active[ch] = false;
+                        active_count--;
                     }
                 }
                 std::this_thread::sleep_for(std::chrono::microseconds(50));
             }
 
-            // Ensure all pulse pins are LOW at period boundary
-            for (int i = 0; i < 4; ++i) {
-                if (pulse_fds[i] >= 0) {
-                    write_gpio_fast(pulse_fds[i], 0);
+            // Ensure all active channels are LOW for remainder of period
+            for (int ch = 0; ch < 4; ++ch) {
+                if (active_fds[ch] >= 0) {
+                    write_gpio_fast(active_fds[ch], 0);
+                }
+            }
+
+            // Sleep until end of period
+            uint64_t cur_ns = get_current_time_ns();
+            uint64_t elapsed_ns = cur_ns - loop_start_ns;
+            if (elapsed_ns < period_ns) {
+                uint64_t remain_us = (period_ns - elapsed_ns) / 1000ULL;
+                if (remain_us > 0) {
+                    std::this_thread::sleep_for(std::chrono::microseconds(remain_us));
                 }
             }
         } else {

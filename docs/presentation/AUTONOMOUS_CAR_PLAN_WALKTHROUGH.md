@@ -332,12 +332,16 @@ Commanded [v_cmd, omega_cmd]         VIO Estimated [v_hat, omega_hat]
                            (Steering Curvature)
 ```
 
-- **Derivative-on-Measurement ($-K_d \frac{d\hat{v}}{dt}$)**: Eliminates derivative kick when the path planner issues sudden speed changes.
-- **Anti-Windup Clamping**: Freezes integration whenever PWM saturates at $\pm 100\%$, preventing dangerous overshoots.
+- **Derivative-on-Measurement ($-K_d \frac{d\hat{v}}{dt}$)**: Eliminates derivative kick when the path planner issues sudden speed changes by differentiating observed speed rather than error.
+- **Anti-Windup Clamping**: Automatically freezes integral accumulation whenever the motor PWM commands reach physical limits ($\pm 100\%$), preventing dangerous overshoot.
 - **Sensor Timestamp Differentiation**: Differentiates against the iPhone's camera shutter timestamp ($t_{\text{sensor}}$) rather than Linux arrival time, completely filtering out Wi-Fi network jitter.
-- **Derivative-on-Measurement**: Evaluates the rate of change of the *observed speed* rather than the *error*, eliminating "derivative kick" when the planner commands a step change in velocity.
-- **Anti-Windup Clamping**: Automatically freezes integral accumulation whenever the motor PWM commands reach physical limits ($\pm 100\%$).
-- **Stiction Compensation**: Adds an instantaneous feed-forward offset ($V_{\text{deadband}} \approx 0.15$) to overcome gearbox static friction at low speeds.
+- **Continuous Feedforward Deadband Scaling**: Replaces naive step-addition with continuous linear scaling:
+  $$u(v) = \operatorname{sgn}(v) \cdot \left( u_{\text{deadband}} + (1.0 - u_{\text{deadband}}) \cdot |v| \right)$$
+  ensuring full dynamic resolution across $[0, 1]$ while guaranteeing immediate breakaway torque without open-loop acceleration kicks.
+- **Dual-Loop Heading ($\theta$) Stabilization**:
+  - **Inner Gyro Damping Loop ($100\text{--}200\,\text{Hz}$)**: Rapid rate feedback ($-K_d \cdot \omega_z$) instantly trims left/right motor duties ($u_L, u_R$) when one wheel experiences mechanical stiction or delay, holding the vehicle straight on startup.
+  - **Outer Pose Tracking Loop ($30\,\text{Hz}$)**: Fuses ARKit VIO and LiDAR ICP scan-matching pose updates ($K_p \cdot e_\theta$) to correct trajectory drift over long distances.
+- **Phase-Synchronized Actuation**: All active channels fire simultaneously at $t = 0$ with contiguous pulses to prevent the boundary-wrapping pulse-chopping and double-braking that crippled multi-phase interleaved schemes. 3S Li-ion pack ($11.1\text{--}12.6\,\text{V}$) provides mandatory voltage headroom over L298N Darlington drops. Support for future Enable-pin Drive-Coast mode eliminates stiction traps entirely.
 
 ---
 

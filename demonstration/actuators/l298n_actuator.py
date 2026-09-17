@@ -60,15 +60,9 @@ class DualL298NActuator:
         # Hardware state tracking
         self.is_simulated = False
         self._pin_states: Dict[int, int] = {}
+        self._gpio_fds: Dict[int, int] = {}
         self._running = False
         self._worker_thread: Optional[threading.Thread] = None
-
-        # Stiction breakaway kick boost (60ms @ 100% duty when starting from stop)
-        self.enable_stiction_kick = True
-        self.kick_duration_s = 0.060
-        self.kick_duty = 1.0
-        self._kick_until: Dict[int, float] = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0}
-        self._prev_duties: list[float] = [0.0, 0.0, 0.0, 0.0]
 
         # Register signal handlers for clean hardware stop on Ctrl+C / SIGINT
         try:
@@ -88,8 +82,8 @@ class DualL298NActuator:
     def _load_default_config(self) -> Dict[str, Any]:
         return {
             "use_hardware_pwm": False,
-            "pwm_frequency_hz": 25,
-            "deadband": 0.15,
+            "pwm_frequency_hz": 250,
+            "deadband": 0.20,
             "enable_watchdog": True,
             "watchdog_timeout_ms": 200,
             "wheels": {
@@ -189,24 +183,48 @@ class DualL298NActuator:
             return
         if self._pin_states.get(pin) == val:
             return
+        fd = self._gpio_fds.get(pin)
         val_bytes = b"1" if val else b"0"
-        try:
-            fd = os.open(f"/sys/class/gpio/gpio{pin}/value", os.O_WRONLY)
-            os.write(fd, val_bytes)
-            os.close(fd)
-            self._pin_states[pin] = val
-        except Exception:
-            pass
+        if fd is not None and fd >= 0:
+            try:
+                os.pwrite(fd, val_bytes, 0)
+                self._pin_states[pin] = val
+            except Exception:
+                try:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    os.write(fd, val_bytes)
+                    self._pin_states[pin] = val
+                except Exception:
+                    pass
+        else:
+            try:
+                fd_new = os.open(f"/sys/class/gpio/gpio{pin}/value", os.O_WRONLY)
+                self._gpio_fds[pin] = fd_new
+                os.pwrite(fd_new, val_bytes, 0)
+                self._pin_states[pin] = val
+            except Exception:
+                pass
 
     def _force_pin_low(self, pin: int) -> None:
         if pin < 0:
             return
-        try:
-            fd = os.open(f"/sys/class/gpio/gpio{pin}/value", os.O_WRONLY)
-            os.write(fd, b"0")
-            os.close(fd)
-        except Exception:
-            pass
+        fd = self._gpio_fds.get(pin)
+        if fd is not None and fd >= 0:
+            try:
+                os.pwrite(fd, b"0", 0)
+            except Exception:
+                try:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    os.write(fd, b"0")
+                except Exception:
+                    pass
+        else:
+            try:
+                fd_new = os.open(f"/sys/class/gpio/gpio{pin}/value", os.O_WRONLY)
+                self._gpio_fds[pin] = fd_new
+                os.pwrite(fd_new, b"0", 0)
+            except Exception:
+                pass
         self._pin_states[pin] = 0
 
     def initialize_hardware(self) -> bool:
@@ -262,6 +280,13 @@ class DualL298NActuator:
                 if p is not None and p >= 0:
                     self._force_pin_low(p)
 
+        for pin, fd in list(self._gpio_fds.items()):
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+        self._gpio_fds.clear()
+
     # -----------------------------------------------------------------------
     # Actuator Control API
     # -----------------------------------------------------------------------
@@ -299,13 +324,14 @@ class DualL298NActuator:
             self._target_duties[channel_idx] = clamp(duty, -1.0, 1.0)
 
     def set_wheel_duties(self, fl: float, fr: float, rl: float, rr: float) -> None:
-        """Set individual wheel duty cycles [-1.0, 1.0]."""
+        """Set individual wheel duty cycles [-1.0, 1.0] with direction-aware deadband and trim."""
         if self._emergency_stop:
             return
 
         with self._lock:
             self._last_command_time = time.perf_counter()
             wheels = self.config.get("wheels", {})
+            global_db = self.config.get("deadband", 0.12)
 
             wheel_inputs = {"FL": fl, "FR": fr, "RL": rl, "RR": rr}
             for name, duty in wheel_inputs.items():
@@ -314,9 +340,21 @@ class DualL298NActuator:
                     continue
                 ch = cfg.get("channel", -1)
                 if 0 <= ch < 4:
-                    trim = cfg.get("trim", 1.0)
+                    v_clamped = clamp(duty, -1.0, 1.0)
+                    if abs(v_clamped) < 1e-3:
+                        self._target_duties[ch] = 0.0
+                        continue
+
+                    if v_clamped > 0.0:
+                        db = cfg.get("deadband_forward", global_db)
+                        tr = cfg.get("trim_forward", cfg.get("trim", 1.0))
+                        applied = (db + (1.0 - db) * v_clamped) * tr
+                    else:
+                        db = cfg.get("deadband_reverse", global_db)
+                        tr = cfg.get("trim_reverse", cfg.get("trim", 1.0))
+                        applied = -((db + (1.0 - db) * abs(v_clamped)) * tr)
+
                     invert = cfg.get("invert", False)
-                    applied = duty * trim
                     if invert:
                         applied = -applied
                     self._target_duties[ch] = clamp(applied, -1.0, 1.0)
@@ -326,24 +364,11 @@ class DualL298NActuator:
         Omni-Tank 2-DoF Differential command:
           Left bank  = Front-Left (FL) and Rear-Left (RL)
           Right bank = Front-Right (FR) and Rear-Right (RR)
+        Direction-aware deadband and trims are automatically applied per-wheel in set_wheel_duties.
         """
         if self._emergency_stop:
             return
-
-        deadband = self.config.get("deadband", 0.15)
-        dl = clamp(duty_left, -1.0, 1.0)
-        dr = clamp(duty_right, -1.0, 1.0)
-
-        # Stiction deadband compensation
-        if abs(dl) > 1e-3:
-            dl += deadband if dl > 0.0 else -deadband
-        if abs(dr) > 1e-3:
-            dr += deadband if dr > 0.0 else -deadband
-
-        dl = clamp(dl, -1.0, 1.0)
-        dr = clamp(dr, -1.0, 1.0)
-
-        self.set_wheel_duties(fl=dl, fr=dr, rl=dl, rr=dr)
+        self.set_wheel_duties(fl=duty_left, fr=duty_right, rl=duty_left, rr=duty_right)
 
     # -----------------------------------------------------------------------
     # Background Software PWM and Watchdog Worker
@@ -373,89 +398,91 @@ class DualL298NActuator:
             if e_stopped:
                 duties = [0.0, 0.0, 0.0, 0.0]
 
-            # Apply Stiction Breakaway Kick if transitioning from 0 to motion
-            if self.enable_stiction_kick and not e_stopped:
-                for ch in range(4):
-                    tgt_d = duties[ch]
-                    prev_d = self._prev_duties[ch]
-                    if abs(prev_d) < 0.01 and abs(tgt_d) >= 0.05:
-                        self._kick_until[ch] = now_sec + self.kick_duration_s
-
-                    if now_sec < self._kick_until[ch] and abs(tgt_d) >= 0.05:
-                        duties[ch] = self.kick_duty if tgt_d > 0.0 else -self.kick_duty
-
-                    self._prev_duties[ch] = tgt_d
-
-            # 2. Update outputs: Direct-IN PWM mode (4-wire per board) or 3-pin mode
+            # 2. Update outputs: 4-Phase Interleaved Direct-IN PWM Mode
             if not self.is_simulated:
                 wheels = self.config.get("wheels", {})
-                pulse_pins: Dict[int, int] = {}  # pin -> on_time_ns
+                # Map channel -> (active_pin, on_time_ns)
+                active_channels: Dict[int, tuple[int, int]] = {}
 
                 for name, w in wheels.items():
                     ch = w.get("channel", -1)
-                    d = duties[ch] if (0 <= ch < 4) else 0.0
+                    if not (0 <= ch < 4):
+                        continue
+                    d = duties[ch]
                     in1 = w.get("in1_pin", -1)
                     in2 = w.get("in2_pin", -1)
-                    pwm_p = w.get("pwm_pin", -1)
+                    pwm_pin = w.get("pwm_pin", -1)
                     on_time = int(abs(d) * period_ns)
 
-                    if pwm_p < 0:
-                        # Direct-IN PWM Mode (ENA/ENB jumper caps ON)
-                        if abs(d) < 1e-3:
+                    if pwm_pin >= 0:
+                        # Enable-Pin Drive-Coast Mode:
+                        # in1/in2 set steady direction; pwm_pin modulates ENA/ENB
+                        if abs(d) < 1e-3 or on_time == 0:
                             self._write_gpio(in1, 0)
                             self._write_gpio(in2, 0)
-                        elif d > 0.0:
-                            # Forward: IN2 is LOW, IN1 pulses
-                            self._write_gpio(in2, 0)
-                            if on_time > 0:
-                                pulse_pins[in1] = on_time
-                            else:
-                                self._write_gpio(in1, 0)
-                        else:
-                            # Reverse: IN1 is LOW, IN2 pulses
-                            self._write_gpio(in1, 0)
-                            if on_time > 0:
-                                pulse_pins[in2] = on_time
-                            else:
-                                self._write_gpio(in2, 0)
-                    else:
-                        # 3-Pin Mode (Dedicated PWM on ENA/ENB)
-                        if abs(d) < 1e-3:
-                            self._write_gpio(in1, 0)
-                            self._write_gpio(in2, 0)
+                            self._write_gpio(pwm_pin, 0)
+                            active_channels[ch] = (-1, 0)
                         elif d > 0.0:
                             self._write_gpio(in1, 1)
                             self._write_gpio(in2, 0)
+                            active_channels[ch] = (pwm_pin, on_time)
                         else:
                             self._write_gpio(in1, 0)
                             self._write_gpio(in2, 1)
-
-                        if on_time > 0:
-                            pulse_pins[pwm_p] = on_time
+                            active_channels[ch] = (pwm_pin, on_time)
+                    else:
+                        # Direct-IN Mode (4-wire jumpered):
+                        if abs(d) < 1e-3 or on_time == 0:
+                            self._write_gpio(in1, 0)
+                            self._write_gpio(in2, 0)
+                            active_channels[ch] = (-1, 0)
+                        elif d > 0.0:
+                            # Forward: in2 is LOW, in1 pulses
+                            self._write_gpio(in2, 0)
+                            active_channels[ch] = (in1, on_time)
                         else:
-                            self._write_gpio(pwm_p, 0)
+                            # Reverse: in1 is LOW, in2 pulses
+                            self._write_gpio(in1, 0)
+                            active_channels[ch] = (in2, on_time)
 
-                # Set active pulsing pins HIGH at start of period
-                for p in pulse_pins:
-                    self._write_gpio(p, 1)
+                # Phase-Synchronized Direct-IN PWM:
+                # All active channels assert HIGH simultaneously at t = 0 (loop_start)
+                active_set = set()
+                for ch, (act_pin, ot) in active_channels.items():
+                    if act_pin >= 0 and ot > 0:
+                        self._write_gpio(act_pin, 1)
+                        active_set.add(ch)
 
-                # Wait until period expires, dropping pins to LOW as their duty threshold expires
-                while True:
+                # High-resolution event loop: de-assert channels as their on-times elapse
+                while active_set:
                     cur_ns = time.perf_counter_ns()
                     elapsed_ns = cur_ns - loop_start
                     if elapsed_ns >= period_ns:
                         break
 
-                    for p, on_time in list(pulse_pins.items()):
-                        if on_time > 0 and elapsed_ns >= on_time:
-                            self._write_gpio(p, 0)
-                            pulse_pins[p] = 0
+                    finished = []
+                    for ch in active_set:
+                        act_pin, ot = active_channels[ch]
+                        if elapsed_ns >= ot:
+                            self._write_gpio(act_pin, 0)
+                            finished.append(ch)
 
-                    time.sleep(0.001)
+                    for ch in finished:
+                        active_set.remove(ch)
 
-                # End of period: ensure all pulse pins are LOW
-                for p in pulse_pins:
-                    self._write_gpio(p, 0)
+                    if active_set:
+                        time.sleep(0.0001)
+
+                # Ensure all active pins are LOW for remainder of period
+                for ch, (act_pin, ot) in active_channels.items():
+                    if act_pin >= 0:
+                        self._write_gpio(act_pin, 0)
+
+                # Sleep until end of period
+                cur_ns = time.perf_counter_ns()
+                elapsed_ns = cur_ns - loop_start
+                if elapsed_ns < period_ns:
+                    time.sleep((period_ns - elapsed_ns) / 1_000_000_000.0)
             else:
                 # Simulated mode: sleep the full period
                 time.sleep(period_ns / 1_000_000_000.0)

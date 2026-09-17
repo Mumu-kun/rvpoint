@@ -32,7 +32,11 @@ struct MotorPinConfig {
     int in1_pin = -1;                   // Direction GPIO line 1
     int in2_pin = -1;                   // Direction GPIO line 2
     bool invert = false;                // Reverse polarity if true
-    float trim = 1.0f;                  // Scale factor [0.5, 1.5]
+    float trim = 1.0f;                  // Default scale factor [0.5, 1.5]
+    float trim_forward = 1.0f;          // Forward scale factor [0.5, 1.5]
+    float trim_reverse = 1.0f;          // Reverse scale factor [0.5, 1.5]
+    float deadband_forward = -1.0f;     // Forward deadband (<0 uses global config)
+    float deadband_reverse = -1.0f;     // Reverse deadband (<0 uses global config)
 };
 
 /**
@@ -41,7 +45,7 @@ struct MotorPinConfig {
 struct DualL298NConfig {
     bool use_hardware_pwm = false;
     int pwm_frequency_hz = 250;         // 200 - 500 Hz optimal for L298N
-    float deadband = 0.15f;             // Stiction compensation offset [0.0, 0.4]
+    float deadband = 0.20f;             // Stiction compensation offset [0.0, 0.4]
     bool enable_watchdog = true;        // 200 ms deadman watchdog
     uint64_t watchdog_timeout_ms = 200; // Timeout before auto-brake
 
