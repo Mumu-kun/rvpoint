@@ -46,10 +46,10 @@ struct DualL298NConfig {
     uint64_t watchdog_timeout_ms = 200; // Timeout before auto-brake
 
     // Mapping for each of the 4 physical wheels
-    MotorPinConfig fl{0, 38, "", 115, 116, false, 1.0f};
-    MotorPinConfig fr{1, 39, "", 117, 118, false, 1.0f};
-    MotorPinConfig rl{2, 40, "", 119, 120, false, 1.0f};
-    MotorPinConfig rr{3, 41, "", 121, 122, false, 1.0f};
+    MotorPinConfig fl{1, -1, "", 72, 73, false, 1.0f};
+    MotorPinConfig fr{0, -1, "", 74, 71, true, 1.0f};
+    MotorPinConfig rl{3, -1, "", 70, 91, true, 1.0f};
+    MotorPinConfig rr{2, -1, "", 47, 48, false, 1.0f};
 
     // Helper to get pin config by wheel
     MotorPinConfig& get_wheel_config(WheelId wheel) {

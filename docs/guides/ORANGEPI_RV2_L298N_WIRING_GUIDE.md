@@ -57,26 +57,26 @@ Leave the **black jumper caps on `ENA` and `ENB` INSTALLED** on both L298N modul
 ### B. Board 1: Front Axle Module (All on INNER Column)
 Just plug your 4 wires down the **Inner Column**, skipping Pin 9 in the middle:
 
-| Front L298N Wire | Function | Inner Column Pin # | Linux Sysfs GPIO |
+| Front L298N Wire | Calibrated Wheel | Inner Column Pin # | Linux Sysfs GPIO |
 | :--- | :--- | :--- | :--- |
-| **`IN1`** | Front-Left Speed/Direction 1 | **Pin 7** | `gpio74` |
+| **`IN1`** | Front-Right (FR) Dir 1 | **Pin 7** | `gpio74` |
 | *(Pin 9 is GND)* | *(Skip or use as ground)* | — | — |
-| **`IN2`** | Front-Left Speed/Direction 2 | **Pin 11** | `gpio71` |
-| **`IN3`** | Front-Right Speed/Direction 1 | **Pin 13** | `gpio72` |
-| **`IN4`** | Front-Right Speed/Direction 2 | **Pin 15** | `gpio91` |
+| **`IN2`** | Front-Right (FR) Dir 2 | **Pin 11** | `gpio71` |
+| **`IN3`** | Front-Left (FL) Dir 1 | **Pin 13** | `gpio72` |
+| **`IN4`** | Front-Left (FL) Dir 2 | **Pin 15** | `gpio73` |
 
 ---
 
 ### C. Board 2: Rear Axle Module (All on OUTER Column)
-Just plug your 4 wires down the **Outer Edge Column**, skipping Pin 14 in the middle:
+Plug your 4 wires down the **Outer Column**, skipping Pin 14 in the middle:
 
-| Rear L298N Wire | Function | Outer Column Pin # | Linux Sysfs GPIO |
+| Rear L298N Wire | Calibrated Wheel | Outer Column Pin # | Linux Sysfs GPIO |
 | :--- | :--- | :--- | :--- |
-| **`IN1`** | Rear-Left Speed/Direction 1 | **Pin 8** | `gpio47` |
-| **`IN2`** | Rear-Left Speed/Direction 2 | **Pin 10** | `gpio48` |
-| **`IN3`** | Rear-Right Speed/Direction 1 | **Pin 12** | `gpio70` |
+| **`IN1`** | Rear-Right (RR) Dir 1 | **Pin 8** | `gpio47` |
+| **`IN2`** | Rear-Right (RR) Dir 2 | **Pin 10** | `gpio48` |
+| **`IN3`** | Rear-Left (RL) Dir 1 | **Pin 12** | `gpio70` |
 | *(Pin 14 is GND)* | *(Skip or use as ground)* | — | — |
-| **`IN4`** | Rear-Right Speed/Direction 2 | **Pin 16** | `gpio92` |
+| **`IN4`** | Rear-Left (RL) Dir 2 | **Pin 16** | `gpio91` |
 
 ---
 

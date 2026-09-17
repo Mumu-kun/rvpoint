@@ -272,8 +272,8 @@ bool DualL298NActuator::initialize_hardware() {
         for (int i = 0; i < 4; ++i) {
             const auto& w = *wheels[i];
             // Export and setup direction pins
-            if (export_gpio(w.in1_pin)) set_gpio_direction(w.in1_pin, "out");
-            if (export_gpio(w.in2_pin)) set_gpio_direction(w.in2_pin, "out");
+            if (export_gpio(w.in1_pin)) set_gpio_direction(w.in1_pin, "low");
+            if (export_gpio(w.in2_pin)) set_gpio_direction(w.in2_pin, "low");
             gpio_fds_[i * 3 + 0] = open_gpio_value_fd(w.in1_pin);
             gpio_fds_[i * 3 + 1] = open_gpio_value_fd(w.in2_pin);
 

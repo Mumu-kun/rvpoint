@@ -87,15 +87,6 @@ class DualL298NActuator:
             "watchdog_timeout_ms": 200,
             "wheels": {
                 "FL": {
-                    "channel": 0,
-                    "pwm_pin": -1,
-                    "sysfs_pwm_path": "",
-                    "in1_pin": 74,
-                    "in2_pin": 71,
-                    "invert": False,
-                    "trim": 1.0,
-                },
-                "FR": {
                     "channel": 1,
                     "pwm_pin": -1,
                     "sysfs_pwm_path": "",
@@ -104,21 +95,30 @@ class DualL298NActuator:
                     "invert": False,
                     "trim": 1.0,
                 },
-                "RL": {
-                    "channel": 2,
+                "FR": {
+                    "channel": 0,
                     "pwm_pin": -1,
                     "sysfs_pwm_path": "",
-                    "in1_pin": 47,
-                    "in2_pin": 48,
-                    "invert": False,
+                    "in1_pin": 74,
+                    "in2_pin": 71,
+                    "invert": True,
                     "trim": 1.0,
                 },
-                "RR": {
+                "RL": {
                     "channel": 3,
                     "pwm_pin": -1,
                     "sysfs_pwm_path": "",
                     "in1_pin": 70,
                     "in2_pin": 91,
+                    "invert": True,
+                    "trim": 1.0,
+                },
+                "RR": {
+                    "channel": 2,
+                    "pwm_pin": -1,
+                    "sysfs_pwm_path": "",
+                    "in1_pin": 47,
+                    "in2_pin": 48,
                     "invert": False,
                     "trim": 1.0,
                 },
