@@ -161,6 +161,11 @@ _Avoid_: Skid steer model, unicycle model
 A hardware wiring topology where the two left DC motors are connected in parallel to H-bridge Channel A and the two right DC motors are connected in parallel to Channel B, requiring exactly two hardware PWM channels and four GPIO direction pins.
 _Avoid_: 4-channel independent drive, individual motor control
 
+**Axle-Partitioned Quad-Channel Omni-Tank**:
+A hardware topology using two dual H-bridge modules partitioned by axle (Board 1: Front-Left Ch A & Front-Right Ch B; Board 2: Rear-Left Ch A & Rear-Right Ch B) providing four independently commanded motor channels driven via four PWM signals and eight direction GPIOs, software-synchronized into left ($v_L \to \text{FL}, \text{RL}$) and right ($v_R \to \text{FR}, \text{RR}$) banks for Omni-Tank differential kinematics with per-wheel calibration trim.
+_Avoid_: Electrically paralleling front and rear axles onto common direction pins, hardware-paralleled dual channels when independent per-wheel driver channels are physically present
+
+
 **Pivot Turn**:
 A zero-radius pure yaw rotation about the geometric center of the vehicle achieved by commanding equal and opposite velocities to the left and right wheel banks.
 _Avoid_: Spin turn, point turn, donut

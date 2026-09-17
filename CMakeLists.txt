@@ -81,6 +81,8 @@ foreach(hdr_file ${ALL_SRC_HEADERS})
     get_filename_component(dir_path "${hdr_file}" DIRECTORY)
     list(APPEND RVPOINT_INCLUDE_DIRS "${dir_path}")
 endforeach()
+list(APPEND RVPOINT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}")
+list(APPEND RVPOINT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/eval")
 list(APPEND RVPOINT_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/eval/benchmarks")
 list(REMOVE_DUPLICATES RVPOINT_INCLUDE_DIRS)
 
