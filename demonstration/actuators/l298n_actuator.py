@@ -63,6 +63,13 @@ class DualL298NActuator:
         self._running = False
         self._worker_thread: Optional[threading.Thread] = None
 
+        # Stiction breakaway kick boost (60ms @ 100% duty when starting from stop)
+        self.enable_stiction_kick = True
+        self.kick_duration_s = 0.060
+        self.kick_duty = 1.0
+        self._kick_until: Dict[int, float] = {0: 0.0, 1: 0.0, 2: 0.0, 3: 0.0}
+        self._prev_duties: list[float] = [0.0, 0.0, 0.0, 0.0]
+
         # Register signal handlers for clean hardware stop on Ctrl+C / SIGINT
         try:
             signal.signal(signal.SIGINT, self._signal_handler)
@@ -365,6 +372,19 @@ class DualL298NActuator:
 
             if e_stopped:
                 duties = [0.0, 0.0, 0.0, 0.0]
+
+            # Apply Stiction Breakaway Kick if transitioning from 0 to motion
+            if self.enable_stiction_kick and not e_stopped:
+                for ch in range(4):
+                    tgt_d = duties[ch]
+                    prev_d = self._prev_duties[ch]
+                    if abs(prev_d) < 0.01 and abs(tgt_d) >= 0.05:
+                        self._kick_until[ch] = now_sec + self.kick_duration_s
+
+                    if now_sec < self._kick_until[ch] and abs(tgt_d) >= 0.05:
+                        duties[ch] = self.kick_duty if tgt_d > 0.0 else -self.kick_duty
+
+                    self._prev_duties[ch] = tgt_d
 
             # 2. Update outputs: Direct-IN PWM mode (4-wire per board) or 3-pin mode
             if not self.is_simulated:

@@ -342,7 +342,7 @@ def run_teleop(actuator: DualL298NActuator) -> None:
     print("Safety Watchdog: Auto-brakes within 200 ms if no key is held.")
     print("Starting teleop loop...\n")
 
-    base_speed = 0.35
+    base_speed = 0.55
 
     with KeyboardReader() as reader:
         try:
@@ -403,7 +403,7 @@ def main():
         help="Path to l298n_pins.json",
     )
     parser.add_argument(
-        "--duty", type=float, default=0.30, help="Test duty cycle [0.1, 1.0]"
+        "--duty", type=float, default=0.55, help="Test duty cycle [0.1, 1.0]"
     )
     parser.add_argument(
         "--hw-pwm", action="store_true", help="Force Linux sysfs hardware PWM mode"
