@@ -1173,7 +1173,9 @@ class TeleopHTTPHandler(BaseHTTPRequestHandler):
                     for pct in range(5, 55, 5):
                         d = pct / 100.0
                         with state.lock:
-                            state.test_progress = f"Stiction Sweep: Testing {pct}% duty..."
+                            state.test_progress = (
+                                f"Stiction Sweep: Testing {pct}% duty..."
+                            )
                             state.actuator.set_wheel_duties(d, d, d, d)
                         time.sleep(1.5)
                         with state.lock:
@@ -1223,7 +1225,11 @@ def main():
     )
     args = parser.parse_args()
 
-    config_path = PROJECT_ROOT / args.config if not Path(args.config).is_absolute() else Path(args.config)
+    config_path = (
+        PROJECT_ROOT / args.config
+        if not Path(args.config).is_absolute()
+        else Path(args.config)
+    )
     global TELEOP_STATE
     TELEOP_STATE = TeleopState(config_path)
 
@@ -1258,7 +1264,9 @@ def main():
         print(f"--> Mobile / Network: http://{ip}:{args.port}")
     print("=" * 65)
     print(f"Config File: {config_path}")
-    print(f"Hardware:    {'SIMULATION / MOCK' if TELEOP_STATE.actuator.is_simulated else 'LINUX SYSFS GPIO'}")
+    print(
+        f"Hardware:    {'SIMULATION / MOCK' if TELEOP_STATE.actuator.is_simulated else 'LINUX SYSFS GPIO'}"
+    )
     print("Press Ctrl+C to stop.\n")
 
     try:

@@ -49,6 +49,7 @@ docs/plans
 .clangd
 .agents/
 .scratch/
+.pi_host
 # Demonstration app
 demonstration/lidar-env
 demonstration/scans
