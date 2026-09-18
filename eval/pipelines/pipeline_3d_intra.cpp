@@ -116,15 +116,21 @@ static int ransac_plane_intra(
     int k_iters = max_iters;
     const double log_p = std::log(1.0 - 0.99);
 
+    // Uniform strided sample spanning the entire cloud evenly to eliminate spatial clustering bias
     const size_t sample_sz = std::min(cloud.n, static_cast<size_t>(2048));
     std::vector<float> sx(sample_sz), sy(sample_sz), sz(sample_sz);
-    FastPRNG s_rng(seed ^ 0x9e3779b97f4a7c15ULL);
+    size_t stride = std::max<size_t>(1, cloud.n / sample_sz);
     for (size_t k = 0; k < sample_sz; ++k) {
-        size_t idx = s_rng.next_bounded(static_cast<uint32_t>(cloud.n));
+        size_t idx = std::min(k * stride, cloud.n - 1);
         sx[k] = cloud.x[idx]; sy[k] = cloud.y[idx]; sz[k] = cloud.z[idx];
     }
 
-    for (int iter = 0; iter < k_iters && iter < max_iters; ++iter) {
+    const int target_ground_inliers = static_cast<int>(0.28f * sample_sz);
+    const int hard_limit = (ground_normal_prior != nullptr) ? std::max(max_iters, 200) : max_iters;
+
+    for (int iter = 0; iter < hard_limit; ++iter) {
+        if (iter >= max_iters && best_sample_inliers >= target_ground_inliers) break;
+        if (iter >= k_iters && best_sample_inliers >= target_ground_inliers) break;
         int i1 = static_cast<int>(rng.next_bounded(static_cast<uint32_t>(cloud.n)));
         int i2 = static_cast<int>(rng.next_bounded(static_cast<uint32_t>(cloud.n)));
         int i3 = static_cast<int>(rng.next_bounded(static_cast<uint32_t>(cloud.n)));
@@ -1548,12 +1554,20 @@ int main(int argc, char** argv) {
             } else if (arg == "--max-cluster") {
                 if (i + 1 >= argc) { std::cerr << "Error: Missing value for --max-cluster\n"; return 1; }
                 max_cluster_size = std::stoi(argv[++i]);
-            } else if (arg == "--ransac-dist" || arg == "--ransac-distance-threshold") {
+            } else if (arg == "--ransac-dist" || arg == "--ransac-distance-threshold" || arg == "--ransac-thresh" || arg == "--ransac-threshold") {
                 if (i + 1 >= argc) { std::cerr << "Error: Missing value for " << arg << "\n"; return 1; }
                 ransac_distance_threshold = std::stof(argv[++i]);
+                if (!std::isfinite(ransac_distance_threshold) || ransac_distance_threshold <= 0.0f) {
+                    std::cerr << "Error: " << arg << " must be a positive finite number.\n";
+                    return 1;
+                }
             } else if (arg == "--ransac-iters") {
                 if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ransac-iters\n"; return 1; }
                 ransac_max_iters = std::stoi(argv[++i]);
+                if (ransac_max_iters < 1) {
+                    std::cerr << "Error: --ransac-iters must be >= 1.\n";
+                    return 1;
+                }
             } else if (arg == "--ror-radius") {
                 if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ror-radius\n"; return 1; }
                 ror_radius = std::stof(argv[++i]);
@@ -1688,6 +1702,7 @@ int main(int argc, char** argv) {
               << "  Streaming Mode  : INTRA-FRAME (" << num_slabs << "-Core Parallel Spatial Slab Decomposition)\n"
               << "  Worker Threads  : " << num_slabs << "\n"
               << "  Voxel Leaf Size : " << voxel_leaf_size << " m\n"
+              << "  RANSAC Thresh   : " << ransac_distance_threshold << " m (iters: " << ransac_max_iters << ")\n"
               << "  Cluster Tol     : " << cluster_tolerance << " m (min: " << min_cluster_size << ")\n"
               << "  Cluster Export  : " << (disable_disk ? "DISABLED (Zero Disk I/O)" : "ENABLED") << "\n"
               << "========================================================================\n\n";

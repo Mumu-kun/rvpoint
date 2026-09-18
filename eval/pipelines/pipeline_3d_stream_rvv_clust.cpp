@@ -840,6 +840,8 @@ int main(int argc, char** argv) {
             cfg.ror_radius = std::atof(argv[++i]);
         } else if ((arg == "--ror-min-pts" || arg == "--ror-min-neighbors") && i + 1 < argc) {
             cfg.ror_min_neighbors = std::atoi(argv[++i]);
+        } else if ((arg == "--ransac-dist" || arg == "--ransac-distance-threshold" || arg == "--ransac-thresh" || arg == "--ransac-threshold") && i + 1 < argc) {
+            cfg.ransac_distance_threshold = std::atof(argv[++i]);
         } else if (arg == "--ransac-iters" && i + 1 < argc) {
             cfg.ransac_max_iterations = std::atoi(argv[++i]);
         } else if (arg == "--ground-angle-thresh" && i + 1 < argc) {

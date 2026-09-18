@@ -88,6 +88,14 @@ int main(int argc, char** argv) {
             cfg.min_cluster_size = std::atoi(argv[++i]);
         } else if (arg == "--max-cluster" && i + 1 < argc) {
             cfg.max_cluster_size = std::atoi(argv[++i]);
+        } else if (arg == "--ror-radius" && i + 1 < argc) {
+            cfg.ror_radius = std::atof(argv[++i]);
+        } else if ((arg == "--ror-min-pts" || arg == "--ror-min-neighbors") && i + 1 < argc) {
+            cfg.ror_min_pts = std::atoi(argv[++i]);
+        } else if ((arg == "--ransac-dist" || arg == "--ransac-distance-threshold" || arg == "--ransac-thresh" || arg == "--ransac-threshold") && i + 1 < argc) {
+            cfg.ransac_distance_threshold = std::atof(argv[++i]);
+        } else if (arg == "--ransac-iters" && i + 1 < argc) {
+            cfg.ransac_max_iterations = std::atoi(argv[++i]);
         } else if (arg == "--no-write") {
             cfg.disable_disk = true;
         } else if (arg == "--progress") {

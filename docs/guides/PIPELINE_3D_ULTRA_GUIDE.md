@@ -1,6 +1,6 @@
 # Pipeline 3D Ultra — Parameters & CLI Command Guide
 
-Comprehensive reference guide for all command-line parameters, options, default values, and operational use-cases for [`pipeline_3d_ultra`](file:///workspace/src/tools/pipeline_3d_ultra.cpp).
+Comprehensive reference guide for all command-line parameters, options, default values, and operational use-cases for [`pipeline_3d_ultra`](file:///workspace/eval/pipelines/pipeline_3d_ultra.cpp).
 
 ---
 
@@ -19,6 +19,7 @@ Comprehensive reference guide for all command-line parameters, options, default 
   --use-sor \
   --ror-radius 0.25 \
   --ror-min-pts 2 \
+  --ransac-dist 0.20 \
   --ransac-iters 250 \
   --no-ground-prior \
   --cluster-tolerance 0.15 \
@@ -66,6 +67,7 @@ Comprehensive reference guide for all command-line parameters, options, default 
 
 | Parameter | Type | Default | Description & Recommended Usage |
 | :--- | :--- | :--- | :--- |
+| `--ransac-dist <val>` / `--ransac-distance-threshold` | Float (meters) | `0.20` (20 cm) | Maximum orthogonal distance from the hypothesis plane for a point to be labeled a ground inlier. Points with $\|ax + by + cz + d\| \le \text{dist}$ are removed as ground. Aliases: `--ransac-thresh`, `--ransac-threshold`. |
 | `--ransac-iters <val>` | Integer | `250` | Maximum RANSAC hypothesis iterations. Adaptive early-termination stops iterations automatically when confidence reaches 99%. |
 | `--ground-angle-thresh <deg>` | Float (degrees) | `45.0` | Angular tolerance cone ($\theta_{\text{max}}$) between plane normal and vertical reference prior ($+Z$). Accepts sloped terrain up to $\pm 45^\circ$. |
 | `--no-ground-prior` / `--unconstrained-plane` | Flag | `false` | **Critical for handheld testing.** Removes orientation constraints, fitting the largest dominant plane at **any arbitrary pitch/roll tilt**. |
@@ -88,7 +90,8 @@ Comprehensive reference guide for all command-line parameters, options, default 
 
 | Parameter | Type | Default | Description & Recommended Usage |
 | :--- | :--- | :--- | :--- |
-| `--no-normals` / `--skip-normals` | Flag | `false` | Skips PCA surface normal covariance estimation. Sets default vertical normals $(0, 0, 1)$ to eliminate computation overhead. |
+| `--no-normals` / `--skip-normals` | Flag | `true` (Default) | Skips PCA surface normal covariance estimation. Sets default vertical normals $(0, 0, 1)$ to eliminate computation overhead for maximum speed. Aliases: `--no-normal`, `--skip-normal`. |
+| `--compute-normals` / `--with-normals` | Flag | `false` | Enables full Cardano closed-form PCA surface normal covariance estimation. Use this mode for strict 1:1 algorithmic parity against standard PCL (`pcl::NormalEstimation`). Alias: `--normals`. |
 
 ---
 
@@ -99,6 +102,11 @@ Comprehensive reference guide for all command-line parameters, options, default 
 ./scripts/run.sh pipeline_3d_ultra data/pcd_compressed/0000000045.pcd \
   --progress \
   --leaf-size 0.10 \
+  --ror-radius 0.25 \
+  --ror-min-pts 2 \
+  --ransac-dist 0.20 \
+  --ransac-iters 250 \
+  --ground-angle-thresh 45.0 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
   --max-cluster 100000
@@ -108,27 +116,64 @@ Comprehensive reference guide for all command-line parameters, options, default 
 *Removes plane angle constraints so the floor/ground is extracted regardless of how the camera is tilted.*
 ```bash
 ./scripts/run.sh pipeline_3d_ultra <frame.pcd> \
-  --no-ground-prior \
   --progress \
+  --leaf-size 0.10 \
+  --no-ground-prior \
+  --ransac-dist 0.20 \
+  --ransac-iters 250 \
+  --cluster-tolerance 0.15 \
+  --min-cluster 50 \
+  --max-cluster 100000 \
   --no-write
 ```
 
 ### 3. Intel RealSense / RGB-D Camera (Optical Frame $+Y$ Down)
 ```bash
 ./scripts/run.sh pipeline_3d_ultra camera_frame.pcd \
-  --optical-frame \
   --progress \
+  --optical-frame \
   --leaf-size 0.05 \
-  --cluster-tolerance 0.08
+  --ror-radius 0.15 \
+  --ror-min-pts 2 \
+  --ransac-dist 0.10 \
+  --ransac-iters 250 \
+  --cluster-tolerance 0.08 \
+  --min-cluster 30 \
+  --max-cluster 50000
 ```
 
 ### 4. Ultra-High-Speed Real-Time Perception (Pure Compute Benchmark)
 *Disables disk write and skips surface normal estimation for lowest latency.*
 ```bash
 ./scripts/run.sh pipeline_3d_ultra data/pcd_compressed/0000000090.pcd \
-  --no-write \
+  --progress \
+  --leaf-size 0.10 \
+  --ror-radius 0.25 \
+  --ror-min-pts 2 \
+  --ransac-dist 0.20 \
+  --ransac-iters 100 \
+  --cluster-tolerance 0.15 \
+  --min-cluster 50 \
+  --max-cluster 100000 \
   --no-normals \
-  --progress
+  --no-write
+```
+
+### 5. 1:1 Strict Algorithmic PCL Parity (With Surface Normals)
+*Enables Cardano PCA surface normal estimation for identical stage-by-stage equivalence with PCL 1.14.*
+```bash
+./scripts/run.sh pipeline_3d_ultra data/pcd_compressed/0000000090.pcd \
+  --progress \
+  --compute-normals \
+  --leaf-size 0.10 \
+  --ror-radius 0.25 \
+  --ror-min-pts 2 \
+  --ransac-dist 0.20 \
+  --ransac-iters 250 \
+  --cluster-tolerance 0.15 \
+  --min-cluster 50 \
+  --max-cluster 100000 \
+  --no-write
 ```
 
 ---

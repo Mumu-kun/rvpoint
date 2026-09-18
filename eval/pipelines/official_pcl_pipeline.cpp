@@ -199,6 +199,13 @@ int main(int argc, char** argv) {
             } else if (arg == "--max-cluster") {
                 if (i + 1 >= argc) { std::cerr << "Error: Missing value for --max-cluster\n"; return 1; }
                 cfg.max_cluster_size = std::stoi(argv[++i]);
+            } else if (arg == "--ransac-dist" || arg == "--ransac-distance-threshold" || arg == "--ransac-thresh" || arg == "--ransac-threshold") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for " << arg << "\n"; return 1; }
+                cfg.ransac_distance_threshold = std::stof(argv[++i]);
+                if (!std::isfinite(cfg.ransac_distance_threshold) || cfg.ransac_distance_threshold <= 0.0f) {
+                    std::cerr << "Error: " << arg << " must be a positive finite number.\n";
+                    return 1;
+                }
             } else if (arg == "--ransac-iters") {
                 if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ransac-iters\n"; return 1; }
                 cfg.ransac_max_iterations = std::stoi(argv[++i]);
@@ -229,7 +236,7 @@ int main(int argc, char** argv) {
                   << " [--progress] [--json] [--no-write] [--no-normals] [--use-ror|--use-sor|--skip-sor] "
                      "[--ror-radius <val>] [--ror-min-pts <val>] [--leaf-size <val>] "
                      "[--cluster-tolerance <val>] [--min-cluster <val>] "
-                     "[--max-cluster <val>] [--ransac-iters <val>] "
+                     "[--max-cluster <val>] [--ransac-dist <val>] [--ransac-iters <val>] "
                      "[--ground-angle-thresh <deg>] [--no-ground-prior] [--optical-frame] <input.pcd> [output_dir]\n";
         return 1;
     }

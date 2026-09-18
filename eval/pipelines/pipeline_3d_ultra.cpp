@@ -1146,6 +1146,7 @@ int main(int argc, char** argv) {
     float cluster_tolerance = kPipelineConfig.cluster_tolerance;
     int min_cluster_size = kPipelineConfig.min_cluster_size;
     int max_cluster_size = kPipelineConfig.max_cluster_size;
+    float ransac_distance_threshold = kPipelineConfig.ransac_distance_threshold;
     int ransac_max_iters = kPipelineConfig.ransac_max_iterations;
     float ror_radius = 0.25f;
     int ror_min_pts = 2; // Preserves thin/periphery object cluster points
@@ -1219,6 +1220,13 @@ int main(int argc, char** argv) {
                     std::cerr << "Error: --max-cluster must be >= 1.\n";
                     return 1;
                 }
+            } else if (arg == "--ransac-dist" || arg == "--ransac-distance-threshold" || arg == "--ransac-thresh" || arg == "--ransac-threshold") {
+                if (i + 1 >= argc) { std::cerr << "Error: Missing value for " << arg << "\n"; return 1; }
+                ransac_distance_threshold = std::stof(argv[++i]);
+                if (!std::isfinite(ransac_distance_threshold) || ransac_distance_threshold <= 0.0f) {
+                    std::cerr << "Error: " << arg << " must be a positive finite number.\n";
+                    return 1;
+                }
             } else if (arg == "--ransac-iters") {
                 if (i + 1 >= argc) { std::cerr << "Error: Missing value for --ransac-iters\n"; return 1; }
                 ransac_max_iters = std::stoi(argv[++i]);
@@ -1258,7 +1266,7 @@ int main(int argc, char** argv) {
                   << " [--progress] [--json] [--no-write] [--no-normals] [--use-ror|--use-sor|--skip-sor] "
                      "[--ror-radius <val>] [--ror-min-pts <val>] [--leaf-size <val>] "
                      "[--cluster-tolerance <val>] [--min-cluster <val>] "
-                     "[--max-cluster <val>] [--ransac-iters <val>] [--seed <val>] "
+                     "[--max-cluster <val>] [--ransac-dist <val>] [--ransac-iters <val>] [--seed <val>] "
                      "[--ground-angle-thresh <deg>] [--no-ground-prior] [--optical-frame] <input.pcd> [output_dir]\n";
         return 1;
     }
@@ -1407,7 +1415,7 @@ int main(int argc, char** argv) {
     stage_start = Clock::now();
     int r_cnt = 0;
     if (n_sor >= 3) {
-        r_cnt = ransac_plane_sprt_rvv(sor_cloud, kPipelineConfig.ransac_distance_threshold,
+        r_cnt = ransac_plane_sprt_rvv(sor_cloud, ransac_distance_threshold,
                                       ransac_max_iters, model,
                                       ground_normal_prior.data(), min_ground_dot, seed);
     }
@@ -1421,7 +1429,7 @@ int main(int argc, char** argv) {
 
     size_t n_inliers = 0;
     if (r_cnt > 0) {
-        n_inliers = extract_inliers_outliers_direct_soa(sor_cloud, model, kPipelineConfig.ransac_distance_threshold,
+        n_inliers = extract_inliers_outliers_direct_soa(sor_cloud, model, ransac_distance_threshold,
                                                         inlier_pts, ox, oy, oz, !disable_disk);
     } else {
         ox = fused.x; oy = fused.y; oz = fused.z;

@@ -2,8 +2,22 @@
 
 
 
-pinning it
-./build/rvv/bin/rvv/pipeline_3d_intra data/pcd_compressed/     --threads 8   --max-frames 131   --leaf-size 0.15   --cluster-tolerance 0.20   --min-cluster 30   --max-cluster 100000   --ror-min-pts 3
+```bash
+# Pin: Flagship Inverted Slab Multi-Frame Benchmark Command:
+./build/rvv/bin/rvv/pipeline_3d_intra data/pcd_compressed/ \
+  --threads 8 \
+  --max-frames 131 \
+  --leaf-size 0.15 \
+  --ransac-dist 0.22 \
+  --ransac-iters 100 \
+  --cluster-tolerance 0.20 \
+  --min-cluster 30 \
+  --max-cluster 100000 \
+  --ror-radius 0.25 \
+  --ror-min-pts 3 \
+  --progress \
+  --no-write
+```
 
 
 
@@ -105,18 +119,24 @@ cmake --build build/scalar -j8
 3. **8-Core Spatial Slab Decomposition**: Divides the point cloud into balanced spatial slabs processed in parallel across all 8 cores, then seamlessly stitches boundary clusters.
 
 ### Supported Parameters:
+* `--threads <N>` / `--cores <N>` / `--num-slabs <N>`: Worker thread count / spatial slabs (default: all `8` cores)
+* `--max-frames <N>` / `--frames <N>`: Maximum frames to process in directory sweep (default: `-1` = all frames)
 * `--leaf-size <val>`: Voxel leaf size in meters (default: `0.10`)
 * `--ror-radius <val>`: ROR search sphere radius in meters (default: `0.25`)
-* `--ror-min-pts <val>`: Minimum neighbors within ROR sphere (default: `2` or `3`)
-* `--skip-ror` / `--skip-sor`: Bypass outlier removal stage entirely
-* `--ransac-iters <val>`: Max hypothesis iterations for SPRT RANSAC (default: `250` or `100`)
-* `--ransac-dist <val>`: RANSAC inlier distance threshold in meters (default: `0.22`)
+* `--ror-min-pts <val>`: Minimum neighbors within ROR sphere (default: `3`)
+* `--skip-ror` / `--no-ror` / `--skip-sor` / `--no-sor`: Bypass outlier removal stage entirely
+* `--ransac-dist <val>`: RANSAC inlier distance threshold in meters (default: `0.22`, aliases: `--ransac-distance-threshold`, `--ransac-thresh`, `--ransac-threshold`)
+* `--ransac-iters <val>`: Max hypothesis iterations for SPRT RANSAC (default: `250`)
+* `--ground-angle-thresh <deg>`: Angular tolerance cone between plane normal and $+Z$ vertical (default: `45.0` deg)
+* `--no-ground-prior` / `--unconstrained-plane`: Accept arbitrary pitch/roll ground tilt (for handheld / tilted tests)
+* `--optical-frame`: Set ground normal prior to $+Y$ for optical RGB-D sensors
+* `--seed <val>`: FastPRNG seed for deterministic RANSAC sampling (default: `42`)
 * `--cluster-tolerance <val>`: Euclidean clustering distance threshold (default: `0.15`)
-* `--min-cluster <val>` / `--max-cluster <val>`: Min/max cluster size filter (default: `50` / `100000`)
-* `--threads <N>`: Worker thread count (default: all `8` cores)
-* `--no-write`: Disable writing PCD files to disk for pure compute benchmarking
+* `--min-cluster <val>`: Minimum cluster size filter (default: `50`)
+* `--max-cluster <val>`: Maximum cluster size filter (default: `100000`)
+* `--no-write` / `--disable-disk`: Disable writing PCD files to disk for pure compute benchmarking
 * `--progress`: Print live per-stage timing breakdown
-* `--json`: Export telemetry metrics to JSON
+* `--json` / `--json-metrics`: Export telemetry metrics to JSON
 
 ```bash
 # ------------------------------------------------------------------------------
@@ -127,6 +147,7 @@ cmake --build build/scalar -j8
   --leaf-size 0.10 \
   --ror-radius 0.25 \
   --ror-min-pts 3 \
+  --ransac-dist 0.22 \
   --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
@@ -141,6 +162,7 @@ cmake --build build/scalar -j8
   --leaf-size 0.10 \
   --ror-radius 0.25 \
   --ror-min-pts 3 \
+  --ransac-dist 0.22 \
   --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
@@ -156,6 +178,7 @@ cmake --build build/scalar -j8
   --leaf-size 0.10 \
   --ror-radius 0.25 \
   --ror-min-pts 3 \
+  --ransac-dist 0.22 \
   --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
@@ -170,13 +193,25 @@ cmake --build build/scalar -j8
 **`pipeline_3d_ultra`** is the full 10-stage baseline perception pipeline matching standard robotics pipelines stage-by-stage.
 
 ### Key Options:
+* `--leaf-size <val>`: Voxel leaf size in meters (default: `0.10`)
 * `--use-ror` / `--ror`: Enable Radius Outlier Removal (Default: `true`)
 * `--use-sor` / `--sor`: Enable Statistical Outlier Removal
+* `--skip-sor` / `--no-sor`: Skip outlier filtering stage entirely
 * `--ror-radius <val>`: ROR search radius (default: `0.25`)
 * `--ror-min-pts <val>`: Min points in radius (default: `2`)
-* `--no-normals`: Skip surface normal estimation stage
-* `--leaf-size <val>`, `--cluster-tolerance <val>`, `--min-cluster <val>`, `--max-cluster <val>`
-* `--no-write`: Measure pure compute without disk write overhead
+* `--ransac-dist <val>`: RANSAC inlier distance threshold in meters (default: `0.20`, aliases: `--ransac-distance-threshold`, `--ransac-thresh`, `--ransac-threshold`)
+* `--ransac-iters <val>`: Max hypothesis iterations (default: `250`)
+* `--ground-angle-thresh <deg>`: Angular tolerance cone from vertical prior (default: `45.0` deg)
+* `--no-ground-prior` / `--unconstrained-plane`: Disable plane angle constraints for arbitrary pitch/roll tilt
+* `--optical-frame`: Set ground normal prior to $+Y$ for optical RGB-D sensors
+* `--seed <val>`: FastPRNG seed for deterministic sampling (default: `42`)
+* `--no-normals` / `--skip-normals`: Skip surface normal estimation stage (default: enabled for fast mode)
+* `--compute-normals` / `--with-normals`: Force full Cardano closed-form PCA normal estimation
+* `--cluster-tolerance <val>`: Euclidean clustering distance (default: `0.15`)
+* `--min-cluster <val>` / `--max-cluster <val>`: Min/max cluster size (default: `50` / `100000`)
+* `--no-write` / `--disable-disk`: Measure pure compute without disk write overhead
+* `--progress`: Print live per-stage timing breakdown
+* `--json` / `--json-metrics`: Export telemetry metrics to JSON
 
 ```bash
 # ------------------------------------------------------------------------------
@@ -187,6 +222,7 @@ cmake --build build/scalar -j8
   --leaf-size 0.10 \
   --ror-radius 0.25 \
   --ror-min-pts 2 \
+  --ransac-dist 0.20 \
   --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
@@ -201,6 +237,8 @@ cmake --build build/scalar -j8
   --progress \
   --use-sor \
   --leaf-size 0.10 \
+  --ransac-dist 0.20 \
+  --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
   --max-cluster 100000 \
@@ -219,6 +257,7 @@ cmake --build build/scalar -j8
   --leaf-size 0.10 \
   --ror-radius 0.25 \
   --ror-min-pts 2 \
+  --ransac-dist 0.20 \
   --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
@@ -229,6 +268,10 @@ cmake --build build/scalar -j8
 ./build/rvv/bin/rvv/pipeline_3d_rvv_clust data/pcd_compressed/0000000010.pcd \
   --progress \
   --leaf-size 0.10 \
+  --ror-radius 0.25 \
+  --ror-min-pts 2 \
+  --ransac-dist 0.20 \
+  --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
   --max-cluster 100000
@@ -251,6 +294,8 @@ cmake --build build/scalar -j8
   --use-ror \
   --ror-radius 0.25 \
   --ror-min-pts 2 \
+  --ransac-dist 0.20 \
+  --ransac-iters 100 \
   --no-normals \
   --leaf-size 0.10 \
   --cluster-tolerance 0.15 \
@@ -263,6 +308,8 @@ cmake --build build/scalar -j8
   --progress \
   --use-sor \
   --leaf-size 0.10 \
+  --ransac-dist 0.20 \
+  --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
   --max-cluster 100000 \
@@ -284,10 +331,13 @@ cmake --build build/scalar -j8
   --threads 8 \
   --max-frames 131 \
   --leaf-size 0.15 \
+  --ror-radius 0.25 \
+  --ror-min-pts 3 \
+  --ransac-dist 0.20 \
+  --ransac-iters 100 \
   --cluster-tolerance 0.20 \
   --min-cluster 30 \
   --max-cluster 100000 \
-  --ror-min-pts 3 \
   --no-write
 
 # High-Density Perception: 20-Frame Stream (23.90 FPS Sustained, 0.10m leaf):
@@ -298,6 +348,7 @@ cmake --build build/scalar -j8
   --leaf-size 0.10 \
   --ror-radius 0.25 \
   --ror-min-pts 2 \
+  --ransac-dist 0.20 \
   --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
@@ -312,6 +363,10 @@ cmake --build build/scalar -j8
   --threads 8 \
   --max-frames 20 \
   --leaf-size 0.10 \
+  --ror-radius 0.25 \
+  --ror-min-pts 2 \
+  --ransac-dist 0.20 \
+  --ransac-iters 100 \
   --cluster-tolerance 0.15 \
   --min-cluster 50 \
   --max-cluster 100000 \
