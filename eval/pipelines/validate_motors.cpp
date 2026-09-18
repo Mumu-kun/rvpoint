@@ -328,9 +328,11 @@ static void run_teleop(DualL298NActuator& actuator) {
               << "  [A] Pivot Left\n"
               << "  [D] Pivot Right\n"
               << "  [SPACE] Instant Active Emergency Brake\n"
+              << "  [R] Reset Emergency Brake (Arm Controls)\n"
               << "  [+] Increase Speed Step\n"
               << "  [-] Decrease Speed Step\n"
               << "  [Q] Exit Teleoperation\n\n"
+              << "Notice: Driving keys (W/A/S/D) or [R] automatically clear active brake.\n"
               << "Safety Watchdog: Releases auto-brake within 200 ms if no key is pressed.\n"
               << "Starting teleop loop...\n\n";
 
@@ -349,20 +351,32 @@ static void run_teleop(DualL298NActuator& actuator) {
             if (c == 'q' || c == 'Q') {
                 running = false;
                 break;
-            } else if (c == 'w' || c == 'W') {
-                actuator.set_duty_cycles(base_speed, base_speed);
-            } else if (c == 's' || c == 'S') {
-                actuator.set_duty_cycles(-base_speed, -base_speed);
-            } else if (c == 'a' || c == 'A') {
-                actuator.set_duty_cycles(-base_speed, base_speed);
-            } else if (c == 'd' || c == 'D') {
-                actuator.set_duty_cycles(base_speed, -base_speed);
+            } else if (c == 'w' || c == 'W' || c == 's' || c == 'S' ||
+                       c == 'a' || c == 'A' || c == 'd' || c == 'D' ||
+                       c == 'r' || c == 'R') {
+                if (actuator.is_emergency_stopped()) {
+                    actuator.reset_emergency_stop();
+                    std::cout << "\r[BRAKE CLEARED] Controls re-armed.          " << std::flush;
+                }
+
+                if (c == 'w' || c == 'W') {
+                    actuator.set_duty_cycles(base_speed, base_speed);
+                } else if (c == 's' || c == 'S') {
+                    actuator.set_duty_cycles(-base_speed, -base_speed);
+                } else if (c == 'a' || c == 'A') {
+                    actuator.set_duty_cycles(-base_speed, base_speed);
+                } else if (c == 'd' || c == 'D') {
+                    actuator.set_duty_cycles(base_speed, -base_speed);
+                }
             } else if (c == ' ') {
                 actuator.emergency_brake();
+                std::cout << "\r[ACTIVE BRAKE ENGAGED] (Press W/A/S/D or R to resume)" << std::flush;
             } else if (c == '+' || c == '=') {
                 base_speed = clamp_val(base_speed + 0.05f, 0.15f, 1.0f);
+                std::cout << "\rSpeed: " << std::fixed << std::setprecision(2) << base_speed << "                              " << std::flush;
             } else if (c == '-' || c == '_') {
                 base_speed = clamp_val(base_speed - 0.05f, 0.15f, 1.0f);
+                std::cout << "\rSpeed: " << std::fixed << std::setprecision(2) << base_speed << "                              " << std::flush;
             }
         }
 

@@ -75,3 +75,20 @@ Automatically downloads raw and processed PCD files to your local `demonstration
 ```bash
 python3 demonstration/receive_scans.py --host 100.94.165.126
 ```
+
+---
+
+## 3. Web Teleoperation & Live Calibration Server
+
+Runs a zero-dependency web dashboard on the Orange Pi RV2 (or off-target mock simulation) on port `8085`:
+
+```bash
+# On Orange Pi RV2 (or local machine):
+python3 demonstration/teleop_server.py --port 8085
+```
+
+👉 Open **`http://<orange_pi_ip>:8085`** (or `http://localhost:8085`) on any smartphone, tablet, or PC browser.
+- **Drive Tab**: Virtual touch analog joystick, tactile D-Pad, keyboard controls (`W`, `A`, `S`, `D`), speed slider, and big red E-STOP button with active dynamic braking.
+- **Calibration Tab**: Live direction-aware per-wheel trims (`trim_forward`, `trim_reverse`) and stiction deadbands (`deadband_forward`, `deadband_reverse`), polarity inverts, and "Save to Disk" to update `eval/actuators/l298n_pins.json`.
+- **Automated Tests Tab**: 1-click 4-way directional verification and stiction breakaway sweep.
+

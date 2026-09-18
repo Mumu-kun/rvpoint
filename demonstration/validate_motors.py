@@ -505,9 +505,11 @@ def run_teleop(actuator: DualL298NActuator) -> None:
     print("  [A] Pivot Left")
     print("  [D] Pivot Right")
     print("  [SPACE] Instant Active Emergency Brake")
+    print("  [R] Reset Emergency Brake (Arm Controls)")
     print("  [+] Increase Speed Step")
     print("  [-] Decrease Speed Step")
     print("  [Q] Exit Teleoperation\n")
+    print("Notice: Driving keys (W/A/S/D) or [R] automatically clear active brake.")
     print("Safety Watchdog: Auto-brakes within 200 ms if no key is held.")
     print("Starting teleop loop...\n")
 
@@ -521,22 +523,44 @@ def run_teleop(actuator: DualL298NActuator) -> None:
                     ch_lower = ch.lower()
                     if ch_lower == "q":
                         break
-                    elif ch_lower == "w":
-                        actuator.set_duty_cycles(base_speed, base_speed)
-                    elif ch_lower == "s":
-                        actuator.set_duty_cycles(-base_speed, -base_speed)
-                    elif ch_lower == "a":
-                        actuator.set_duty_cycles(-base_speed, base_speed)
-                    elif ch_lower == "d":
-                        actuator.set_duty_cycles(base_speed, -base_speed)
+                    elif ch_lower in ("w", "s", "a", "d", "r"):
+                        if actuator.is_emergency_stopped():
+                            actuator.reset_emergency_stop()
+                            print(
+                                "\r[BRAKE CLEARED] Controls re-armed.          ",
+                                end="",
+                                flush=True,
+                            )
+
+                        if ch_lower == "w":
+                            actuator.set_duty_cycles(base_speed, base_speed)
+                        elif ch_lower == "s":
+                            actuator.set_duty_cycles(-base_speed, -base_speed)
+                        elif ch_lower == "a":
+                            actuator.set_duty_cycles(-base_speed, base_speed)
+                        elif ch_lower == "d":
+                            actuator.set_duty_cycles(base_speed, -base_speed)
                     elif ch == " ":
                         actuator.emergency_brake()
+                        print(
+                            "\r[ACTIVE BRAKE ENGAGED] (Press W/A/S/D or R to resume)",
+                            end="",
+                            flush=True,
+                        )
                     elif ch in ("+", "="):
                         base_speed = min(1.0, base_speed + 0.05)
-                        print(f"Speed: {base_speed:.2f}")
+                        print(
+                            f"\rSpeed: {base_speed:.2f}                              ",
+                            end="",
+                            flush=True,
+                        )
                     elif ch in ("-", "_"):
                         base_speed = max(0.15, base_speed - 0.05)
-                        print(f"Speed: {base_speed:.2f}")
+                        print(
+                            f"\rSpeed: {base_speed:.2f}                              ",
+                            end="",
+                            flush=True,
+                        )
 
                 time.sleep(0.02)
         except KeyboardInterrupt:

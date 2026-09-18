@@ -230,17 +230,21 @@ class DualL298NActuator:
     def initialize_hardware(self) -> bool:
         self.shutdown_hardware()
 
-        # Check if sysfs gpio is writable
-        sysfs_gpio_available = (
-            os.access("/sys/class/gpio", os.W_OK)
-            if os.path.exists("/sys/class/gpio")
-            else False
-        )
+        # Check if sysfs gpio export is accessible and writable
+        export_path = "/sys/class/gpio/export"
+        sysfs_gpio_available = False
+        if os.path.exists(export_path):
+            try:
+                fd = os.open(export_path, os.O_WRONLY)
+                os.close(fd)
+                sysfs_gpio_available = True
+            except (OSError, PermissionError):
+                sysfs_gpio_available = False
 
         if not sysfs_gpio_available:
             self.is_simulated = True
             print(
-                "[DualL298NActuator:Python] Hardware sysfs GPIO inaccessible. Running in SIMULATION / MOCK mode."
+                "[DualL298NActuator:Python] Hardware sysfs GPIO inaccessible (run with sudo?). Running in SIMULATION / MOCK mode."
             )
         else:
             self.is_simulated = False
