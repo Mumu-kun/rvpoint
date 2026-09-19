@@ -45,8 +45,10 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-MAGIC = b"LDP1"
-HEADER = struct.Struct("<III4f16f")  # frame_idx, w, h, fx, fy, cx, cy, pose(4x4)
+MAGIC_LDP1 = b"LDP1"
+MAGIC_LDP2 = b"LDP2"
+HEADER_LDP1 = struct.Struct("<III4f16f")  # 92 bytes
+HEADER_LDP2 = struct.Struct("<III4f16fI9f")  # 132 bytes (includes tracking_state + gyro + accel + gravity)
 
 
 def get_local_ips() -> List[str]:
@@ -118,34 +120,65 @@ def find_pipeline_binary(pipeline_choice: str = "auto", specified_path: Optional
 
 
 def recv_frame(conn: socket.socket, buf: bytearray) -> Optional[Dict]:
-    """Parse next complete LiDAR frame from TCP buffer; returns dict or None on timeout."""
+    """Parse next complete LiDAR frame (LDP1 or LDP2) from TCP buffer; returns dict or None on timeout."""
     while True:
-        i = buf.find(MAGIC)
-        if i == -1:
-            del buf[:max(0, len(buf) - 3)]
-        elif i > 0:
-            del buf[:i]
+        idx1 = buf.find(MAGIC_LDP1)
+        idx2 = buf.find(MAGIC_LDP2)
 
-        if len(buf) >= 4 + HEADER.size:
-            frame_idx, w, h, fx, fy, cx, cy, *pose = HEADER.unpack_from(buf, 4)
-            need = w * h * 5  # float32 depth (w*h*4) + uint8 confidence (w*h*1)
-            if len(buf) >= 4 + HEADER.size + need:
-                start = 4 + HEADER.size
-                depth = np.frombuffer(buf, "<f4", w * h, start).reshape(h, w).copy()
-                conf = np.frombuffer(buf, np.uint8, w * h, start + w * h * 4).reshape(h, w).copy()
-                del buf[: start + need]
-                return {
-                    "idx": frame_idx,
-                    "w": w,
-                    "h": h,
-                    "fx": fx,
-                    "fy": fy,
-                    "cx": cx,
-                    "cy": cy,
-                    "pose": np.asarray(pose, np.float64).reshape(4, 4),
-                    "depth": depth,
-                    "conf": conf,
-                }
+        pos = -1
+        protocol = None
+        if idx1 != -1 and idx2 != -1:
+            if idx1 < idx2:
+                pos, protocol = idx1, "LDP1"
+            else:
+                pos, protocol = idx2, "LDP2"
+        elif idx1 != -1:
+            pos, protocol = idx1, "LDP1"
+        elif idx2 != -1:
+            pos, protocol = idx2, "LDP2"
+
+        if pos == -1:
+            del buf[: max(0, len(buf) - 3)]
+        elif pos > 0:
+            del buf[:pos]
+
+        if protocol is not None:
+            hdr_struct = HEADER_LDP2 if protocol == "LDP2" else HEADER_LDP1
+            hdr_size = 4 + hdr_struct.size
+
+            if len(buf) >= hdr_size:
+                unpacked = hdr_struct.unpack_from(buf, 4)
+                frame_idx = unpacked[0]
+                w = unpacked[1]
+                h = unpacked[2]
+                fx, fy, cx, cy = unpacked[3:7]
+                pose = unpacked[7:23]
+
+                need = w * h * 5  # float32 depth (w*h*4) + uint8 confidence (w*h*1)
+                if len(buf) >= hdr_size + need:
+                    start = hdr_size
+                    depth = np.frombuffer(buf, "<f4", w * h, start).reshape(h, w).copy()
+                    conf = np.frombuffer(buf, np.uint8, w * h, start + w * h * 4).reshape(h, w).copy()
+                    del buf[: hdr_size + need]
+                    ret = {
+                        "idx": frame_idx,
+                        "w": w,
+                        "h": h,
+                        "fx": fx,
+                        "fy": fy,
+                        "cx": cx,
+                        "cy": cy,
+                        "pose": np.asarray(pose, np.float64).reshape(4, 4),
+                        "depth": depth,
+                        "conf": conf,
+                        "protocol": protocol,
+                    }
+                    if protocol == "LDP2" and len(unpacked) >= 33:
+                        ret["tracking_state"] = unpacked[23]
+                        ret["gyro"] = unpacked[24:27]
+                        ret["accel"] = unpacked[27:30]
+                        ret["gravity"] = unpacked[30:33]
+                    return ret
 
         try:
             chunk = conn.recv(262144)
@@ -188,7 +221,22 @@ def unproject_points(frame: Dict, args: argparse.Namespace) -> np.ndarray:
     if args.flip_z:
         pts[:, 2] *= -1
 
-    if not args.cam_frame:
+    if getattr(args, "cam_frame", False):
+        pass
+    elif (getattr(args, "gravity_align", False) or getattr(args, "vehicle_frame", False)) and frame.get("gravity") is not None:
+        # RVPoint CameraAlignment using live CoreMotion gravity vector [gx, gy, gz] from LDP2
+        gx, gy, gz = frame["gravity"]
+        g_norm = np.linalg.norm([gx, gy, gz])
+        if g_norm >= 1.0:
+            uz = -np.array([gx, gy, gz], dtype=np.float32) / g_norm
+            dot = uz[2]
+            fwd = np.array([-dot * uz[0], -dot * uz[1], 1.0 - dot * uz[2]], dtype=np.float32)
+            f_len = np.linalg.norm(fwd)
+            ux = fwd / f_len if f_len > 1e-4 else np.array([0.0, 0.0, 1.0], dtype=np.float32)
+            uy = np.cross(uz, ux)
+            R = np.vstack([ux, uy, uz])
+            pts = pts @ R.T
+    elif not args.cam_frame:
         pose = frame["pose"]
         pts = pts @ pose[:3, :3].T + pose[:3, 3]
 
@@ -620,7 +668,7 @@ class FrameProcessor:
         # perfectly isolating the horizontal floor and preventing diagonal cuts.
         if self.args.unconstrained_plane:
             cmd.append("--no-ground-prior")
-        elif self.args.vehicle_frame:
+        elif self.args.vehicle_frame or getattr(self.args, "gravity_align", False):
             pass  # Vehicle frame (+Z up) is default in C++
         else:
             # Default for iPhone LiDAR: camera optical frame (+Y vertical)
@@ -868,8 +916,15 @@ def main():
     )
     ap.add_argument(
         "--vehicle-frame",
+        "--body-frame",
+        dest="vehicle_frame",
         action="store_true",
         help="Force vehicle +Z ground normal prior (for automotive/KITTI datasets)",
+    )
+    ap.add_argument(
+        "--gravity-align",
+        action="store_true",
+        help="Use LDP2 CoreMotion live gravity vector to level point cloud into ISO 8855 body frame (+Z up)",
     )
 
     # Pinhole & Point Cloud Range
@@ -953,7 +1008,7 @@ def main():
     if not args.no_sync:
         print(f"Live Stream Server   : Port {args.sync_port} (TCP binary RVPT protocol)")
     print(f"Voxel Leaf Size      : {args.leaf_size} m | Tolerance: {args.cluster_tolerance} m")
-    prior_str = "Unconstrained (Any Angle)" if args.unconstrained_plane else ("Vehicle +Z" if args.vehicle_frame else "iPhone Optical Frame (+Y Vertical)")
+    prior_str = "Unconstrained (Any Angle)" if args.unconstrained_plane else ("Vehicle +Z (Body Leveled)" if (args.vehicle_frame or getattr(args, "gravity_align", False)) else "iPhone Optical Frame (+Y Vertical)")
     print(f"Plane Prior          : {prior_str}")
     print("-" * 76)
     print("Connect your iPhone LiDAR Streamer app to one of these IP addresses:")

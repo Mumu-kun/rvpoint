@@ -562,7 +562,12 @@ HTML_PAGE = """<!DOCTYPE html>
   <!-- Bottom Floating Controls -->
   <div id="controls-panel" class="glass-panel">
     <div class="control-group">
-      <span>Ground Plane:</span>
+      <span>Frame:</span>
+      <button id="btn-frame-mode" class="btn" style="padding: 4px 10px; font-size: 11px; font-weight: 700; background: rgba(102, 155, 188, 0.25);" title="Toggle between ISO 8855 Body Frame (+Z Up) and Camera Optical (+Y Up)">ISO 8855 (+Z Up)</button>
+    </div>
+
+    <div class="control-group">
+      <span>Ground:</span>
       <div id="toggle-ground" class="toggle-switch active" title="Toggle ground plane points on/off">
         <div class="toggle-thumb"></div>
       </div>
@@ -587,6 +592,7 @@ HTML_PAGE = """<!DOCTYPE html>
   <script>
     // State management
     const state = {
+      frameMode: 'body', // 'body' (ISO 8855: +X fwd, +Y left, +Z up) or 'optical' (+Y down/up)
       showGround: true,
       pointSize: 3.0,
       lastFrameIdx: -1,
@@ -602,9 +608,9 @@ HTML_PAGE = """<!DOCTYPE html>
     scene.background = new THREE.Color(0x001726);
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100.0);
-    // Standard 3D right-handed orientation: +Y is UP (matching ARKit and standard PCD viewers)
-    camera.up.set(0, 1, 0);
-    camera.position.set(0, 0.5, 3.0);
+    // Default: ISO 8855 Body Frame (+Z is UP)
+    camera.up.set(0, 0, 1);
+    camera.position.set(-1.5, -1.5, 1.2);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -614,12 +620,13 @@ HTML_PAGE = """<!DOCTYPE html>
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0, 0, -2.5);
+    controls.target.set(0.8, 0, 0.2);
     controls.update();
 
-    // Subtle horizontal coordinate ground grid in the X-Z plane (Y = floor)
+    // Horizontal coordinate ground grid (default in X-Y plane for +Z up)
     const grid = new THREE.GridHelper(10, 20, 0x669bbc, 0x003049);
-    grid.position.set(0, -0.85, -2.5);
+    grid.rotation.x = Math.PI / 2;
+    grid.position.set(0, 0, 0);
     scene.add(grid);
 
     // Coordinate axes helper (RGB = XYZ, size = 0.5m)
@@ -684,6 +691,13 @@ HTML_PAGE = """<!DOCTYPE html>
       sizeVal.textContent = v.toFixed(1) + ' px';
     });
 
+    const frameModeBtn = document.getElementById('btn-frame-mode');
+    frameModeBtn.addEventListener('click', () => {
+      state.frameMode = state.frameMode === 'body' ? 'optical' : 'body';
+      frameModeBtn.textContent = state.frameMode === 'body' ? 'ISO 8855 (+Z Up)' : 'Optical (+Y Up)';
+      fitCameraToCloud();
+    });
+
     function fitCameraToCloud() {
       if (!geometry.attributes.position || geometry.attributes.position.count === 0) return;
       geometry.computeBoundingBox();
@@ -698,14 +712,20 @@ HTML_PAGE = """<!DOCTYPE html>
 
       controls.target.copy(center);
 
-      // Position camera in front of the object looking towards it
-      const dist = maxDim * 1.6;
-      camera.position.set(center.x, center.y + maxDim * 0.15, center.z + dist);
+      const dist = maxDim * 1.8;
+      if (state.frameMode === 'body') {
+        camera.up.set(0, 0, 1);
+        grid.rotation.x = Math.PI / 2;
+        grid.position.set(center.x, center.y, box.min.z - 0.005);
+        camera.position.set(center.x - dist * 0.9, center.y - dist * 0.7, center.z + dist * 0.6);
+      } else {
+        camera.up.set(0, 1, 0);
+        grid.rotation.x = 0;
+        grid.position.set(center.x, box.min.y - 0.005, center.z);
+        camera.position.set(center.x, center.y + maxDim * 0.15, center.z + dist);
+      }
       camera.lookAt(center);
       controls.update();
-
-      // Position ground grid right below the lowest point
-      grid.position.set(center.x, box.min.y - 0.005, center.z);
     }
 
     document.getElementById('btn-reset').addEventListener('click', () => {
