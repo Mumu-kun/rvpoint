@@ -34,7 +34,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from demonstration.actuators.l298n_actuator import DualL298NActuator, clamp
+from demonstration.actuators.pca9685_actuator import PCA9685Actuator, clamp
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ from demonstration.actuators.l298n_actuator import DualL298NActuator, clamp
 class TeleopState:
     def __init__(self, config_path: Path):
         self.config_path = config_path
-        self.actuator = DualL298NActuator(config_path=config_path, auto_init=True)
+        self.actuator = PCA9685Actuator(config_path=config_path, auto_init=True)
         self.lock = threading.Lock()
 
         # Teleop driving command cache
@@ -657,7 +657,7 @@ HTML_PAGE = """<!DOCTYPE html>
       try {
         const res = await fetch('/api/config/save', { method: 'POST' });
         const data = await res.json();
-        alert(data.success ? 'Configuration saved to l298n_pins.json!' : 'Failed to save config.');
+        alert(data.success ? 'Configuration saved to pca9685_pins.json!' : 'Failed to save config.');
       } catch (err) {
         alert('Error saving config: ' + err);
       }
@@ -1220,7 +1220,7 @@ def main():
     )
     parser.add_argument(
         "--config",
-        default="eval/actuators/l298n_pins.json",
+        default="eval/actuators/pca9685_pins.json",
         help="Path to motor configuration JSON",
     )
     args = parser.parse_args()

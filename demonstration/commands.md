@@ -89,7 +89,7 @@ python3 demonstration/teleop_server.py --port 8085
 
 👉 Open **`http://<orange_pi_ip>:8085`** (or `http://localhost:8085`) on any smartphone, tablet, or PC browser.
 - **Drive Tab**: Virtual touch analog joystick, tactile D-Pad, keyboard controls (`W`, `A`, `S`, `D`), speed slider, and big red E-STOP button with active dynamic braking.
-- **Calibration Tab**: Live direction-aware per-wheel trims (`trim_forward`, `trim_reverse`) and stiction deadbands (`deadband_forward`, `deadband_reverse`), polarity inverts, and "Save to Disk" to update `eval/actuators/l298n_pins.json`.
+- **Calibration Tab**: Live direction-aware per-wheel trims (`trim_forward`, `trim_reverse`) and stiction deadbands (`deadband_forward`, `deadband_reverse`), polarity inverts, and "Save to Disk" to update `eval/actuators/pca9685_pins.json`.
 - **Automated Tests Tab**: 1-click 4-way directional verification and stiction breakaway sweep.
 
 ---

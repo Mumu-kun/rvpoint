@@ -1,0 +1,47 @@
+{
+  "bus": 4,
+  "address": "0x60",
+  "freq_hz": 200.0,
+  "mapping": "adafruit",
+  "deadband": 0.12,
+  "enable_watchdog": true,
+  "watchdog_timeout_ms": 200,
+  "wheels": {
+    "FL": {
+      "motor": 1,
+      "invert": false,
+      "trim": 1.0,
+      "trim_forward": 1.0,
+      "trim_reverse": 1.0,
+      "deadband_forward": 0.12,
+      "deadband_reverse": 0.12
+    },
+    "FR": {
+      "motor": 2,
+      "invert": false,
+      "trim": 1.0,
+      "trim_forward": 1.0,
+      "trim_reverse": 1.0,
+      "deadband_forward": 0.12,
+      "deadband_reverse": 0.12
+    },
+    "RL": {
+      "motor": 3,
+      "invert": false,
+      "trim": 1.0,
+      "trim_forward": 1.0,
+      "trim_reverse": 1.0,
+      "deadband_forward": 0.12,
+      "deadband_reverse": 0.12
+    },
+    "RR": {
+      "motor": 4,
+      "invert": false,
+      "trim": 1.0,
+      "trim_forward": 1.0,
+      "trim_reverse": 1.0,
+      "deadband_forward": 0.12,
+      "deadband_reverse": 0.12
+    }
+  }
+}
