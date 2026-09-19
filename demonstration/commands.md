@@ -92,3 +92,27 @@ python3 demonstration/teleop_server.py --port 8085
 - **Calibration Tab**: Live direction-aware per-wheel trims (`trim_forward`, `trim_reverse`) and stiction deadbands (`deadband_forward`, `deadband_reverse`), polarity inverts, and "Save to Disk" to update `eval/actuators/l298n_pins.json`.
 - **Automated Tests Tab**: 1-click 4-way directional verification and stiction breakaway sweep.
 
+---
+
+## 4. PCA9685 I2C 16-Channel Hardware PWM Driver (Raspberry Pi / SBC)
+
+Zero-dependency hardware validation and diagnostic runner for PCA9685 connected via I2C (`/dev/i2c-1`):
+
+```bash
+# Step 1: Scan I2C bus to verify chip detection (usually address 0x40, 0x60, or 0x70)
+python3 demonstration/test_pca9685.py --scan
+
+# Step 2: Spin a single motor / PWM channel (e.g. Channel 0 at 35% duty for 2s)
+python3 demonstration/test_pca9685.py --channel 0 --duty 0.35
+
+# Step 3: Run stiction breakaway sweep (gradually ramps duty from 5% to 50% to find startup threshold)
+python3 demonstration/test_pca9685.py --sweep --channel 0
+
+# Step 4: Sequentially test channels 0, 1, 2, 3
+python3 demonstration/test_pca9685.py --test individual --duty 0.35
+
+# Step 5: Immediate emergency stop for all 16 channels
+python3 demonstration/test_pca9685.py --stop
+```
+
+
