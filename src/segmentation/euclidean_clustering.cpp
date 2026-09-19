@@ -113,7 +113,7 @@ void EuclideanClustering::radiusQueryUnvisited(
 std::vector<ClusterIndices> EuclideanClustering::extract() const {
     std::vector<ClusterIndices> result;
 
-    if (!cloud_ || cloud_->n == 0) {
+    if (!cloud_ || cloud_->n == 0 || !cloud_->x || !cloud_->y || !cloud_->z) {
         return result;
     }
 

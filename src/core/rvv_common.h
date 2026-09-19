@@ -11,6 +11,16 @@
 namespace rvpoint {
 
 /**
+ * @brief Maximum vector register capacity for LMUL=8 across RISC-V VLEN architectures.
+ *
+ * Sized for hardware VLEN up to 1024 bits:
+ *   Max float32 elements with LMUL=8: (1024 / 32) * 8 = 256 elements (1 KB stack buffer).
+ *   Max mask bytes for vbool4_t:      256 / 8 = 32 bytes.
+ */
+constexpr std::size_t kMaxVectorFloatsM8 = 256;
+constexpr std::size_t kMaxVectorMaskBytesM8 = kMaxVectorFloatsM8 / 8; // 32 bytes
+
+/**
  * @brief Helper: Squared Euclidean Distance Kernel (RVV).
  *
  * Computes d^2 = (x-qx)^2 + (y-qy)^2 + (z-qz)^2 for 'n' points using vector

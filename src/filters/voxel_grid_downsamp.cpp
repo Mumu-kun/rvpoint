@@ -1,4 +1,5 @@
 #include "filters/voxel_grid.h"
+#include "filters/radix_sort.h"
 #include <cmath>
 #include <map>
 #include <tuple>
@@ -6,6 +7,9 @@
 #include <vector>
 #include <numeric>
 #include <limits>
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 #if defined(__riscv_vector)
 #include <riscv_vector.h>
@@ -92,6 +96,48 @@ void compute_voxel_keys_rvv(const PointCloudSoA& in,
                              float inv_leaf, int min_ix, int min_iy, int min_iz,
                              int grid_x, int grid_xy,
                              int32_t* keys, size_t n) {
+#if defined(_OPENMP)
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        int num_threads = omp_get_num_threads();
+        size_t start = (n * tid) / num_threads;
+        size_t end   = (n * (tid + 1)) / num_threads;
+        size_t i = start;
+        while (i < end) {
+            size_t vl = __riscv_vsetvl_e32m4(end - i);
+
+            // Load coordinates
+            vfloat32m4_t vx = __riscv_vle32_v_f32m4(&in.x[i], vl);
+            vfloat32m4_t vy = __riscv_vle32_v_f32m4(&in.y[i], vl);
+            vfloat32m4_t vz = __riscv_vle32_v_f32m4(&in.z[i], vl);
+
+            // Scale: coord * inv_leaf (same as scalar)
+            vx = __riscv_vfmul_vf_f32m4(vx, inv_leaf, vl);
+            vy = __riscv_vfmul_vf_f32m4(vy, inv_leaf, vl);
+            vz = __riscv_vfmul_vf_f32m4(vz, inv_leaf, vl);
+
+            // Vectorized floor -> int (handles negative values correctly)
+            vint32m4_t ix = vfloor_i32m4(vx, vl);
+            vint32m4_t iy = vfloor_i32m4(vy, vl);
+            vint32m4_t iz = vfloor_i32m4(vz, vl);
+
+            // Shift to 0-based indices using the global minimum voxel index
+            ix = __riscv_vsub_vx_i32m4(ix, min_ix, vl);
+            iy = __riscv_vsub_vx_i32m4(iy, min_iy, vl);
+            iz = __riscv_vsub_vx_i32m4(iz, min_iz, vl);
+
+            // Linear key = ix + iy * grid_x + iz * grid_x * grid_y
+            vint32m4_t iy_scaled = __riscv_vmul_vx_i32m4(iy, grid_x, vl);
+            vint32m4_t iz_scaled = __riscv_vmul_vx_i32m4(iz, grid_xy, vl);
+            vint32m4_t key = __riscv_vadd_vv_i32m4(ix, iy_scaled, vl);
+            key = __riscv_vadd_vv_i32m4(key, iz_scaled, vl);
+
+            __riscv_vse32_v_i32m4(keys + i, key, vl);
+            i += vl;
+        }
+    }
+#else
     size_t i = 0;
     while (i < n) {
         size_t vl = __riscv_vsetvl_e32m4(n - i);
@@ -125,12 +171,50 @@ void compute_voxel_keys_rvv(const PointCloudSoA& in,
         __riscv_vse32_v_i32m4(keys + i, key, vl);
         i += vl;
     }
+#endif
 }
 
 // Helper: Vectorized centroid reduction for a group of points (LMUL=m2)
 void centroid_reduce_rvv(const PointCloudSoA& in,
                          const uint32_t* order, size_t group_start,
                          size_t group_size, PointXYZ& out) {
+    if (__builtin_expect(group_size == 1, 1)) {
+        uint32_t idx = order[group_start];
+        out.x = in.x[idx];
+        out.y = in.y[idx];
+        out.z = in.z[idx];
+        return;
+    }
+    if (group_size == 2) {
+        uint32_t i0 = order[group_start];
+        uint32_t i1 = order[group_start + 1];
+        out.x = 0.5f * (in.x[i0] + in.x[i1]);
+        out.y = 0.5f * (in.y[i0] + in.y[i1]);
+        out.z = 0.5f * (in.z[i0] + in.z[i1]);
+        return;
+    }
+    if (group_size == 3) {
+        uint32_t i0 = order[group_start];
+        uint32_t i1 = order[group_start + 1];
+        uint32_t i2 = order[group_start + 2];
+        constexpr float f = 1.0f / 3.0f;
+        out.x = (in.x[i0] + in.x[i1] + in.x[i2]) * f;
+        out.y = (in.y[i0] + in.y[i1] + in.y[i2]) * f;
+        out.z = (in.z[i0] + in.z[i1] + in.z[i2]) * f;
+        return;
+    }
+    if (group_size == 4) {
+        uint32_t i0 = order[group_start];
+        uint32_t i1 = order[group_start + 1];
+        uint32_t i2 = order[group_start + 2];
+        uint32_t i3 = order[group_start + 3];
+        constexpr float f = 0.25f;
+        out.x = (in.x[i0] + in.x[i1] + in.x[i2] + in.x[i3]) * f;
+        out.y = (in.y[i0] + in.y[i1] + in.y[i2] + in.y[i3]) * f;
+        out.z = (in.z[i0] + in.z[i1] + in.z[i2] + in.z[i3]) * f;
+        return;
+    }
+
     float sum_x = 0.0f, sum_y = 0.0f, sum_z = 0.0f;
     size_t k = 0;
 
@@ -213,72 +297,6 @@ std::size_t voxel_grid_downsamp_sc(const PointXYZ* in, std::size_t n,
 }
 
 // ============================================================================
-// RVV Implementation
-// ============================================================================
-std::size_t voxel_grid_downsamp_rvv(const PointCloudSoA& in,
-                                    PointXYZ* out, float leaf_size) {
-    if (in.n == 0) return 0;
-
-#if defined(__riscv_vector)
-    std::map<std::tuple<int, int, int>, std::pair<PointXYZ, int>> grid;
-    float inv_leaf = 1.0f / leaf_size;
-
-    size_t n = in.n;
-    size_t i = 0;
-
-    while (i < n) {
-        size_t vl = __riscv_vsetvl_e32m8(n - i);
-
-        // Load X, Y, Z
-        vfloat32m8_t vx = __riscv_vle32_v_f32m8(&in.x[i], vl);
-        vfloat32m8_t vy = __riscv_vle32_v_f32m8(&in.y[i], vl);
-        vfloat32m8_t vz = __riscv_vle32_v_f32m8(&in.z[i], vl);
-
-        // Scale: val * inv_leaf
-        vfloat32m8_t vsx = __riscv_vfmul_vf_f32m8(vx, inv_leaf, vl);
-        vfloat32m8_t vsy = __riscv_vfmul_vf_f32m8(vy, inv_leaf, vl);
-        vfloat32m8_t vsz = __riscv_vfmul_vf_f32m8(vz, inv_leaf, vl);
-
-        std::vector<float> raw_sx(vl), raw_sy(vl), raw_sz(vl);
-        __riscv_vse32_v_f32m8(raw_sx.data(), vsx, vl);
-        __riscv_vse32_v_f32m8(raw_sy.data(), vsy, vl);
-        __riscv_vse32_v_f32m8(raw_sz.data(), vsz, vl);
-
-        for(size_t j=0; j<vl; ++j) {
-            int idx_x = std::floor(raw_sx[j]);
-            int idx_y = std::floor(raw_sy[j]);
-            int idx_z = std::floor(raw_sz[j]);
-
-            auto key = std::make_tuple(idx_x, idx_y, idx_z);
-            grid[key].first.x += in.x[i+j];
-            grid[key].first.y += in.y[i+j];
-            grid[key].first.z += in.z[i+j];
-            grid[key].second++;
-        }
-
-        i += vl;
-    }
-
-    // Compute centroids
-    std::size_t count = 0;
-    for (auto& kv : grid) {
-        float f = 1.0f / kv.second.second;
-        out[count].x = kv.second.first.x * f;
-        out[count].y = kv.second.first.y * f;
-        out[count].z = kv.second.first.z * f;
-        count++;
-    }
-    return count;
-#else
-    std::vector<PointXYZ> aos(in.n);
-    for (size_t i = 0; i < in.n; ++i) {
-        aos[i] = {in.x[i], in.y[i], in.z[i]};
-    }
-    return voxel_grid_downsamp_sc(aos.data(), in.n, out, leaf_size);
-#endif
-}
-
-// ============================================================================
 // Fully Vectorized RVV Implementation (v2) -- Sort-Based, No std::map
 // ============================================================================
 std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA& in,
@@ -309,28 +327,76 @@ std::size_t voxel_grid_downsamp_rvv_v2(const PointCloudSoA& in,
     compute_voxel_keys_rvv(in, inv_leaf, min_ix, min_iy, min_iz,
                             grid_x, grid_xy, keys.data(), n);
 
-    // Phase 3: Sort indices by voxel key
-    std::vector<uint32_t> order(n);
-    std::iota(order.begin(), order.end(), 0u);
-    std::sort(order.begin(), order.end(),
-              [&keys](uint32_t a, uint32_t b) { return keys[a] < keys[b]; });
+    // Phase 3: Parallel radix sort indices by voxel key (O(N/P))
+    int num_threads = 8;
+#if defined(_OPENMP)
+    num_threads = omp_get_max_threads();
+#endif
 
-    // Phase 4: Vectorized centroid computation per voxel group
+    std::vector<uint32_t> order(n);
+#if defined(_OPENMP)
+    #pragma omp parallel for num_threads(num_threads)
+#endif
+    for (size_t i = 0; i < n; ++i) order[i] = static_cast<uint32_t>(i);
+
+    radix_sort_pairs_parallel(keys.data(), order.data(), n, num_threads);
+
+    // Phase 4: Parallel centroid computation across disjoint voxel groups
+    std::vector<size_t> chunk_split(num_threads + 1);
+    chunk_split[0] = 0;
+    chunk_split[num_threads] = n;
+    for (int t = 1; t < num_threads; ++t) {
+        size_t idx = (n * t) / num_threads;
+        while (idx < n && keys[idx] == keys[idx - 1]) {
+            idx++;
+        }
+        chunk_split[t] = idx;
+    }
+
+    std::vector<std::vector<PointXYZ>> thread_out(num_threads);
+#if defined(_OPENMP)
+    #pragma omp parallel num_threads(num_threads)
+#endif
+    {
+        int tid = 0;
+#if defined(_OPENMP)
+        tid = omp_get_thread_num();
+#endif
+        if (tid < num_threads) {
+            size_t start = chunk_split[tid];
+            size_t end = chunk_split[tid + 1];
+            auto& local_pts = thread_out[tid];
+            if (end > start) {
+                local_pts.reserve(end - start);
+                size_t group_start = start;
+                for (size_t j = start + 1; j <= end; ++j) {
+                    if (j == end || keys[j] != keys[j - 1]) {
+                        size_t group_size = j - group_start;
+                        PointXYZ pt;
+                        centroid_reduce_rvv(in, order.data(), group_start, group_size, pt);
+                        local_pts.push_back(pt);
+                        group_start = j;
+                    }
+                }
+            }
+        }
+    }
+
     size_t out_count = 0;
-    size_t group_start = 0;
-    for (size_t j = 1; j <= n; ++j) {
-        if (j == n || keys[order[j]] != keys[order[j - 1]]) {
-            size_t group_size = j - group_start;
-            centroid_reduce_rvv(in, order.data(), group_start, group_size,
-                                out[out_count]);
-            out_count++;
-            group_start = j;
+    for (int t = 0; t < num_threads; ++t) {
+        if (!thread_out[t].empty()) {
+            std::memcpy(&out[out_count], thread_out[t].data(), thread_out[t].size() * sizeof(PointXYZ));
+            out_count += thread_out[t].size();
         }
     }
 
     return out_count;
 #else
-    return voxel_grid_downsamp_rvv(in, out, leaf_size);
+    std::vector<PointXYZ> aos(in.n);
+    for (size_t i = 0; i < in.n; ++i) {
+        aos[i] = {in.x[i], in.y[i], in.z[i]};
+    }
+    return voxel_grid_downsamp_sc(aos.data(), in.n, out, leaf_size);
 #endif
 }
 
