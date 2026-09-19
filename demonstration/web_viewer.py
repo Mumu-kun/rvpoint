@@ -91,96 +91,99 @@ class StreamBridge:
             buf = bytearray()
             try:
                 while self.running:
-                    idx_pt = buf.find(POINTS_STREAM_MAGIC)
-                    idx_file = buf.find(SYNC_MAGIC)
+                    try:
+                        idx_pt = buf.find(POINTS_STREAM_MAGIC)
+                        idx_file = buf.find(SYNC_MAGIC)
 
-                    earliest = -1
-                    if idx_pt != -1 and idx_file != -1:
-                        earliest = min(idx_pt, idx_file)
-                    elif idx_pt != -1:
-                        earliest = idx_pt
-                    elif idx_file != -1:
-                        earliest = idx_file
+                        earliest = -1
+                        if idx_pt != -1 and idx_file != -1:
+                            earliest = min(idx_pt, idx_file)
+                        elif idx_pt != -1:
+                            earliest = idx_pt
+                        elif idx_file != -1:
+                            earliest = idx_file
 
-                    if earliest > 0:
-                        del buf[:earliest]
-                    elif earliest == -1:
-                        if len(buf) > 8:
-                            del buf[: len(buf) - 4]
-                        chunk = sock.recv(65536)
-                        if not chunk:
-                            break
-                        buf += chunk
+                        if earliest > 0:
+                            del buf[:earliest]
+                        elif earliest == -1:
+                            if len(buf) > 8:
+                                del buf[: len(buf) - 4]
+                            chunk = sock.recv(65536)
+                            if not chunk:
+                                break
+                            buf += chunk
+                            continue
+
+                        if buf.startswith(POINTS_STREAM_MAGIC):
+                            if len(buf) < HEADER_SIZE:
+                                chunk = sock.recv(65536)
+                                if not chunk:
+                                    break
+                                buf += chunk
+                                continue
+
+                            magic, frame_idx, pt_cnt, ground_cnt, cl_cnt, comp_ms, wall_ms = struct.unpack_from(
+                                HEADER_FORMAT, buf, 0
+                            )
+                            payload_size = pt_cnt * 16
+                            total_size = HEADER_SIZE + payload_size
+
+                            if len(buf) < total_size:
+                                chunk = sock.recv(max(65536, total_size - len(buf)))
+                                if not chunk:
+                                    break
+                                buf += chunk
+                                continue
+
+                            raw_packet = bytes(buf[:total_size])
+                            del buf[:total_size]
+
+                            with self.lock:
+                                self.latest_raw_packet = raw_packet
+                                self.latest_frame_meta.update({
+                                    "connected": True,
+                                    "frame_idx": frame_idx,
+                                    "point_count": pt_cnt,
+                                    "ground_count": ground_cnt,
+                                    "clusters_count": cl_cnt,
+                                    "compute_ms": round(comp_ms, 2),
+                                    "wall_ms": round(wall_ms, 2),
+                                    "timestamp": time.time(),
+                                })
+                            self.frames_received += 1
+
+                        elif buf.startswith(SYNC_MAGIC):
+                            if len(buf) < 7:
+                                chunk = sock.recv(65536)
+                                if not chunk:
+                                    break
+                                buf += chunk
+                                continue
+
+                            _, name_len = struct.unpack_from("!BH", buf, 4)
+                            file_hdr = 7 + name_len + 4
+                            if len(buf) < file_hdr:
+                                chunk = sock.recv(65536)
+                                if not chunk:
+                                    break
+                                buf += chunk
+                                continue
+
+                            data_len = struct.unpack_from("!I", buf, 7 + name_len)[0]
+                            total_f_size = file_hdr + data_len
+                            if len(buf) < total_f_size:
+                                chunk = sock.recv(max(65536, total_f_size - len(buf)))
+                                if not chunk:
+                                    break
+                                buf += chunk
+                                continue
+
+                            del buf[:total_f_size]
+
+                    except socket.timeout:
+                        # Harmless timeout while waiting for next frame; keep connection alive!
                         continue
 
-                    if buf.startswith(POINTS_STREAM_MAGIC):
-                        if len(buf) < HEADER_SIZE:
-                            chunk = sock.recv(65536)
-                            if not chunk:
-                                break
-                            buf += chunk
-                            continue
-
-                        magic, frame_idx, pt_cnt, ground_cnt, cl_cnt, comp_ms, wall_ms = struct.unpack_from(
-                            HEADER_FORMAT, buf, 0
-                        )
-                        payload_size = pt_cnt * 16
-                        total_size = HEADER_SIZE + payload_size
-
-                        if len(buf) < total_size:
-                            chunk = sock.recv(max(65536, total_size - len(buf)))
-                            if not chunk:
-                                break
-                            buf += chunk
-                            continue
-
-                        raw_packet = bytes(buf[:total_size])
-                        del buf[:total_size]
-
-                        with self.lock:
-                            self.latest_raw_packet = raw_packet
-                            self.latest_frame_meta.update({
-                                "connected": True,
-                                "frame_idx": frame_idx,
-                                "point_count": pt_cnt,
-                                "ground_count": ground_cnt,
-                                "clusters_count": cl_cnt,
-                                "compute_ms": round(comp_ms, 2),
-                                "wall_ms": round(wall_ms, 2),
-                                "timestamp": time.time(),
-                            })
-                        self.frames_received += 1
-
-                    elif buf.startswith(SYNC_MAGIC):
-                        if len(buf) < 7:
-                            chunk = sock.recv(65536)
-                            if not chunk:
-                                break
-                            buf += chunk
-                            continue
-
-                        _, name_len = struct.unpack_from("!BH", buf, 4)
-                        file_hdr = 7 + name_len + 4
-                        if len(buf) < file_hdr:
-                            chunk = sock.recv(65536)
-                            if not chunk:
-                                break
-                            buf += chunk
-                            continue
-
-                        data_len = struct.unpack_from("!I", buf, 7 + name_len)[0]
-                        total_f_size = file_hdr + data_len
-                        if len(buf) < total_f_size:
-                            chunk = sock.recv(max(65536, total_f_size - len(buf)))
-                            if not chunk:
-                                break
-                            buf += chunk
-                            continue
-
-                        del buf[:total_f_size]
-
-            except socket.timeout:
-                continue
             except Exception:
                 pass
             finally:
@@ -562,12 +565,7 @@ HTML_PAGE = """<!DOCTYPE html>
   <!-- Bottom Floating Controls -->
   <div id="controls-panel" class="glass-panel">
     <div class="control-group">
-      <span>Frame:</span>
-      <button id="btn-frame-mode" class="btn" style="padding: 4px 10px; font-size: 11px; font-weight: 700; background: rgba(102, 155, 188, 0.25);" title="Toggle between ISO 8855 Body Frame (+Z Up) and Camera Optical (+Y Up)">ISO 8855 (+Z Up)</button>
-    </div>
-
-    <div class="control-group">
-      <span>Ground:</span>
+      <span>Ground Plane:</span>
       <div id="toggle-ground" class="toggle-switch active" title="Toggle ground plane points on/off">
         <div class="toggle-thumb"></div>
       </div>
@@ -592,7 +590,6 @@ HTML_PAGE = """<!DOCTYPE html>
   <script>
     // State management
     const state = {
-      frameMode: 'body', // 'body' (ISO 8855: +X fwd, +Y left, +Z up) or 'optical' (+Y down/up)
       showGround: true,
       pointSize: 3.0,
       lastFrameIdx: -1,
@@ -608,9 +605,9 @@ HTML_PAGE = """<!DOCTYPE html>
     scene.background = new THREE.Color(0x001726);
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100.0);
-    // Default: ISO 8855 Body Frame (+Z is UP)
-    camera.up.set(0, 0, 1);
-    camera.position.set(-1.5, -1.5, 1.2);
+    // Standard 3D right-handed orientation: +Y is UP (matching ARKit and standard PCD viewers)
+    camera.up.set(0, 1, 0);
+    camera.position.set(0, 0.5, 3.0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -620,13 +617,12 @@ HTML_PAGE = """<!DOCTYPE html>
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.target.set(0.8, 0, 0.2);
+    controls.target.set(0, 0, -2.5);
     controls.update();
 
-    // Horizontal coordinate ground grid (default in X-Y plane for +Z up)
+    // Subtle horizontal coordinate ground grid in the X-Z plane (Y = floor)
     const grid = new THREE.GridHelper(10, 20, 0x669bbc, 0x003049);
-    grid.rotation.x = Math.PI / 2;
-    grid.position.set(0, 0, 0);
+    grid.position.set(0, -0.85, -2.5);
     scene.add(grid);
 
     // Coordinate axes helper (RGB = XYZ, size = 0.5m)
@@ -691,13 +687,6 @@ HTML_PAGE = """<!DOCTYPE html>
       sizeVal.textContent = v.toFixed(1) + ' px';
     });
 
-    const frameModeBtn = document.getElementById('btn-frame-mode');
-    frameModeBtn.addEventListener('click', () => {
-      state.frameMode = state.frameMode === 'body' ? 'optical' : 'body';
-      frameModeBtn.textContent = state.frameMode === 'body' ? 'ISO 8855 (+Z Up)' : 'Optical (+Y Up)';
-      fitCameraToCloud();
-    });
-
     function fitCameraToCloud() {
       if (!geometry.attributes.position || geometry.attributes.position.count === 0) return;
       geometry.computeBoundingBox();
@@ -712,20 +701,14 @@ HTML_PAGE = """<!DOCTYPE html>
 
       controls.target.copy(center);
 
-      const dist = maxDim * 1.8;
-      if (state.frameMode === 'body') {
-        camera.up.set(0, 0, 1);
-        grid.rotation.x = Math.PI / 2;
-        grid.position.set(center.x, center.y, box.min.z - 0.005);
-        camera.position.set(center.x - dist * 0.9, center.y - dist * 0.7, center.z + dist * 0.6);
-      } else {
-        camera.up.set(0, 1, 0);
-        grid.rotation.x = 0;
-        grid.position.set(center.x, box.min.y - 0.005, center.z);
-        camera.position.set(center.x, center.y + maxDim * 0.15, center.z + dist);
-      }
+      // Position camera in front of the object looking towards it
+      const dist = maxDim * 1.6;
+      camera.position.set(center.x, center.y + maxDim * 0.15, center.z + dist);
       camera.lookAt(center);
       controls.update();
+
+      // Position ground grid right below the lowest point
+      grid.position.set(center.x, box.min.y - 0.005, center.z);
     }
 
     document.getElementById('btn-reset').addEventListener('click', () => {
