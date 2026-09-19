@@ -87,27 +87,40 @@ setup_env_paths() {
 
     source "${COMMON_DIR}/versions.sh"
 
-    CMAKE_ROOT=/opt/cmake
-    QEMU_ROOT=/opt/qemu
-    RISCV_ROOT=/opt/riscv
+    if [ "$(uname -m)" = "riscv64" ]; then
+        # Native RISC-V host (e.g. Orange Pi RV2 / SpacemiT K1)
+        if [ -d "/opt/riscv/bin" ]; then
+            export RISCV="/opt/riscv"
+            export RISCV_PATH="/opt/riscv"
+            export PATH="/opt/riscv/bin:${PATH}"
+        fi
+        if [ -d "/opt/cmake/bin" ]; then
+            export PATH="/opt/cmake/bin:${PATH}"
+        fi
+    else
+        # Cross-compilation host (e.g. x86_64)
+        CMAKE_ROOT=/opt/cmake
+        QEMU_ROOT=/opt/qemu
+        RISCV_ROOT=/opt/riscv
 
-    export CMAKE_ROOT
-    export QEMU_ROOT
-    export RISCV="${RISCV_ROOT}"
-    export RISCV_PATH="${RISCV_ROOT}"
+        export CMAKE_ROOT
+        export QEMU_ROOT
+        export RISCV="${RISCV_ROOT}"
+        export RISCV_PATH="${RISCV_ROOT}"
 
-    export PATH="${CMAKE_ROOT}/bin:${RISCV_ROOT}/bin:${QEMU_ROOT}/bin:${PATH}"
+        export PATH="${CMAKE_ROOT}/bin:${RISCV_ROOT}/bin:${QEMU_ROOT}/bin:${PATH}"
 
-    export QEMU_CPU_FLAGS="-cpu rv64,v=true,vlen=128"
-    export QEMU_SYSROOT_FLAGS="-L ${RISCV_ROOT}/sysroot"
+        export QEMU_CPU_FLAGS="-cpu rv64,v=true,vlen=128"
+        export QEMU_SYSROOT_FLAGS="-L ${RISCV_ROOT}/sysroot"
+        QEMU_BIN="${QEMU_ROOT}/bin"
+        RISCV_BIN="${RISCV_ROOT}/bin"
+    fi
+
     export RISCV_ARCH="${RISCV_ARCH:-rv64gcv}"
     export RISCV_ABI="${RISCV_ABI:-lp64d}"
     
     export GEM5_BIN="${GEM5_BIN:-${PROJECT_ROOT}/env/extras/gem5_docker.sh}"
     export GEM5_CONFIG="${GEM5_CONFIG:-/gem5/configs/deprecated/example/se.py}"
-    
-    QEMU_BIN="${QEMU_ROOT}/bin"
-    RISCV_BIN="${RISCV_ROOT}/bin"
 }
 
 # --- Download Utilities ---

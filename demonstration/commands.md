@@ -1,0 +1,118 @@
+# RVPoint Demonstration Run Commands Reference
+
+Quick reference commands for running the real-time LiDAR perception server and live visualizers.
+
+---
+
+## 1. On Orange Pi RV2 (Perception & Processing Engine)
+
+> Connect your iPhone LiDAR Streamer app to `100.94.165.126:9000` (Tailscale) or `172.20.10.2:9000` (Local Wi-Fi/Hotspot).
+
+### Mode A: Stream-Only (Recommended for Continuous Live Viewing — 0 Disk Writes)
+Bypasses saving files to flash/SD card, keeping scratch buffers in RAM (`/dev/shm`) and broadcasting continuous 3D points directly to your PC:
+```bash
+python3 demonstration/server_main.py \
+  --pipeline ultra \
+  --leaf-size 0.03 \
+  --ransac-dist 0.06 \
+  --ground-angle-thresh 6.7 \
+  --cluster-tolerance 0.10 \
+  --min-cluster 15 \
+  --stream-only \
+  --continuous
+```
+*(Passing `--continuous` or `--interval 0` disables the 500ms throttle so every frame from iPhone 15 Pro LiDAR is processed immediately in real time).*
+
+### Mode B: Save to Disk + Live Stream
+Saves raw scans to `main_scans/` and clustered scans to `processed_scans/`, while simultaneously broadcasting to the live visualizer:
+```bash
+python3 demonstration/server_main.py \
+  --pipeline ultra \
+  --leaf-size 0.03 \
+  --ransac-dist 0.06 \
+  --ground-angle-thresh 6.7 \
+  --cluster-tolerance 0.10 \
+  --min-cluster 15 \
+  --save-scans
+```
+
+---
+
+## 2. On Host PC / Mac (Real-Time 3D Visualizers)
+
+### Option A: WebGL Three.js Browser Visualizer (Recommended — 60 FPS GPU Viewport)
+Runs a zero-dependency local bridge and serves a high-performance 3D dashboard:
+```bash
+# Over Tailscale:
+python3 demonstration/web_viewer.py --host 100.94.165.126
+
+# Over Local Wi-Fi / Hotspot:
+python3 demonstration/web_viewer.py --host 172.20.10.2
+```
+👉 Open **`http://localhost:8080`** in Chrome, Safari, or Edge.
+- **Controls**: Left-drag to orbit, right-drag to pan, scroll to zoom.
+- **Features**: Toggle ground plane, adjust point size, one-click PCD snapshot download, live RVV 1.0 telemetry.
+
+---
+
+### Option B: Native 3D Window (Open3D Desktop Client)
+Renders inside a native interactive GUI window with keyboard shortcuts:
+```bash
+# Using Python with Open3D:
+./demonstration/lidar-env/bin/python3 demonstration/live_viewer.py --host 100.94.165.126
+```
+- **Controls**:
+  - `G`: Toggle ground plane visibility
+  - `+` / `-`: Increase / decrease point size
+  - `R`: Reset camera viewpoint
+  - `S`: Save current frame snapshot as PCD and PNG
+  - `Q` / `ESC`: Exit
+
+---
+
+### Option C: File Synchronizer (PCD File Downloader)
+Automatically downloads raw and processed PCD files to your local `demonstration/mains/` and `demonstration/prcsd/` folders:
+```bash
+python3 demonstration/receive_scans.py --host 100.94.165.126
+```
+
+---
+
+## 3. Web Teleoperation & Live Calibration Server
+
+Runs a zero-dependency web dashboard on the Orange Pi RV2 (or off-target mock simulation) on port `8085`:
+
+```bash
+# On Orange Pi RV2 (or local machine):
+python3 demonstration/teleop_server.py --port 8085
+```
+
+👉 Open **`http://<orange_pi_ip>:8085`** (or `http://localhost:8085`) on any smartphone, tablet, or PC browser.
+- **Drive Tab**: Virtual touch analog joystick, tactile D-Pad, keyboard controls (`W`, `A`, `S`, `D`), speed slider, and big red E-STOP button with active dynamic braking.
+- **Calibration Tab**: Live direction-aware per-wheel trims (`trim_forward`, `trim_reverse`) and stiction deadbands (`deadband_forward`, `deadband_reverse`), polarity inverts, and "Save to Disk" to update `eval/actuators/pca9685_pins.json`.
+- **Automated Tests Tab**: 1-click 4-way directional verification and stiction breakaway sweep.
+
+---
+
+## 4. PCA9685 I2C 16-Channel Hardware PWM Driver (Raspberry Pi / SBC)
+
+Zero-dependency hardware validation and diagnostic runner for PCA9685 connected via I2C (`/dev/i2c-1`):
+
+```bash
+# Step 1: Scan I2C bus to verify chip detection (usually address 0x40, 0x60, or 0x70)
+python3 demonstration/test_pca9685.py --scan
+
+# Step 2: Spin a single motor / PWM channel (e.g. Channel 0 at 35% duty for 2s)
+python3 demonstration/test_pca9685.py --channel 0 --duty 0.35
+
+# Step 3: Run stiction breakaway sweep (gradually ramps duty from 5% to 50% to find startup threshold)
+python3 demonstration/test_pca9685.py --sweep --channel 0
+
+# Step 4: Sequentially test channels 0, 1, 2, 3
+python3 demonstration/test_pca9685.py --test individual --duty 0.35
+
+# Step 5: Immediate emergency stop for all 16 channels
+python3 demonstration/test_pca9685.py --stop
+```
+
+
